@@ -32,3 +32,14 @@ _提交时间：2026-10-14 14:10:00_
 - 管理员：profiles.is_admin + activate_admin(code) + list_all_orders(limit)。
 
 _提交时间：2026-10-14 15:00:00_
+
+## R4 · 预览环境兼容性（utils/ui.js）
+
+- H5 预览容器不完整模拟原生能力，报 wx.showLoading is not a function；
+- 同一原因导致 picker-view 三列渲染错乱（点开直接是第三级房号）。
+- 新增 utils/ui.js：所有 wx UI/storage 调用统一走这里，available() 检测 + try/catch + 超时兜底；
+- confirm 带 15s 超时，绝不悬着。
+- 三级选择器废弃 picker-view，改为三个 scroll-view 列 + bindtap 选中。
+- 踩坑：sed 全量替换时不能把 ui.js 自己内部的 wx.* 也替换掉（会无限递归）。
+
+_提交时间：2026-10-14 16:00:00_

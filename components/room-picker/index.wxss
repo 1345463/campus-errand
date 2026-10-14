@@ -1,0 +1,120 @@
+/* 与 .field-input 保持一致：白底 + 描边，否则灰底页面上整块选择器是隐形的 */
+.room-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #FFFFFF;
+  border: 2rpx solid #E3E6EB;
+  border-radius: 16rpx;
+  padding: 20rpx;
+}
+.room-text {
+  font-size: 28rpx;
+  flex: 1;
+  color: #1F2229;
+}
+.room-placeholder {
+  color: #A0A3AA;
+}
+.room-arrow {
+  color: #C0C3CA;
+  font-size: 26rpx;
+}
+.picker-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 100;
+}
+.picker-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #FFFFFF;
+  border-radius: 24rpx 24rpx 0 0;
+  z-index: 101;
+  padding-bottom: 20rpx;
+}
+.picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26rpx 30rpx;
+  border-bottom: 1rpx solid #F2F3F5;
+}
+.picker-cancel {
+  font-size: 28rpx;
+  color: #8A8A8F;
+}
+.picker-title {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+.picker-done {
+  font-size: 28rpx;
+  color: #FF5A7A;
+  font-weight: 600;
+}
+.picker-col-head {
+  display: flex;
+  padding: 18rpx 30rpx 10rpx;
+  border-bottom: 1rpx solid #F2F3F5;
+}
+.picker-col-title {
+  flex: 1;
+  text-align: center;
+  font-size: 24rpx;
+  color: #8A8A8F;
+}
+.picker-cols {
+  display: flex;
+  height: 440rpx;
+  overflow: hidden;
+}
+.picker-col {
+  flex: 1;
+  height: 440rpx;
+  border-right: 1rpx solid #F7F8FA;
+  /* 触控惯性滚动，预览容器和真机都靠它 */
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+}
+.picker-col:last-child {
+  border-right: none;
+}
+.picker-cell {
+  text-align: center;
+  font-size: 30rpx;
+  line-height: 84rpx;
+  color: #3A3D45;
+}
+.picker-cell.active {
+  color: #FF5A7A;
+  font-weight: 600;
+  background: #FFF4F6;
+}
+.picker-cell.cell-other {
+  color: #8A8A8F;
+  font-size: 26rpx;
+}
+.picker-custom {
+  padding: 16rpx 30rpx 0;
+  border-top: 1rpx solid #F2F3F5;
+}
+.custom-input {
+  background: #FFFFFF;
+  border: 2rpx solid #E3E6EB;
+  border-radius: 14rpx;
+  padding: 18rpx 20rpx;
+  font-size: 28rpx;
+  color: #1F2229;
+  margin-bottom: 14rpx;
+}
+.custom-tip {
+  font-size: 24rpx;
+  color: #A0A3AA;
+}

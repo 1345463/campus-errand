@@ -22,3 +22,13 @@ _提交时间：2026-10-14 13:20:00_
 - 原则：不用匿名登录/假 session 绕过鉴权。
 
 _提交时间：2026-10-14 14:10:00_
+
+## R3 · 学校切换 + 三级宿舍 + 账号登录 + 管理员
+
+- utils/campus.js：广东邮电职业技术学院，进取楼/团结楼/博学楼/精益楼/敬业楼/迎宾楼，
+- 1-14 层、1-40 号，formatRoom / parseRoom 双向解析。
+- 自定义组件 components/room-picker 做三级选择；地址拆成 building="楼栋 · 楼层" + room="宿舍号"。
+- 账号登录 loginWithPassword / sendPhoneCode / registerWithPhone（不依赖 wx.login，预览可用）。
+- 管理员：profiles.is_admin + activate_admin(code) + list_all_orders(limit)。
+
+_提交时间：2026-10-14 15:00:00_

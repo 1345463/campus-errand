@@ -1,0 +1,51 @@
+<view class="page">
+  <view class="card">
+    <view class="section-head">
+      <text class="section-title">新增地址</text>
+    </view>
+    <view class="field">
+      <view class="field-label"><text class="field-star">* </text>联系人</view>
+      <input class="field-input" placeholder="收件人姓名" value="{{form.contact_name}}" data-key="contact_name" bindinput="onInput" maxlength="20" />
+    </view>
+    <view class="field">
+      <view class="field-label"><text class="field-star">* </text>手机号</view>
+      <input class="field-input" type="number" placeholder="11 位手机号" value="{{form.phone}}" data-key="phone" bindinput="onInput" maxlength="11" />
+    </view>
+    <view class="field">
+      <view class="field-label"><text class="field-star">* </text>宿舍地址</view>
+      <room-picker
+        value="{{roomValue}}"
+        placeholder="选择楼栋 · 楼层 · 宿舍号"
+        bind:change="onRoomChange"
+      />
+    </view>
+    <view class="field">
+      <view class="field-label">标签</view>
+      <view class="tags">
+        <view
+          class="tag {{form.tag === item ? 'active' : ''}}"
+          wx:for="{{tagOptions}}"
+          wx:key="*this"
+          data-value="{{item}}"
+          bindtap="pickTag"
+        >{{item}}</view>
+      </view>
+    </view>
+    <view class="btn-primary {{saving ? 'disabled' : ''}}" bindtap="add">{{saving ? '保存中…' : '保存地址'}}</view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="section-title">已保存的地址</text>
+    </view>
+    <view wx:if="{{list.length === 0}}" class="empty">还没有保存的地址</view>
+    <view class="addr-item" wx:for="{{list}}" wx:for-item="addr" wx:key="id">
+      <view class="addr-main">
+        <view class="addr-title">{{addr.building}} {{addr.room}}</view>
+        <view class="addr-sub">{{addr.tag}} · {{addr.contact_name}} {{addr.phoneMask}}</view>
+      </view>
+      <text class="addr-use" data-index="{{index}}" bindtap="useAddress">设为常用</text>
+      <text class="addr-del" data-id="{{addr.id}}" bindtap="remove">删除</text>
+    </view>
+  </view>
+</view>

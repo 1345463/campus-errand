@@ -1,0 +1,22 @@
+/* 「成为接单员」页局部样式：顶部的认证进度入口 + 状态说明 */
+
+/* 入口整体就是一张可点的卡片，所以把 card 的内边距清零，交给 .menu-item 自己撑 */
+.cert-entry-card {
+  padding: 0;
+}
+
+.cert-entry {
+  border-bottom: none;
+}
+
+.cert-entry-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.cert-entry-desc {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #8A8A8F;
+}

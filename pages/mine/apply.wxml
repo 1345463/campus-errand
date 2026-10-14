@@ -1,0 +1,77 @@
+<view class="page">
+  <!-- 认证进度：全页只有这一个入口。
+       待审核 / 已通过时，它就是整页内容（不再另起一张卡重复讲状态）；
+       被驳回时它留在申请表单上方，方便先看驳回原因再改。
+       进度详情（状态 / 提交资料 / 驳回原因）在本页的二级页面里。 -->
+  <view
+    wx:if="{{!showForm || certStatus === 'rejected'}}"
+    class="card cert-entry-card"
+    bindtap="goCert"
+  >
+    <view class="menu-item cert-entry">
+      <text class="menu-icon">🪪</text>
+      <view class="cert-entry-main">
+        <text class="menu-label">认证进度</text>
+        <text class="cert-entry-desc">{{statusHint}}</text>
+      </view>
+      <text class="menu-value">{{certText}}</text>
+      <text class="menu-arrow">></text>
+    </view>
+  </view>
+
+  <block wx:if="{{showForm}}">
+    <view wx:if="{{rejectNote}}" class="notice-bar">
+      <text class="notice-text">上次审核未通过：{{rejectNote}}</text>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">接单员协议</text>
+      </view>
+      <view class="hint">1. 须为本校在校学生，提供真实姓名与学生证信息</view>
+      <view class="hint">2. 接单后须按时完成，不得无故弃单</view>
+      <view class="hint">3. 不得接受任何违法违规、涉及黄赌毒的需求</view>
+      <view class="hint">4. 不得承接代刷体测数据、代课代签到等违反校纪校规的任务</view>
+      <view class="hint">5. 平台仅保存脱敏后的证件号码，用于身份核验</view>
+    </view>
+
+    <view class="card">
+      <view class="field">
+        <view class="field-label"><text class="field-star">* </text>真实姓名</view>
+        <input class="field-input" placeholder="与证件保持一致" value="{{realName}}" bindinput="onName" maxlength="20" />
+      </view>
+
+      <view class="field">
+        <view class="field-label"><text class="field-star">* </text>身份证号</view>
+        <input class="field-input" type="idcard" placeholder="18 位身份证号" value="{{idNo}}" bindinput="onIdNo" maxlength="18" />
+        <view class="hint">平台只保存脱敏结果（前 6 位 + ******** + 后 4 位），完整号码不会入库</view>
+      </view>
+
+      <view class="field">
+        <view class="field-label"><text class="field-star">* </text>学生证照片</view>
+        <view class="uploader">
+          <view class="upload-item" wx:if="{{studentPreview}}">
+            <image src="{{studentPreview}}" mode="aspectFill"></image>
+            <view class="upload-del" bindtap="clearStudent">×</view>
+          </view>
+          <view wx:else class="upload-add" bindtap="chooseStudent">+</view>
+        </view>
+        <view class="hint">上传后用于核验在校身份，请保证姓名与学号清晰</view>
+        <view class="hint" wx:if="{{!canPickImage}}">当前环境不支持选图，可先提交，稍后在微信小程序里补传</view>
+      </view>
+
+      <view class="field">
+        <view class="field-label">身份证正面（可选）</view>
+        <view class="uploader">
+          <view class="upload-item" wx:if="{{idPreview}}">
+            <image src="{{idPreview}}" mode="aspectFill"></image>
+            <view class="upload-del" bindtap="clearIdCard">×</view>
+          </view>
+          <view wx:else class="upload-add" bindtap="chooseIdCard">+</view>
+        </view>
+      </view>
+
+      <view class="btn-primary {{submitting ? 'disabled' : ''}}" bindtap="submit">{{submitting ? '提交中…' : '提交审核'}}</view>
+    </view>
+  </block>
+</view>

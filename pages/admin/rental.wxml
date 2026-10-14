@@ -1,0 +1,135 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>登录后才能使用管理后台</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}" class="empty">
+    <view>没有管理权限</view>
+    <view class="hint top-gap">请到「我的」页用管理员口令开通</view>
+  </view>
+
+  <view wx:else>
+    <view class="err-bar" wx:if="{{errorText}}">
+      <text class="err-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="load">重试</text>
+    </view>
+    <view class="tip-bar" wx:if="{{tipText && !errorText}}">
+      <text class="tip-text">{{tipText}}</text>
+    </view>
+
+    <view class="filter-row">
+      <view
+        class="chip {{tab === item.key ? 'active' : ''}}"
+        wx:for="{{tabs}}"
+        wx:key="key"
+        data-key="{{item.key}}"
+        bindtap="switchTab"
+      >{{item.label}}</view>
+    </view>
+
+    <view class="tool-row">
+      <view class="doc-btn" bindtap="load">刷新列表</view>
+    </view>
+
+    <view wx:if="{{loading}}" class="empty">加载中…</view>
+    <view wx:elif="{{list.length === 0 && !errorText}}" class="empty">
+      <view>没有符合条件的租赁申请</view>
+      <view class="hint top-gap">同学们在「相机租赁」页提交预填信息后会出现在这里</view>
+    </view>
+
+    <view class="card apply-card" wx:for="{{list}}" wx:key="id">
+      <view class="apply-head">
+        <text class="apply-name">{{item.itemName}} × {{item.days}} 天</text>
+        <text class="status-text status-{{item.status}}">{{item.statusText}}</text>
+      </view>
+
+      <view class="detail-row">
+        <view class="detail-label">申请人</view>
+        <view class="detail-value">{{item.realName}}（{{item.studentNo}}）</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">学院班级</view>
+        <view class="detail-value">{{item.college || '未填写'}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">手机号</view>
+        <view class="detail-value">{{item.contact}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">取还时间</view>
+        <view class="detail-value">{{item.expectFrom || '未填'}} → {{item.expectTo || '未填'}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">自提地点</view>
+        <view class="detail-value">{{item.pickupAddr || '未填写'}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">用途备注</view>
+        <view class="detail-value">{{item.note || '无'}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">挂牌价</view>
+        <view class="detail-value">¥{{item.unitPrice}} / 天</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">报价</view>
+        <view class="detail-value">
+          {{item.quotedPrice != null ? '¥' + item.quotedPrice + ' / 天' : '未报价'}}
+          <text wx:if="{{item.deposit != null}}"> · 押金 ¥{{item.deposit}}</text>
+        </view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">合计</view>
+        <view class="detail-value">¥{{item.totalText}}</view>
+      </view>
+      <view class="detail-row last">
+        <view class="detail-label">提交时间</view>
+        <view class="detail-value">{{item.createdText}}</view>
+      </view>
+
+      <view wx:if="{{priceId === item.id}}" class="note-box">
+        <input
+          class="field-input"
+          type="digit"
+          placeholder="日租金（元）"
+          value="{{price}}"
+          data-key="price"
+          bindinput="onPriceInput"
+        />
+        <input
+          class="field-input top-gap-sm"
+          type="digit"
+          placeholder="押金（元，没有填 0）"
+          value="{{deposit}}"
+          data-key="deposit"
+          bindinput="onPriceInput"
+        />
+        <view class="btn-row top-gap-sm">
+          <view class="btn-ghost half" bindtap="closePrice">取消</view>
+          <view
+            class="btn-primary half {{actingId === item.id ? 'disabled' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="savePrice"
+          >保存报价</view>
+        </view>
+      </view>
+
+      <view wx:else class="btn-row">
+        <view
+          class="btn-ghost half"
+          wx:if="{{actingId !== item.id}}"
+          data-id="{{item.id}}"
+          bindtap="openPrice"
+        >设置价格</view>
+        <view
+          wx:if="{{item.status !== 'ordered'}}"
+          class="btn-primary half {{actingId === item.id ? 'disabled' : ''}} {{armId === item.id ? 'btn-armed' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="createOrder"
+        >{{armId === item.id ? '再点一次生成工单' : (actingId === item.id ? '生成中…' : '生成特殊工单')}}</view>
+        <view wx:else class="btn-ghost half" data-id="{{item.orderId}}" bindtap="openOrder">查看工单 #{{item.orderId}}</view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,45 @@
+<view class="page">
+  <view class="err-bar" wx:if="{{errorText}}">
+    <text class="err-text">{{errorText}}</text>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="section-title">{{title}}</text>
+    </view>
+    <view class="detail-row">
+      <view class="detail-label">版本</view>
+      <view class="detail-value">{{version}}</view>
+    </view>
+    <view class="detail-row last">
+      <view class="detail-label">更新</view>
+      <view class="detail-value">{{updatedAt}}</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="agree-note">
+      请仔细阅读。勾选同意即表示你承诺：不发布、不承接违反校纪校规和国家法律法规的事项（例如代跑校园跑、代课）；接单员私下接受与平台提交的服务信息不同的任务，与本平台无关。
+    </view>
+  </view>
+
+  <view class="card" wx:for="{{sections}}" wx:key="title">
+    <view class="section-head">
+      <text class="section-title">{{item.title}}</text>
+    </view>
+    <view class="agree-line" wx:for="{{item.lines}}" wx:for-item="line" wx:key="*this">{{line}}</view>
+  </view>
+
+  <view wx:if="{{force}}" class="footer-bar">
+    <view class="agree-row" bindtap="toggleAgree">
+      <view class="agree-box {{agreed ? 'checked' : ''}}">
+        <text wx:if="{{agreed}}" class="agree-tick">✓</text>
+      </view>
+      <text class="agree-text">我已阅读并同意《{{title}}》（版本 {{version}}）</text>
+    </view>
+    <view class="btn-primary {{saving ? 'disabled' : ''}} {{agreed ? '' : 'disabled'}}" bindtap="accept">
+      {{saving ? '提交中…' : '同意并继续'}}
+    </view>
+    <view class="hint">未勾选同意前无法使用下单、接单等功能</view>
+  </view>
+</view>

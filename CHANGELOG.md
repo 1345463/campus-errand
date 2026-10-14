@@ -107,3 +107,19 @@ _提交时间：2026-10-14 22:46:00_
 - 重要提醒：新建环境是空库，和 WorkBuddy 云服务的库不互通，修不了正在修的 bug。
 
 _提交时间：2026-10-14 23:00:00_
+
+## R11 · 结算 / 租赁 / 用户协议
+
+- orders 新增 runner_done_at / feedback_text / feedback_at / feedback_status / admin_note / is_special；
+- profiles 新增 agreed_version / agreed_at；新表 rental_requests。
+- 新函数 confirm_order_done / submit_settle_feedback / admin_list_feedbacks /
+- admin_resolve_feedback / submit_rental_request / list_my_rental_requests /
+- admin_list_rental_requests / admin_set_rental_price / admin_create_rental_order / accept_agreement。
+- complete_order 语义改造：从"直接结算"改为"接单员标记送达 → waiting_confirm"，
+- 这是整个订单状态机的关键转折。
+- room-picker 去掉面板上的 catchtouchmove（会拦掉三列 scroll-view 的 touchmove）；
+- 三列末尾加"其他" + 自定义输入框。
+- 新页面 pages/agreement/index、pages/admin/settle、pages/admin/rental、pages/rental/apply。
+- utils/agreement.js：VERSION + 9 节正文，登录后 agreed_version 不等于当前版本强制跳协议页。
+
+_提交时间：2026-10-14 23:30:00_

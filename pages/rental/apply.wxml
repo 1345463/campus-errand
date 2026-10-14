@@ -1,0 +1,96 @@
+<view class="page">
+  <view class="err-bar" wx:if="{{errorText}}">
+    <text class="err-text">{{errorText}}</text>
+  </view>
+
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>登录后才能提交租赁申请</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去登录</view>
+  </view>
+
+  <view wx:else>
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">{{itemName}}</text>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">挂牌价</view>
+        <view class="detail-value">¥{{unitPrice}} / 天（最终价格由管理员确认）</view>
+      </view>
+      <view class="detail-row last">
+        <view class="detail-label">租期</view>
+        <view class="detail-value">
+          <view class="chip-row">
+            <text
+              class="chip {{days === item ? 'active' : ''}}"
+              wx:for="{{dayOptions}}"
+              wx:key="*this"
+              data-day="{{item}}"
+              bindtap="pickDay"
+            >{{item}} 天</text>
+          </view>
+          <view class="rent-total">已选 {{days}} 天，合计约 ¥{{totalText}}（按挂牌价估算，最终以管理员报价为准）</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">预填信息</text>
+      </view>
+      <view class="field">
+        <text class="field-label">真实姓名</text>
+        <input class="field-input" placeholder="与校园卡一致" value="{{realName}}" data-key="realName" bindinput="onInput" maxlength="20" />
+      </view>
+      <view class="field">
+        <text class="field-label">学号</text>
+        <input class="field-input" placeholder="用于核验在校身份" value="{{studentNo}}" data-key="studentNo" bindinput="onInput" maxlength="24" />
+      </view>
+      <view class="field">
+        <text class="field-label">学院 / 班级</text>
+        <input class="field-input" placeholder="例如：移动通信学院 24 级 3 班" value="{{college}}" data-key="college" bindinput="onInput" maxlength="40" />
+      </view>
+      <view class="field">
+        <text class="field-label">手机号</text>
+        <input class="field-input" type="number" placeholder="11 位手机号" value="{{contact}}" data-key="contact" bindinput="onInput" maxlength="11" />
+      </view>
+      <view class="field">
+        <text class="field-label">期望取机时间</text>
+        <input class="field-input" placeholder="例如：10 月 20 日 12:00" value="{{expectFrom}}" data-key="expectFrom" bindinput="onInput" maxlength="30" />
+      </view>
+      <view class="field">
+        <text class="field-label">期望还机时间</text>
+        <input class="field-input" placeholder="例如：10 月 21 日 18:00" value="{{expectTo}}" data-key="expectTo" bindinput="onInput" maxlength="30" />
+      </view>
+      <view class="field">
+        <text class="field-label">自提地点</text>
+        <input class="field-input" placeholder="例如：进取楼一楼大堂" value="{{pickupAddr}}" data-key="pickupAddr" bindinput="onInput" maxlength="40" />
+      </view>
+      <view class="field">
+        <text class="field-label">用途 / 备注</text>
+        <textarea
+          class="field-area"
+          placeholder="例如：社团活动拍摄，需要备用电池"
+          value="{{note}}"
+          data-key="note"
+          bindinput="onInput"
+          maxlength="200"
+          auto-height="{{true}}"
+        />
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="settle-rule">
+        提交后由管理员核对库存与价格，确认后会生成一张特殊工单；特殊工单只在管理员和指定接单员可见，不会出现在公共大厅。
+      </view>
+    </view>
+
+    <view class="footer-bar">
+      <view class="btn-primary {{submitting ? 'disabled' : ''}}" bindtap="submit">
+        {{submitting ? '提交中…' : '提交租赁申请'}}
+      </view>
+      <view class="hint">提交后可在「我的 → 我的租赁申请」查看进度</view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "发布任务",
+  "usingComponents": {
+    "room-picker": "/components/room-picker/index"
+  }
+}

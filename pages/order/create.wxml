@@ -1,0 +1,147 @@
+<view class="page">
+  <view wx:if="{{!signedIn}}" class="login-tip" bindtap="goLogin">
+    <text class="login-tip-text">当前未登录，提交前需先登录</text>
+    <text class="login-tip-btn">去登录</text>
+  </view>
+
+  <view wx:if="{{modBanner}}" class="mod-bar">
+    <text class="mod-title">无法发布</text>
+    <text class="mod-text">{{modBanner}}</text>
+    <text class="mod-sub">如果确认是误判，请换一种写法；确有需要请联系管理员处理</text>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="section-title">{{service.icon}} {{service.name}}</text>
+    </view>
+    <view class="hint">{{service.hint}}</view>
+  </view>
+
+  <view class="card">
+    <block wx:for="{{renderFields}}" wx:key="key">
+      <view class="field">
+        <view class="field-label">
+          <text wx:if="{{item.required}}" class="field-star">* </text>{{item.label}}
+        </view>
+        <view wx:if="{{item.tip}}" class="field-tip">{{item.tip}}</view>
+
+        <room-picker
+          wx:if="{{item.type === 'address' && item.kind === 'dorm'}}"
+          value="{{form[item.key]}}"
+          placeholder="{{item.placeholder}}"
+          data-key="{{item.key}}"
+          bind:change="onRoomChange"
+        />
+
+        <input
+          wx:elif="{{item.type === 'text' || item.type === 'address'}}"
+          class="field-input"
+          placeholder="{{item.placeholder}}"
+          value="{{form[item.key]}}"
+          data-key="{{item.key}}"
+          bindinput="onInput"
+          maxlength="80"
+        />
+
+        <textarea
+          wx:elif="{{item.type === 'textarea'}}"
+          class="field-textarea"
+          placeholder="{{item.placeholder}}"
+          value="{{form[item.key]}}"
+          data-key="{{item.key}}"
+          bindinput="onInput"
+          maxlength="300"
+        />
+
+        <view wx:elif="{{item.type === 'tags' || item.type === 'gender'}}" class="tags">
+          <view
+            wx:for="{{item.opts}}"
+            wx:for-item="opt"
+            wx:key="value"
+            class="tag {{opt.active ? 'active' : ''}}"
+            data-key="{{item.key}}"
+            data-value="{{opt.value}}"
+            bindtap="toggleTag"
+          >{{opt.value}}</view>
+        </view>
+
+        <view wx:elif="{{item.type === 'images'}}">
+          <view class="uploader">
+            <view class="upload-item" wx:for="{{previews}}" wx:for-item="pic" wx:key="index">
+              <image src="{{pic}}" mode="aspectFill"></image>
+              <view class="upload-del" data-index="{{index}}" bindtap="removeImage">×</view>
+            </view>
+            <view wx:if="{{previews.length < item.max}}" class="upload-add" bindtap="chooseImage">+</view>
+          </view>
+          <view class="hint">最多 {{item.max}} 张，可以上传取餐码、快递柜截图等</view>
+        </view>
+
+        <view wx:elif="{{item.type === 'reward'}}">
+          <input
+            class="field-input"
+            type="digit"
+            placeholder="输入赏金金额"
+            value="{{form.reward}}"
+            data-key="reward"
+            bindinput="onInput"
+          />
+          <view class="tags">
+            <view
+              class="tag"
+              wx:for="{{quickRewards}}"
+              wx:key="*this"
+              data-value="{{item}}"
+              bindtap="setReward"
+            >¥{{item}}</view>
+          </view>
+          <view class="hint">开价最少 {{minReward}} 元，建议 2 元起，距离远或重物可适当加价，更容易被接单</view>
+        </view>
+
+        <view wx:if="{{item.shortcuts && item.shortcuts.length}}" class="chip-row field-chips">
+          <text
+            class="chip chip-shortcut {{form[item.key] === option ? 'active' : ''}}"
+            wx:for="{{item.shortcuts}}"
+            wx:for-item="option"
+            wx:key="*this"
+            data-key="{{item.key}}"
+            data-value="{{option}}"
+            bindtap="pickShortcut"
+          >{{option}}</text>
+        </view>
+
+        <view wx:if="{{modHitMap[item.key]}}" class="mod-field-error">{{modHitMap[item.key]}}</view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 积分抵扣券：灰度 coupon_deduct。券是抵扣付款金额用的，
+       接单员仍然拿全额赏金，差价由平台承担，所以这里不用跟接单员解释。 -->
+  <view wx:if="{{couponOn && coupons.length > 0}}" class="card">
+    <view class="section-head">
+      <text class="section-title">积分抵扣券</text>
+    </view>
+    <picker mode="selector" range="{{couponNames}}" value="{{couponIndex}}" bindchange="pickCoupon">
+      <view class="field-input pick-text">🎫 {{couponNames[couponIndex]}}</view>
+    </picker>
+    <view class="hint">使用后会直接从这一单的付款金额里抵扣，券同时标记为已使用</view>
+  </view>
+
+  <!-- 优先展示券：灰度 order_boost。勾选后这一单在大厅里排到最前面，
+       券是一次性的——发布成功立刻核销，所以只允许选一张。 -->
+  <view wx:if="{{boostOn && boosts.length > 0}}" class="card">
+    <view class="section-head">
+      <text class="section-title">优先展示券</text>
+    </view>
+    <picker mode="selector" range="{{boostNames}}" value="{{boostIndex}}" bindchange="pickBoost">
+      <view class="field-input pick-text">🚀 {{boostNames[boostIndex]}}</view>
+    </picker>
+    <view class="hint">勾选后这一单排在大厅最前面，发布成功即刻消耗掉这张券</view>
+  </view>
+
+  <view class="footer-bar">
+    <view class="btn-primary {{submitting || modBanner ? 'disabled' : ''}}" bindtap="submit">
+      {{submitting ? '提交中…' : '提交任务'}}
+    </view>
+    <view class="hint" wx:if="{{modBanner}}">请修改标红的内容后再提交</view>
+  </view>
+</view>

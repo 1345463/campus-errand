@@ -1,0 +1,18 @@
+/* 「我的」页局部样式 */
+
+/* 我的订单的 5 个状态入口：强制一行等分。
+   默认的 .chip 带 padding 12rpx 26rpx + 右边距 16rpx，5 个加起来超过一屏宽度，
+   会掉到第二行；这里改成 flex:1 等分并把边距压小，任何机型都是一行。 */
+.filter-row.order-chips {
+  flex-wrap: nowrap;
+  padding: 20rpx 24rpx 20rpx;
+}
+
+.filter-row.order-chips .chip {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0 6rpx;
+  padding: 12rpx 0;
+  text-align: center;
+  font-size: 24rpx;
+}

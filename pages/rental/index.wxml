@@ -1,0 +1,71 @@
+<view class="page">
+  <view class="card">
+    <view class="section-head">
+      <text class="section-title">📷 相机租赁</text>
+    </view>
+    <view class="hint">{{pickupPoint}}</view>
+    <view class="settle-rule">
+      租赁不直接下单：先提交预填信息，管理员核对库存与价格后会生成一张特殊工单，届时再按工单完成取还与结算。
+    </view>
+  </view>
+
+  <view class="err-bar" wx:if="{{errorText}}">
+    <text class="err-text">{{errorText}}</text>
+    <text class="err-retry" bindtap="loadMine">重试</text>
+  </view>
+
+  <view wx:if="{{itemsStale}}" class="err-bar">
+    <text class="err-text">机型价格可能是旧的（没读到最新挂牌价）</text>
+    <text class="err-retry" bindtap="loadItems">重试</text>
+  </view>
+
+  <view class="rental-item" wx:for="{{items}}" wx:key="id" bindtap="goApply" data-id="{{item.id}}" data-name="{{item.name}}" data-price="{{item.price}}">
+    <view class="rental-icon">📷</view>
+    <view class="rental-info">
+      <view class="rental-name">{{item.name}}</view>
+      <view class="rental-spec">{{item.spec}}</view>
+    </view>
+    <view>
+      <text class="rental-price">¥{{item.price}}</text>
+      <text class="rental-unit"> /天</text>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="section-title">我的租赁申请</text>
+    </view>
+    <view wx:if="{{needLogin}}" class="hint">登录后才能查看自己提交的申请</view>
+    <view wx:elif="{{mineLoading}}" class="hint">加载中…</view>
+    <view wx:elif="{{mine.length === 0}}" class="hint">还没有提交过申请，点上面任意机型即可填写</view>
+    <view wx:else>
+      <view class="detail-row" wx:for="{{mine}}" wx:key="id">
+        <view class="detail-label">{{item.itemName}} × {{item.days}} 天</view>
+        <view class="detail-value">
+          <text>{{item.statusText}}</text>
+          <text wx:if="{{item.orderId}}" class="mine-link" data-id="{{item.orderId}}" bindtap="openOrder">
+            查看工单 →
+          </text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="section-title">租赁须知</text>
+    </view>
+    <view class="detail-row">
+      <view class="detail-label">押金</view>
+      <view class="detail-value">按机型收取，归还验收无误后退回</view>
+    </view>
+    <view class="detail-row">
+      <view class="detail-label">租期</view>
+      <view class="detail-value">按天计费，不足一天按一天计</view>
+    </view>
+    <view class="detail-row last">
+      <view class="detail-label">取还方式</view>
+      <view class="detail-value">{{pickupPoint}}</view>
+    </view>
+  </view>
+</view>

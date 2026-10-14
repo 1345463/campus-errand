@@ -1,0 +1,1210 @@
+page {
+  background: #F5F6F8;
+  color: #1F2229;
+  font-size: 28rpx;
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+}
+
+.page {
+  padding-bottom: 60rpx;
+}
+
+.login-tip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20rpx 20rpx 0;
+  padding: 20rpx 24rpx;
+  border-radius: 18rpx;
+  background: #FFF4E5;
+}
+.login-tip-text {
+  font-size: 24rpx;
+  color: #8A5A1A;
+  flex: 1;
+}
+.login-tip-btn {
+  font-size: 24rpx;
+  color: #FF5A7A;
+  padding: 8rpx 24rpx;
+  border-radius: 999rpx;
+  background: #FFFFFF;
+}
+
+.notice-bar {
+  display: flex;
+  align-items: center;
+  padding: 16rpx 24rpx;
+  background: #FFF4E5;
+}
+.notice-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #FF9F43;
+  margin-right: 12rpx;
+}
+.notice-text {
+  font-size: 24rpx;
+  color: #8A5A1A;
+  flex: 1;
+}
+
+.hero {
+  margin: 20rpx;
+  padding: 36rpx;
+  border-radius: 24rpx;
+  background: #FF5A7A;
+  color: #FFFFFF;
+}
+.hero-title {
+  font-size: 40rpx;
+  font-weight: 600;
+}
+.hero-sub {
+  font-size: 24rpx;
+  margin-top: 14rpx;
+  opacity: 0.92;
+}
+
+.card {
+  background: #FFFFFF;
+  margin: 20rpx;
+  padding: 28rpx;
+  border-radius: 24rpx;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+.section-title {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+.section-more {
+  font-size: 24rpx;
+  color: #8A8A8F;
+}
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+.grid-item {
+  width: 20%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 26rpx;
+}
+.grid-icon {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+}
+.grid-label {
+  font-size: 24rpx;
+  margin-top: 10rpx;
+  color: #3A3D45;
+}
+
+.quick-row {
+  display: flex;
+}
+.quick-item {
+  flex: 1;
+  margin-right: 16rpx;
+  padding: 26rpx;
+  border-radius: 20rpx;
+  background: #FFFFFF;
+  border: 2rpx solid #E3E6EB;
+}
+.quick-item.last {
+  margin-right: 0;
+}
+.quick-title {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+.quick-desc {
+  font-size: 22rpx;
+  color: #8A8A8F;
+  margin-top: 8rpx;
+}
+
+.task-card {
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: #FFFFFF;
+  border: 2rpx solid #E3E6EB;
+  margin-bottom: 20rpx;
+}
+.task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.task-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  flex: 1;
+}
+.reward {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #FF5A7A;
+}
+.task-meta {
+  font-size: 24rpx;
+  color: #8A8A8F;
+  margin-top: 10rpx;
+}
+.task-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18rpx;
+}
+.badge {
+  font-size: 22rpx;
+  padding: 6rpx 18rpx;
+  border-radius: 999rpx;
+  background: #FFEAF0;
+  color: #FF5A7A;
+}
+.task-btn {
+  font-size: 24rpx;
+  padding: 10rpx 30rpx;
+  border-radius: 999rpx;
+  background: #FF5A7A;
+  color: #FFFFFF;
+}
+
+.empty {
+  text-align: center;
+  color: #A0A3AA;
+  font-size: 26rpx;
+  padding: 48rpx 0;
+}
+
+.field {
+  margin-bottom: 30rpx;
+}
+.field-label {
+  font-size: 26rpx;
+  color: #5A5D66;
+  margin-bottom: 12rpx;
+}
+.field-star {
+  color: #FF5A7A;
+}
+/* 输入框统一成「白底 + 描边」的实体框。
+   原来只有一层 #F7F8FA 底色：放在 #F5F6F8 页面上几乎看不见，
+   放进 #FFFFFF 卡片里也只是隐约一片，用户根本分不清哪里能输入、有几项。
+
+   ⚠ 这里**不要**给 input 加 `box-sizing: border-box`，也**不要**加 `width: 100%`：
+   小程序的 input 自带一个固定默认高度（约 1.4em）。一旦改成 border-box，
+   padding 会从这个高度里扣，content 高度被压成 0 —— 实测描边+padding 刚好占满整个盒子，
+   文字上下被裁掉一半（登录页就是这么坏掉的）。
+   width:100% 在 content-box 下还会让 padding+border 溢出父容器。
+   让 input 保持默认的「块级 + width:auto」，宽高都交给它自己算。 */
+.field-input {
+  background: #FFFFFF;
+  border: 2rpx solid #E3E6EB;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  font-size: 28rpx;
+  color: #1F2233;
+}
+.field-textarea {
+  background: #FFFFFF;
+  border: 2rpx solid #E3E6EB;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  font-size: 28rpx;
+  color: #1F2233;
+  height: 160rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* 占位文字统一比正文浅一档，避免和已填内容混淆 */
+.field-ph {
+  color: #B4B8C0;
+}
+.hint {
+  font-size: 22rpx;
+  color: #A0A3AA;
+  margin-top: 10rpx;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+}
+.tag {
+  padding: 12rpx 26rpx;
+  border-radius: 999rpx;
+  background: #F2F3F5;
+  font-size: 24rpx;
+  margin: 0 16rpx 16rpx 0;
+  color: #5A5D66;
+}
+.tag.active {
+  background: #FFEAF0;
+  color: #FF5A7A;
+}
+.gender-row {
+  display: flex;
+}
+
+.uploader {
+  display: flex;
+  flex-wrap: wrap;
+}
+.upload-item {
+  width: 150rpx;
+  height: 150rpx;
+  margin: 0 16rpx 16rpx 0;
+  border-radius: 16rpx;
+  background: #F2F3F5;
+  position: relative;
+}
+.upload-item image {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 16rpx;
+}
+.upload-del {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background: #FF5A7A;
+  color: #FFFFFF;
+  font-size: 24rpx;
+  text-align: center;
+  line-height: 40rpx;
+}
+.upload-add {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 16rpx;
+  background: #F2F3F5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 52rpx;
+  color: #A0A3AA;
+}
+
+.footer-bar {
+  padding: 20rpx 24rpx 40rpx;
+  background: #FFFFFF;
+  border-top: 1rpx solid #EFEFEF;
+}
+.btn-primary {
+  background: #FF5A7A;
+  color: #FFFFFF;
+  text-align: center;
+  padding: 26rpx;
+  border-radius: 999rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+.btn-ghost {
+  background: #F2F3F5;
+  color: #5A5D66;
+  text-align: center;
+  padding: 26rpx;
+  border-radius: 999rpx;
+  font-size: 30rpx;
+}
+.btn-row {
+  display: flex;
+}
+.btn-row .btn-primary {
+  flex: 1;
+  margin-right: 16rpx;
+}
+.btn-row .btn-ghost {
+  flex: 1;
+}
+.disabled {
+  opacity: 0.5;
+}
+/* 二次确认态：和默认主按钮明显区分，避免用户以为没点到 */
+.btn-armed {
+  background: #FF8A3D;
+}
+.err-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20rpx 20rpx 0;
+  padding: 18rpx 24rpx;
+  border-radius: 16rpx;
+  background: #FFF1F3;
+  border: 1rpx solid #FFD5DD;
+}
+.err-text {
+  flex: 1;
+  color: #D9304E;
+  font-size: 26rpx;
+  line-height: 1.5;
+}
+.err-retry {
+  flex: none;
+  margin-left: 20rpx;
+  color: #FF5A7A;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+.tip-bar {
+  margin: 20rpx 20rpx 0;
+  padding: 18rpx 24rpx;
+  border-radius: 16rpx;
+  background: #EAF7EF;
+  border: 1rpx solid #C8EBD5;
+}
+.tip-text {
+  color: #1E8A4B;
+  font-size: 26rpx;
+}
+.tool-row {
+  display: flex;
+  padding: 20rpx 20rpx 0;
+}
+.settle-text {
+  font-size: 28rpx;
+  color: #1F2229;
+  line-height: 1.6;
+}
+.settle-rule {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #8A8A8F;
+  line-height: 1.6;
+}
+.settle-sub {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #A0A3AA;
+}
+.settle-feedback {
+  margin-top: 14rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 14rpx;
+  background: #FFF7E8;
+  color: #B26A00;
+  font-size: 25rpx;
+  line-height: 1.6;
+}
+.feedback-box {
+  margin-top: 20rpx;
+}
+.field-area {
+  width: 100%;
+  background: #FFFFFF;
+  border: 2rpx solid #E3E6EB;
+  border-radius: 14rpx;
+  padding: 18rpx 20rpx;
+  font-size: 28rpx;
+  color: #1F2229;
+  min-height: 120rpx;
+}
+.top-gap-sm {
+  margin-top: 14rpx;
+}
+.mine-link {
+  margin-left: 12rpx;
+  color: #FF5A7A;
+  font-size: 24rpx;
+}
+.agree-line {
+  font-size: 26rpx;
+  color: #3A3D45;
+  line-height: 1.8;
+  margin-bottom: 12rpx;
+}
+.agree-note {
+  background: #FFF7E8;
+  border: 1rpx solid #FFE2B0;
+  border-radius: 14rpx;
+  padding: 18rpx 20rpx;
+  color: #B26A00;
+  font-size: 25rpx;
+  line-height: 1.7;
+}
+.agree-row {
+  display: flex;
+  align-items: flex-start;
+  padding-bottom: 20rpx;
+}
+.agree-box {
+  flex: none;
+  width: 34rpx;
+  height: 34rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid #C0C3CA;
+  margin-right: 14rpx;
+  margin-top: 4rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.agree-box.checked {
+  background: #FF5A7A;
+  border-color: #FF5A7A;
+}
+.agree-tick {
+  color: #FFFFFF;
+  font-size: 24rpx;
+  line-height: 1;
+}
+.agree-text {
+  flex: 1;
+  font-size: 26rpx;
+  color: #3A3D45;
+  line-height: 1.6;
+}
+.field-tip {
+  background: #FFF7E8;
+  border: 1rpx solid #FFE2B0;
+  border-radius: 12rpx;
+  padding: 14rpx 16rpx;
+  margin: 10rpx 0 14rpx;
+  color: #B26A00;
+  font-size: 24rpx;
+  line-height: 1.7;
+}
+/* 违规词：发布页顶部横幅 + 字段下方的红字 */
+.mod-bar {
+  margin: 20rpx 20rpx 0;
+  padding: 20rpx 24rpx;
+  border-radius: 18rpx;
+  background: #FFEBEC;
+  border: 1rpx solid #FFC9CD;
+}
+.mod-title {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #C8354A;
+  margin-bottom: 8rpx;
+}
+.mod-text {
+  display: block;
+  font-size: 24rpx;
+  color: #C8354A;
+  line-height: 1.6;
+}
+.mod-sub {
+  display: block;
+  font-size: 22rpx;
+  color: #A85563;
+  line-height: 1.6;
+  margin-top: 8rpx;
+}
+.mod-field-error {
+  margin-top: 12rpx;
+  padding: 14rpx 16rpx;
+  border-radius: 12rpx;
+  background: #FFF0F1;
+  border: 1rpx solid #FFC9CD;
+  color: #C8354A;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+.login-agree {
+  padding-top: 20rpx;
+  text-align: left;
+}
+.btn-block {
+  margin: 0 0 16rpx;
+}
+
+.addr-item {
+  display: flex;
+  align-items: center;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #F2F3F5;
+}
+.addr-item:last-child {
+  border-bottom: none;
+}
+.addr-main {
+  flex: 1;
+}
+.addr-title {
+  font-size: 28rpx;
+}
+.addr-sub {
+  font-size: 24rpx;
+  color: #8A8A8F;
+  margin-top: 8rpx;
+}
+.addr-use {
+  font-size: 24rpx;
+  color: #FF5A7A;
+  padding: 10rpx 22rpx;
+  border-radius: 999rpx;
+  background: #FFEAF0;
+}
+.addr-del {
+  font-size: 24rpx;
+  color: #8A8A8F;
+  margin-left: 20rpx;
+  padding: 10rpx 22rpx;
+  border-radius: 999rpx;
+  background: #F2F3F5;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 20rpx 20rpx 0;
+}
+.chip {
+  padding: 12rpx 26rpx;
+  border-radius: 999rpx;
+  background: #FFFFFF;
+  font-size: 24rpx;
+  margin: 0 16rpx 16rpx 0;
+  color: #5A5D66;
+  /* 关键：chip 是行内 text 时必须禁止内部换行，
+     否则「7 天」会在数字和「天」之间断开，且行内元素的 padding
+     不撑高行盒 —— 背景圆角就会和上一行文字叠在一起。 */
+  white-space: nowrap;
+}
+.chip.active {
+  background: #FFEAF0;
+  color: #FF5A7A;
+}
+/* chip 排布容器：必须显式 flex 换行。
+   直接把一串行内 text 塞进 .detail-value（block）里时，
+   它们按纯文本排版，撑不开盒模型，选中态背景就会糊成一片。 */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 4rpx;
+}
+/* 表单里的常用地点快捷标签：必须看起来「可点」，否则用户以为是一行普通说明 */
+.field-chips {
+  margin-top: 16rpx;
+}
+.chip-shortcut {
+  border: 1rpx solid #E6E9F0;
+  margin-bottom: 12rpx;
+}
+.chip-shortcut.active {
+  border-color: #FFC9D4;
+}
+/* 订单卡片底部操作：删除 / 恢复 */
+.card-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 18rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #F2F3F5;
+}
+.link-danger {
+  color: #C8354A;
+  font-size: 24rpx;
+}
+.link-danger.strong {
+  font-weight: 600;
+}
+.link-ghost {
+  color: #8A8A8F;
+  font-size: 24rpx;
+  margin-left: 24rpx;
+}
+.link-primary {
+  color: #FF5A7A;
+  font-size: 24rpx;
+}
+.hidden-foot {
+  display: flex;
+  justify-content: center;
+  padding: 24rpx 0 8rpx;
+}
+.order-card.muted {
+  opacity: 0.68;
+}
+
+.rent-total {
+  font-size: 24rpx;
+  color: #8A8A8F;
+  line-height: 1.6;
+}
+.order-card {
+  background: #FFFFFF;
+  margin: 0 20rpx 20rpx;
+  padding: 28rpx;
+  border-radius: 24rpx;
+}
+.status-pending {
+  color: #FF9F43;
+}
+.status-accepted {
+  color: #3B82F6;
+}
+.status-done {
+  color: #22A06B;
+}
+.status-canceled {
+  color: #A0A3AA;
+}
+
+.profile-head {
+  margin: 20rpx;
+  padding: 34rpx;
+  border-radius: 24rpx;
+  background: #FF5A7A;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+}
+.avatar {
+  width: 110rpx;
+  height: 110rpx;
+  border-radius: 50%;
+  background: #FFFFFF;
+  color: #FF5A7A;
+  font-size: 46rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+.profile-info {
+  margin-left: 24rpx;
+  flex: 1;
+}
+.uname {
+  font-size: 34rpx;
+  font-weight: 600;
+}
+.uid {
+  font-size: 22rpx;
+  opacity: 0.9;
+  margin-top: 8rpx;
+}
+.role-tag {
+  font-size: 22rpx;
+  padding: 8rpx 22rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.25);
+}
+.stat-row {
+  display: flex;
+  background: #FFFFFF;
+  margin: 20rpx;
+  padding: 26rpx 0;
+  border-radius: 24rpx;
+}
+.stat-item {
+  flex: 1;
+  text-align: center;
+}
+.stat-num {
+  font-size: 34rpx;
+  font-weight: 600;
+}
+.stat-label {
+  font-size: 22rpx;
+  color: #8A8A8F;
+  margin-top: 6rpx;
+}
+.menu-list {
+  background: #FFFFFF;
+  margin: 20rpx;
+  border-radius: 24rpx;
+  overflow: hidden;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 28rpx;
+  border-bottom: 1rpx solid #F2F3F5;
+}
+.menu-item.last {
+  border-bottom: none;
+}
+.menu-icon {
+  font-size: 34rpx;
+  width: 60rpx;
+}
+.menu-label {
+  flex: 1;
+  font-size: 28rpx;
+}
+.menu-value {
+  color: #8A8A8F;
+  font-size: 26rpx;
+  margin-right: 12rpx;
+}
+.menu-arrow {
+  color: #C0C3CA;
+  font-size: 26rpx;
+}
+
+.admin-panel {
+  margin: 0 20rpx 20rpx;
+  padding: 24rpx 28rpx;
+}
+.admin-panel .hint {
+  margin-top: 16rpx;
+}
+
+.login-wrap {
+  padding: 100rpx 40rpx;
+  text-align: center;
+}
+.login-title {
+  font-size: 38rpx;
+  font-weight: 600;
+  margin-bottom: 18rpx;
+}
+.login-desc {
+  font-size: 26rpx;
+  color: #8A8A8F;
+  margin-bottom: 48rpx;
+}
+.top-gap {
+  margin-top: 20rpx;
+}
+/* ---------- 登录 / 注册表单 ----------
+   .login-wrap 是居中的，输入框继承了 text-align:center，
+   占位文字「手机号」「密码」看上去就像两个居中标题，加上底色几乎透明，
+   整块白底完全分不出是两个输入框。这里把表单区改回左对齐，
+   每个字段独立成框、独立标签、拉开间距。
+   盒子几何全部交给外层 view（.login-box）控制，input 只负责显示文字 —— 
+   view 没有 input 那个默认固定高度，所以 padding / 高度怎么设都不会压扁文字。 */
+.login-form {
+  text-align: left;
+}
+.login-item {
+  margin-bottom: 28rpx;
+}
+.login-label {
+  font-size: 26rpx;
+  color: #5A5D66;
+  margin-bottom: 12rpx;
+  padding-left: 6rpx;
+}
+.login-box {
+  display: flex;
+  align-items: center;
+  height: 88rpx;
+  padding: 0 24rpx;
+  background: #FFFFFF;
+  border: 2rpx solid #E3E6EB;
+  border-radius: 18rpx;
+  box-sizing: border-box;
+}
+.login-box.focused {
+  border-color: #FF5A7A;
+  background: #FFF8FA;
+}
+.login-input {
+  flex: 1;
+  /* input 自身已无 padding / border，width:100% 不会再溢出父容器，
+     万一渲染器没把它当 flex item，它也照样能撑满整行 */
+  width: 100%;
+  min-width: 0;
+  font-size: 30rpx;
+  line-height: normal;
+  color: #1F2233;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.login-ph {
+  color: #B4B8C0;
+  font-size: 28rpx;
+}
+.login-error {
+  margin-bottom: 20rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 14rpx;
+  background: #FFF3F5;
+  border: 2rpx solid #FFD3DC;
+  color: #D33A5C;
+  font-size: 24rpx;
+  line-height: 1.6;
+  text-align: left;
+}
+.code-row {
+  display: flex;
+  align-items: stretch;
+}
+.code-box {
+  flex: 1;
+  margin-right: 16rpx;
+}
+.code-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 26rpx;
+  border-radius: 18rpx;
+  background: #FFEAF0;
+  color: #FF5A7A;
+  font-size: 26rpx;
+  white-space: nowrap;
+}
+.code-btn.disabled {
+  background: #F2F3F5;
+  color: #A0A3AA;
+}
+.switch-line {
+  text-align: center;
+  font-size: 26rpx;
+  color: #8A8A8F;
+  margin-top: 30rpx;
+}
+.link {
+  color: #FF5A7A;
+}
+.divider {
+  text-align: center;
+  color: #C0C3CA;
+  font-size: 24rpx;
+  margin: 50rpx 0 30rpx;
+  position: relative;
+}
+
+/* 楼栋 / 楼层 / 宿舍号 三级选择 */
+.room-picker {
+  display: flex;
+  align-items: center;
+  background: #FFFFFF;
+  border: 2rpx solid #E3E6EB;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  justify-content: space-between;
+}
+.room-text {
+  font-size: 28rpx;
+  flex: 1;
+}
+.room-placeholder {
+  color: #A0A3AA;
+}
+.room-arrow {
+  color: #C0C3CA;
+  font-size: 26rpx;
+}
+.picker-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 100;
+}
+.picker-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #FFFFFF;
+  border-radius: 24rpx 24rpx 0 0;
+  z-index: 101;
+  padding-bottom: 20rpx;
+}
+.picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26rpx 30rpx;
+  border-bottom: 1rpx solid #F2F3F5;
+}
+.picker-cancel {
+  font-size: 28rpx;
+  color: #8A8A8F;
+}
+.picker-title {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+.picker-done {
+  font-size: 28rpx;
+  color: #FF5A7A;
+  font-weight: 600;
+}
+.picker-body {
+  max-height: 520rpx;
+}
+.picker-col {
+  height: 440rpx;
+}
+.picker-cell {
+  text-align: center;
+  font-size: 30rpx;
+  line-height: 88rpx;
+  color: #3A3D45;
+}
+
+.rental-item {
+  display: flex;
+  align-items: center;
+  padding: 26rpx;
+  background: #FFFFFF;
+  margin: 0 20rpx 20rpx;
+  border-radius: 20rpx;
+}
+.rental-icon {
+  width: 110rpx;
+  height: 110rpx;
+  border-radius: 20rpx;
+  background: #F3F0FF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48rpx;
+}
+.rental-info {
+  flex: 1;
+  margin-left: 24rpx;
+}
+.rental-name {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+.rental-spec {
+  font-size: 24rpx;
+  color: #8A8A8F;
+  margin-top: 8rpx;
+}
+.rental-price {
+  color: #FF5A7A;
+  font-size: 34rpx;
+  font-weight: 600;
+}
+.rental-unit {
+  font-size: 22rpx;
+  color: #8A8A8F;
+}
+
+.detail-row {
+  display: flex;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #F2F3F5;
+}
+.detail-row.last {
+  border-bottom: none;
+}
+.detail-label {
+  width: 180rpx;
+  color: #8A8A8F;
+  font-size: 26rpx;
+}
+.detail-value {
+  flex: 1;
+  font-size: 28rpx;
+  word-break: break-all;
+}
+.hidden-tip {
+  color: #A0A3AA;
+  font-size: 25rpx;
+}
+.img-row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 14rpx;
+}
+.img-thumb {
+  width: 160rpx;
+  height: 160rpx;
+  margin: 0 16rpx 16rpx 0;
+  border-radius: 16rpx;
+}
+
+/* ===== 管理后台：接单员审核 ===== */
+.btn-danger {
+  background: #F2F3F5;
+  color: #E5484D;
+  text-align: center;
+  padding: 26rpx;
+  border-radius: 999rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+.btn-row .half {
+  flex: 1;
+  margin-right: 0;
+}
+.btn-row .half:first-child {
+  margin-right: 16rpx;
+}
+.btn-row {
+  margin-top: 20rpx;
+}
+.apply-card {
+  padding: 28rpx;
+}
+.apply-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 18rpx;
+  border-bottom: 1rpx solid #F2F3F5;
+}
+.apply-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1F2126;
+}
+.status-text {
+  font-size: 24rpx;
+}
+.status-approved {
+  color: #22A06B;
+}
+.status-rejected {
+  color: #E5484D;
+}
+.doc-row {
+  display: flex;
+  padding-top: 22rpx;
+}
+.doc-btn {
+  flex: 1;
+  text-align: center;
+  font-size: 26rpx;
+  color: #FF5A7A;
+  background: #FFEAF0;
+  padding: 18rpx 0;
+  border-radius: 999rpx;
+}
+.doc-btn:first-child {
+  margin-right: 16rpx;
+}
+.note-box {
+  margin-top: 20rpx;
+}.note-input {
+  width: 100%;
+  background: #FFFFFF;
+  border: 2rpx solid #E3E6EB;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  font-size: 26rpx;
+  color: #1F2233;
+  min-height: 120rpx;
+  box-sizing: border-box;
+}
+.img-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+.img-preview {
+  width: 100%;
+}
+.img-tip {
+  color: #FFFFFF;
+  font-size: 26rpx;
+  margin-top: 32rpx;
+}
+
+/* ===== 身份切换 / 积分钱包 ===== */
+.role-switch {
+  display: flex;
+  background: #F2F3F5;
+  border-radius: 999rpx;
+  padding: 6rpx;
+}
+.role-opt {
+  padding: 12rpx 26rpx;
+  font-size: 24rpx;
+  color: #8A8A8F;
+  border-radius: 999rpx;
+}
+.role-opt.on {
+  background: #FF5A7A;
+  color: #FFFFFF;
+  font-weight: 600;
+}
+.stat-arrow {
+  color: #C6C8CE;
+  margin-left: 6rpx;
+}
+.btn-disabled {
+  background: #E9EAED;
+  color: #A0A3AA;
+  text-align: center;
+  padding: 26rpx;
+  border-radius: 999rpx;
+  font-size: 30rpx;
+}
+
+/* ===== 头像与用户名（第四章）===== */
+/* 点头像区即可改资料：整块可点，右侧的身份切换不受影响 */
+.profile-main {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+.profile-main .profile-info {
+  min-width: 0;
+}
+.avatar-tap {
+  position: relative;
+  overflow: visible;
+  flex: none;
+}
+.avatar-img {
+  width: 110rpx;
+  height: 110rpx;
+  border-radius: 50%;
+  background: #F2F3F5;
+}
+/* 头像右下角的小角标，提示这里可以点 */
+.avatar-edit {
+  position: absolute;
+  right: -6rpx;
+  bottom: -6rpx;
+  min-width: 34rpx;
+  height: 34rpx;
+  line-height: 34rpx;
+  padding: 0 6rpx;
+  border-radius: 999rpx;
+  background: #FFFFFF;
+  color: #FF5A7A;
+  font-size: 20rpx;
+  text-align: center;
+  border: 2rpx solid #FF5A7A;
+  box-sizing: border-box;
+}
+
+/* 注册表单里的必填标记 */
+.required-mark {
+  color: #FF5A7A;
+  margin-left: 6rpx;
+  font-size: 26rpx;
+}
+.login-name-hint {
+  margin: 4rpx 0 12rpx;
+}
+

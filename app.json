@@ -1,0 +1,68 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/orders/list",
+    "pages/mine/index",
+    "pages/order/create",
+    "pages/order/detail",
+    "pages/mine/address",
+    "pages/mine/apply",
+    "pages/mine/points",
+    "pages/mine/wallet",
+    "pages/rental/index",
+    "pages/rental/apply",
+    "pages/agreement/index",
+    "pages/admin/review",
+    "pages/admin/settle",
+    "pages/admin/reports",
+    "pages/admin/items",
+    "pages/admin/rental",
+    "pages/admin/dashboard",
+    "pages/admin/staff",
+    "pages/admin/flags",
+    "pages/admin/banners",
+    "pages/admin/feedback",
+    "pages/mine/messages",
+    "pages/mine/cert",
+    "pages/mine/feedback",
+    "pages/mine/mall",
+    "pages/hall/index",
+    "pages/admin/points",
+    "pages/admin/dispatch",
+    "pages/feedback/thread",
+    "pages/mine/profile",
+    "pages/mine/credit",
+    "pages/mine/reviews",
+    "pages/order/review"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#FF5A7A",
+    "navigationBarTitleText": "校园跑腿",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F5F6F8",
+    "backgroundTextStyle": "dark",
+    "enablePullDownRefresh": false
+  },
+  "tabBar": {
+    "color": "#8A8A8F",
+    "selectedColor": "#FF5A7A",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/orders/list",
+        "text": "订单"
+      },
+      {
+        "pagePath": "pages/mine/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "lazyCodeLoading": "requiredComponents",
+  "sitemapLocation": "sitemap.json"
+}

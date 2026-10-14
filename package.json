@@ -1,0 +1,9 @@
+{
+  "name": "campus-errand-miniprogram",
+  "version": "1.0.0",
+  "private": true,
+  "description": "校园跑腿代办小程序",
+  "dependencies": {
+    "@tencent-ai/workbuddy-cloud-sdk": "dev"
+  }
+}

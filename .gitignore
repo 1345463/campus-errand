@@ -1,0 +1,20 @@
+# 依赖
+node_modules/
+
+# 开发者工具本地私有配置（含个人 appid 覆盖）
+project.private.config.json
+
+# 注：.wbapp_*.privacy.json 是微信隐私协议声明（Album/Camera/...用途），
+# 小程序提审需要它，且实测不含任何密钥，所以**入库**，不要忽略。
+
+# 注意：miniprogram_npm/ 是 SDK 构建产物，必须入库。
+# 「预览/上传」依赖它，删掉就跑不起来，和 node_modules/ 性质完全不同。
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+*.swp
+
+# 临时产物
+*.tmp
+*.log

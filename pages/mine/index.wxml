@@ -1,0 +1,302 @@
+<view class="page">
+  <view wx:if="{{!logged}}">
+    <view class="login-wrap">
+      <view class="login-title">校园跑腿</view>
+      <view class="login-desc">{{school}} · 同学互助跑腿平台</view>
+
+      <block wx:if="{{mode === 'login'}}">
+        <view class="login-form">
+          <view class="login-item">
+            <view class="login-label">手机号</view>
+            <view class="login-box {{focusKey === 'phone' ? 'focused' : ''}}">
+              <input
+                class="login-input"
+                type="number"
+                placeholder="请输入 11 位手机号"
+                placeholder-class="login-ph"
+                value="{{phone}}"
+                data-key="phone"
+                bindinput="onAccountInput"
+                bindfocus="onFieldFocus"
+                bindblur="onFieldBlur"
+                maxlength="11"
+              />
+            </view>
+          </view>
+          <view class="login-item">
+            <view class="login-label">密码</view>
+            <view class="login-box {{focusKey === 'password' ? 'focused' : ''}}">
+              <input
+                class="login-input"
+                password="{{true}}"
+                placeholder="请输入登录密码"
+                placeholder-class="login-ph"
+                value="{{password}}"
+                data-key="password"
+                bindinput="onAccountInput"
+                bindfocus="onFieldFocus"
+                bindblur="onFieldBlur"
+              />
+            </view>
+          </view>
+        </view>
+        <view wx:if="{{formError}}" class="login-error">{{formError}}</view>
+        <view class="agree-row login-agree" bindtap="toggleAgreed">
+          <view class="agree-box {{agreed ? 'checked' : ''}}">
+            <text wx:if="{{agreed}}" class="agree-tick">✓</text>
+          </view>
+          <text class="agree-text">
+            {{agreementNotice}}（<text class="link" catchtap="goAgreement">查看全文</text>）
+          </text>
+        </view>
+        <view class="btn-primary top-gap {{submitting ? 'disabled' : ''}}" bindtap="accountLogin">
+          {{submitting ? '登录中…' : '账号登录'}}
+        </view>
+        <view class="switch-line">还没有账号？<text class="link" bindtap="switchMode">注册一个</text></view>
+      </block>
+
+      <block wx:else>
+        <view class="login-form">
+          <view class="login-item">
+            <view class="login-label">手机号</view>
+            <view class="login-box {{focusKey === 'phone' ? 'focused' : ''}}">
+              <input
+                class="login-input"
+                type="number"
+                placeholder="请输入 11 位手机号"
+                placeholder-class="login-ph"
+                value="{{phone}}"
+                data-key="phone"
+                bindinput="onAccountInput"
+                bindfocus="onFieldFocus"
+                bindblur="onFieldBlur"
+                maxlength="11"
+              />
+            </view>
+          </view>
+          <view class="login-item">
+            <view class="login-label">短信验证码</view>
+            <view class="code-row">
+              <view class="login-box code-box {{focusKey === 'code' ? 'focused' : ''}}">
+                <input
+                  class="login-input"
+                  type="number"
+                  placeholder="请输入验证码"
+                  placeholder-class="login-ph"
+                  value="{{code}}"
+                  data-key="code"
+                  bindinput="onAccountInput"
+                  bindfocus="onFieldFocus"
+                  bindblur="onFieldBlur"
+                  maxlength="6"
+                />
+              </view>
+              <view class="code-btn {{countdown > 0 ? 'disabled' : ''}}" bindtap="sendCode">
+                {{countdown > 0 ? countdown + ' 秒后重发' : '获取验证码'}}
+              </view>
+            </view>
+          </view>
+          <view class="login-item">
+            <view class="login-label">用户名<text class="required-mark">*</text></view>
+            <view class="login-box {{focusKey === 'regNickname' ? 'focused' : ''}}">
+              <input
+                class="login-input"
+                placeholder="必填，2 - 16 个字"
+                placeholder-class="login-ph"
+                value="{{regNickname}}"
+                data-key="regNickname"
+                bindinput="onAccountInput"
+                bindfocus="onFieldFocus"
+                bindblur="onFieldBlur"
+                maxlength="16"
+              />
+            </view>
+          </view>
+          <view class="login-item">
+            <view class="login-label">密码</view>
+            <view class="login-box {{focusKey === 'password' ? 'focused' : ''}}">
+              <input
+                class="login-input"
+                password="{{true}}"
+                placeholder="设置密码（至少 6 位）"
+                placeholder-class="login-ph"
+                value="{{password}}"
+                data-key="password"
+                bindinput="onAccountInput"
+                bindfocus="onFieldFocus"
+                bindblur="onFieldBlur"
+              />
+            </view>
+          </view>
+        </view>
+        <view class="hint login-name-hint">用户名会展示给订单对方，注册后可在「我的 → 头像与用户名」里修改</view>
+        <view wx:if="{{formError}}" class="login-error">{{formError}}</view>
+        <view class="agree-row login-agree" bindtap="toggleAgreed">
+          <view class="agree-box {{agreed ? 'checked' : ''}}">
+            <text wx:if="{{agreed}}" class="agree-tick">✓</text>
+          </view>
+          <text class="agree-text">
+            {{agreementNotice}}（<text class="link" catchtap="goAgreement">查看全文</text>）
+          </text>
+        </view>
+        <view class="btn-primary top-gap {{submitting ? 'disabled' : ''}}" bindtap="accountRegister">
+          {{submitting ? '提交中…' : '注册并登录'}}
+        </view>
+        <view class="switch-line">已有账号？<text class="link" bindtap="switchMode">返回登录</text></view>
+      </block>
+
+      <view class="divider">或</view>
+      <view class="btn-ghost {{logining ? 'disabled' : ''}}" bindtap="onLogin">
+        {{logining ? '登录中…' : '微信一键登录'}}
+      </view>
+      <view class="hint">
+        微信登录只能在小程序真机/体验版里用。预览环境请用上面的账号密码登录。
+      </view>
+    </view>
+  </view>
+
+  <view wx:else>
+    <!-- 点头像 / 用户名区域即可修改头像与用户名 -->
+    <view class="profile-head">
+      <view class="profile-main" bindtap="goProfile">
+        <view class="avatar avatar-tap">
+          <image wx:if="{{avatarSrc}}" class="avatar-img" src="{{avatarSrc}}" mode="aspectFill"></image>
+          <text wx:else>{{initial}}</text>
+          <view class="avatar-edit">改</view>
+        </view>
+        <view class="profile-info">
+          <view class="uname">{{nicknameText}}</view>
+          <view class="uid">ID {{uidText}}</view>
+          <view class="uid">点击这里修改头像和用户名</view>
+        </view>
+      </view>
+      <view class="role-switch {{switching ? 'disabled' : ''}}" bindtap="toggleRole">
+        <view class="role-opt {{roleText === '用户' ? 'on' : ''}}">用户</view>
+        <view class="role-opt {{roleText === '接单员' ? 'on' : ''}}">接单员</view>
+      </view>
+    </view>
+
+    <view class="stat-row">
+      <view class="stat-item" bindtap="goPoints">
+        <view class="stat-num">{{points}}</view>
+        <view class="stat-label">积分 <text class="stat-arrow">></text></view>
+      </view>
+      <view class="stat-item" bindtap="goWallet">
+        <view class="stat-num">{{balance}}</view>
+        <view class="stat-label">钱包（元）<text class="stat-arrow">></text></view>
+      </view>
+      <view wx:if="{{flagsOn.credit_score}}" class="stat-item" bindtap="goCredit">
+        <view class="stat-num">{{creditScore}}</view>
+        <view class="stat-label">信誉分 <text class="stat-arrow">></text></view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-num">{{certShort}}</view>
+        <view class="stat-label">接单资格</view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">我的订单</text>
+      </view>
+      <!-- 状态入口必须挤在一行：这里用 .order-chips 关掉换行并等分宽度，
+           不再用带右边距的默认 chip 排布（默认排布会挤到第二行）。
+           「待评价」是评价页的唯一入口，所以菜单里不再重复列一项「我的评价」。 -->
+      <view class="filter-row order-chips">
+        <view class="chip {{orderFilter === 'all' ? 'active' : ''}}" data-status="all" bindtap="goOrders">全部</view>
+        <view class="chip {{orderFilter === 'pending' ? 'active' : ''}}" data-status="pending" bindtap="goOrders">待接单</view>
+        <view class="chip {{orderFilter === 'accepted' ? 'active' : ''}}" data-status="accepted" bindtap="goOrders">进行中</view>
+        <view class="chip {{orderFilter === 'done' ? 'active' : ''}}" data-status="done" bindtap="goOrders">已完成</view>
+        <view wx:if="{{flagsOn.my_reviews}}" class="chip" bindtap="goMyReviews">待评价</view>
+      </view>
+    </view>
+
+    <view class="menu-list">
+      <view class="menu-item" bindtap="goApply">
+        <text class="menu-icon">🪪</text>
+        <text class="menu-label">成为接单员</text>
+        <text class="menu-value">{{certText}}</text>
+        <text class="menu-arrow">></text>
+      </view>
+      <view class="menu-item" bindtap="goAddress">
+        <text class="menu-icon">📍</text>
+        <text class="menu-label">我的地址</text>
+        <text class="menu-arrow">></text>
+      </view>
+      <view class="menu-item" bindtap="goAccepted">
+        <text class="menu-icon">🧾</text>
+        <text class="menu-label">我接的单</text>
+        <text class="menu-arrow">></text>
+      </view>
+      <view class="menu-item" bindtap="goRental">
+        <text class="menu-icon">📷</text>
+        <text class="menu-label">相机租赁</text>
+        <text class="menu-arrow">></text>
+      </view>
+
+      <!-- 评价、信誉分、头像用户名都不在这里重复列：
+           它们各自的入口已经长在上面（我的订单的「待评价」chip、
+           统计栏的「信誉分」格子、头像区），同一个目标页只留一个入口。 -->
+
+      <!-- 消息中心：灰度开才出现，右上角带未读数 -->
+      <view wx:if="{{flagsOn.message_center}}" class="menu-item" bindtap="goMessages">
+        <text class="menu-icon">🔔</text>
+        <text class="menu-label">消息中心</text>
+        <text wx:if="{{unread > 0}}" class="menu-value">未读 {{unread}}</text>
+        <text wx:else class="menu-value">暂无新消息</text>
+        <text class="menu-arrow">></text>
+      </view>
+      <view wx:if="{{flagsOn.point_mall}}" class="menu-item" bindtap="goMall">
+        <text class="menu-icon">🎁</text>
+        <text class="menu-label">积分商城</text>
+        <text class="menu-value">{{points}} 分</text>
+        <text class="menu-arrow">></text>
+      </view>
+      <view wx:if="{{flagsOn.user_feedback}}" class="menu-item" bindtap="goFeedback">
+        <text class="menu-icon">💬</text>
+        <text class="menu-label">意见反馈</text>
+        <text class="menu-arrow">></text>
+      </view>
+
+      <!-- 后台：所有模块的入口都收在「管理员工作台」里，本页不再逐个列出 -->
+      <view class="menu-item" bindtap="onAdminTap">
+        <text class="menu-icon">🛡️</text>
+        <text class="menu-label">管理员权限</text>
+        <text class="menu-value">{{isAdmin ? '已开通' : '未开通'}}</text>
+        <text class="menu-arrow">></text>
+      </view>
+      <view wx:if="{{adminPanelOpen && !isAdmin}}" class="card admin-panel">
+        <input
+          class="field-input"
+          placeholder="管理员口令"
+          value="{{adminCode}}"
+          data-key="adminCode"
+          bindinput="onAccountInput"
+        />
+        <view class="btn-primary top-gap {{adminSaving ? 'disabled' : ''}}" bindtap="submitAdminCode">
+          {{adminSaving ? '处理中…' : '确认开通'}}
+        </view>
+        <view class="hint">开通后可查看全部订单，并直接获得接单资格（仅调试期使用）</view>
+      </view>
+      <!-- 管理员工作台：灰度开且有任意后台权限时出现，是全部后台页的唯一入口 -->
+      <view wx:if="{{flagsOn.admin_dashboard && isAnyAdmin}}" class="menu-item" bindtap="goDashboard">
+        <text class="menu-icon">🗂️</text>
+        <text class="menu-label">管理员工作台</text>
+        <text class="menu-value">全部后台功能</text>
+        <text class="menu-arrow">></text>
+      </view>
+
+      <view class="menu-item" bindtap="goAgreement">
+        <text class="menu-icon">📄</text>
+        <text class="menu-label">用户协议</text>
+        <text class="menu-value">{{agreementVersionText}}</text>
+        <text class="menu-arrow">></text>
+      </view>
+      <view class="menu-item last" bindtap="onLogout">
+        <text class="menu-icon">🚪</text>
+        <text class="menu-label">{{logoutArmed ? '再点一次确认退出' : '退出登录'}}</text>
+        <text class="menu-arrow">></text>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,113 @@
+<view class="page">
+  <view class="filter-row">
+    <view
+      class="chip {{mode === item.key ? 'active' : ''}}"
+      wx:for="{{modes}}"
+      wx:key="key"
+      data-key="{{item.key}}"
+      bindtap="switchMode"
+    >{{item.label}}</view>
+    <view
+      class="chip {{mode === 'admin' ? 'active' : ''}}"
+      wx:if="{{isAdmin}}"
+      data-key="admin"
+      bindtap="switchMode"
+    >全部订单（管理）</view>
+  </view>
+  <view class="filter-row">
+    <view
+      class="chip {{status === item.key ? 'active' : ''}}"
+      wx:for="{{statuses}}"
+      wx:key="key"
+      data-key="{{item.key}}"
+      bindtap="switchStatus"
+    >{{item.label}}</view>
+  </view>
+
+  <!-- 订单搜索：灰度 order_search 打开后才出现 -->
+  <view wx:if="{{searchOn}}" class="search-row">
+    <input
+      class="search-input"
+      placeholder-class="field-ph"
+      placeholder="搜单号 / 标题 / 地址"
+      value="{{keyword}}"
+      confirm-type="search"
+      bindinput="onKeywordInput"
+      bindconfirm="doSearch"
+    ></input>
+    <view class="search-btn" bindtap="doSearch">搜索</view>
+    <view wx:if="{{searching}}" class="search-clear" bindtap="clearSearch">清空</view>
+  </view>
+
+  <view wx:if="{{errorText}}" class="mod-bar">
+    <view class="mod-text">{{errorText}}</view>
+  </view>
+
+  <view wx:if="{{needLogin}}" class="empty">登录后才能查看订单</view>
+  <view wx:elif="{{loading}}" class="empty">加载中…</view>
+  <view wx:elif="{{list.length === 0 && searching}}" class="empty">没有匹配的订单</view>
+  <view wx:elif="{{list.length === 0}}" class="empty">暂无任务！</view>
+
+  <!-- 已删除订单的入口必须放在列表判空之外：
+       否则把所有单都删掉后列表为空，就再也找不到「显示已删除订单」去恢复了 -->
+  <block wx:if="{{!needLogin && !loading}}">
+    <view class="hidden-foot">
+      <text class="link-ghost" bindtap="toggleHidden">{{showHidden ? '隐藏已删除订单' : '显示已删除订单'}}</text>
+    </view>
+    <block wx:if="{{showHidden}}">
+      <view wx:if="{{hiddenLoading}}" class="hint">加载中…</view>
+      <view wx:elif="{{hiddenList.length === 0}}" class="hint">还没有删除过订单</view>
+      <view wx:else>
+        <view class="order-card muted" wx:for="{{hiddenList}}" wx:key="id">
+          <view class="task-row">
+            <text class="task-title">{{item.title}}</text>
+            <text class="reward">¥{{item.reward}}</text>
+          </view>
+          <view class="task-meta">{{item.serviceName}} · {{item.createdText}}</view>
+          <view class="task-foot">
+            <text class="status-{{item.status}}">{{item.statusText}}</text>
+            <text class="link-primary" data-id="{{item.id}}" bindtap="restoreOrder">恢复显示</text>
+          </view>
+        </view>
+      </view>
+    </block>
+  </block>
+
+  <view wx:if="{{list.length > 0}}">
+    <view
+      class="order-card"
+      wx:for="{{list}}"
+      wx:key="id"
+      bindtap="openDetail"
+      data-id="{{item.id}}"
+    >
+      <view class="task-row">
+        <text class="task-title">{{item.title}}</text>
+        <text class="reward">¥{{item.reward}}</text>
+      </view>
+      <view class="task-meta">{{item.serviceName}} · {{item.createdText}}</view>
+      <view class="task-meta">{{item.routeText}}</view>
+      <view wx:if="{{mode === 'admin'}}" class="task-meta">
+        发布 {{item.ownerName}}<text wx:if="{{item.runnerName}}"> · 接单 {{item.runnerName}}</text>
+      </view>
+      <view class="task-foot">
+        <text class="status-{{item.status}}">{{item.statusText}}</text>
+        <text class="menu-arrow">详情 ></text>
+      </view>
+
+      <view wx:if="{{item.canDelete}}" class="card-actions">
+        <text wx:if="{{hideArmId !== item.id}}" class="link-danger" data-id="{{item.id}}" catchtap="askHide">删除订单</text>
+        <block wx:else>
+          <text class="link-danger strong" data-id="{{item.id}}" catchtap="askHide">再点一次确认删除</text>
+          <text class="link-ghost" catchtap="cancelHide">取消</text>
+        </block>
+      </view>
+      <view wx:if="{{item.takedown}}" class="task-meta">该订单因违规被管理员下架</view>
+    </view>
+
+    <!-- 分页：只有灰度 order_paging 打开、且不在搜索态时才显示 -->
+    <view wx:if="{{loadingMore}}" class="empty">加载中…</view>
+    <view wx:elif="{{pagingOn && hasMore}}" class="empty">上拉加载更多</view>
+    <view wx:elif="{{pagingOn && !searching}}" class="empty">已经到底了</view>
+  </view>
+</view>

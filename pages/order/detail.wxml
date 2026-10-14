@@ -1,0 +1,238 @@
+<view class="page">
+  <view wx:if="{{hidden}}" class="empty">
+    <view>该订单已删除</view>
+    <view class="hint top-gap">删除后不再出现在订单列表，记录仍保留在系统中以便核查</view>
+    <view class="btn-ghost top-gap" bindtap="goOrders">返回订单列表</view>
+  </view>
+
+  <block wx:if="{{!hidden}}">
+  <view class="err-bar" wx:if="{{errorText}}">
+    <text class="err-text">{{errorText}}</text>
+    <text class="err-retry" bindtap="load">重试</text>
+  </view>
+
+  <view class="card">
+    <view class="task-row">
+      <text class="task-title">{{order.title}}</text>
+      <text class="reward">¥{{order.reward}}</text>
+    </view>
+    <view class="task-meta">{{order.serviceName}} · 发布于 {{order.createdText}}</view>
+    <view class="task-foot">
+      <text class="status-{{order.status}}">{{order.statusText}}</text>
+      <view>
+        <text class="badge" wx:if="{{isOwner}}">我发布的</text>
+        <text class="badge" wx:if="{{isRunner}}">我接的单</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="section-title">任务信息</text>
+    </view>
+    <view class="detail-row">
+      <view class="detail-label">取件地址</view>
+      <view class="detail-value">{{order.pickup_addr || '待沟通'}}</view>
+    </view>
+    <view class="detail-row">
+      <view class="detail-label">送达地址</view>
+      <view class="detail-value">{{order.deliver_addr || '待沟通'}}</view>
+    </view>
+    <view class="detail-row">
+      <view class="detail-label">期望时间</view>
+      <view class="detail-value">{{expectTimeText}}</view>
+    </view>
+    <view class="detail-row" wx:if="{{genderText}}">
+      <view class="detail-label">性别限制</view>
+      <view class="detail-value">{{genderText}}</view>
+    </view>
+    <view class="detail-row" wx:if="{{tagsText}}">
+      <view class="detail-label">标签</view>
+      <view class="detail-value">{{tagsText}}</view>
+    </view>
+    <view class="detail-row">
+      <view class="detail-label">补充说明</view>
+      <view class="detail-value">{{order.description || '无'}}</view>
+    </view>
+    <view class="detail-row {{canSeeRunnerName && order.runner_name ? '' : 'last'}}">
+      <view class="detail-label">联系方式</view>
+      <view class="detail-value">
+        <text wx:if="{{canSeeContact}}">{{order.contact}}</text>
+        <text wx:else class="hidden-tip">接单后可见</text>
+      </view>
+    </view>
+    <view class="img-row" wx:if="{{images.length > 0}}">
+      <image
+        class="img-thumb"
+        wx:for="{{images}}"
+        wx:key="index"
+        src="{{item}}"
+        mode="aspectFill"
+        data-src="{{item}}"
+        bindtap="previewImage"
+      ></image>
+    </view>
+    <!-- 没接单的人服务端就把图片和取餐码掐掉了，这里补一句说明，
+         免得看着空空的以为是加载失败 -->
+    <view wx:elif="{{!canSeeContact}}" class="hint">
+      取餐码、图片和联系方式在接单之后才会显示
+    </view>
+    <view wx:if="{{order.discount_amount}}" class="detail-row last">
+      <view class="detail-label">券抵扣</view>
+      <view class="detail-value">已用券抵扣 ¥{{order.discount_amount}}（接单员仍拿全额赏金）</view>
+    </view>
+  </view>
+
+  <!-- 送达佐证：接单员提交完成拍的照片，发布方确认收货前靠它核对 -->
+  <view class="card" wx:if="{{deliverImageUrls.length > 0}}">
+    <view class="section-head">
+      <text class="section-title">送达佐证</text>
+    </view>
+    <view class="img-row">
+      <image
+        class="img-thumb"
+        wx:for="{{deliverImageUrls}}"
+        wx:for-item="deliverUrl"
+        wx:key="index"
+        src="{{deliverUrl}}"
+        mode="aspectFill"
+        data-src="{{deliverUrl}}"
+        data-group="deliver"
+        bindtap="previewImage"
+      ></image>
+    </view>
+    <view class="hint">接单员提交完成时的照片，确认无误后再点确认，赏金会立刻打给对方</view>
+  </view>
+
+  <!-- 接单员实名 + 信誉分：只给这单的参与方和管理员看 -->
+  <view class="card" wx:if="{{canSeeRunnerName && order.runner_name}}">
+    <view class="detail-row {{peerCreditText ? '' : 'last'}}">
+      <view class="detail-label">接单员</view>
+      <view class="detail-value">{{order.runner_name}}（{{acceptedText}} 接单）</view>
+    </view>
+    <view wx:if="{{peerCreditText}}" class="detail-row last">
+      <view class="detail-label">信誉分</view>
+      <view class="detail-value">{{peerCreditText}}</view>
+    </view>
+  </view>
+
+  <!-- 进度时间轴：灰度 order_timeline 打开后才出现，只有已发生的节点 -->
+  <view class="card" wx:if="{{timelineOn && timeline.length > 0}}">
+    <view class="section-head">
+      <text class="section-title">订单进度</text>
+    </view>
+    <view class="tl">
+      <view class="tl-item {{item.isLast ? 'last' : ''}}" wx:for="{{timeline}}" wx:key="key">
+        <view class="tl-dot"></view>
+        <view class="tl-body">
+          <view class="tl-title">{{item.title}}</view>
+          <view class="tl-desc">{{item.desc}}</view>
+          <view class="tl-time">{{item.timeText}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 评价：灰度 order_review 打开且订单完成后才出现 -->
+  <view class="card" wx:if="{{reviewOn && order.status === 'done'}}">
+    <view class="section-head">
+      <text class="section-title">评价</text>
+    </view>
+    <view wx:if="{{canReview}}">
+      <view class="hint">给这次合作留个评价，会影响对方的信誉分</view>
+      <view class="btn-primary top-gap" bindtap="goReview">去评价</view>
+    </view>
+    <view wx:else>
+      <view class="hint">你已评价：{{myScore}} 星</view>
+      <view wx:if="{{peerScore}}" class="settle-feedback">对方评价：{{peerScore}} 星 · {{peerComment}}</view>
+      <view wx:else class="hint">对方还没有评价</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{settleHint}}">
+    <view class="section-head">
+      <text class="section-title">结算进度</text>
+    </view>
+    <view class="settle-text">{{settleHint}}</view>
+    <view class="settle-rule">{{settleRuleText}}</view>
+    <view wx:if="{{doneText}}" class="settle-sub">接单员提交完成时间：{{doneText}}</view>
+    <view wx:if="{{feedbackStatusText}}" class="settle-feedback">{{feedbackStatusText}}</view>
+
+    <block wx:if="{{isRunner && order.status === 'waiting_confirm'}}">
+      <view wx:if="{{canFeedback}}" class="btn-ghost top-gap" bindtap="openFeedback">
+        发布方超 48 小时未确认，申请管理员核查
+      </view>
+      <view wx:else class="settle-sub">{{feedbackWaitText}}</view>
+    </block>
+
+    <view wx:if="{{feedbackOpen}}" class="feedback-box">
+      <textarea
+        class="note-input"
+        placeholder-class="field-ph"
+        placeholder="请说明送达情况，例如：已于 X 月 X 日放在宿舍门口并拍照，联系不上发布方"
+        value="{{feedbackText}}"
+        bindinput="onFeedbackInput"
+        maxlength="200"
+        auto-height="{{true}}"
+      />
+      <view class="btn-row">
+        <view class="btn-ghost half" bindtap="closeFeedback">取消</view>
+        <view class="btn-primary half {{feedbackBusy ? 'disabled' : ''}}" bindtap="submitFeedback">
+          {{feedbackBusy ? '提交中…' : '提交核查申请'}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{canReport}}">
+    <view class="section-head">
+      <text class="section-title">遇到问题？</text>
+    </view>
+    <view wx:if="{{reportStatusText}}" class="settle-feedback">{{reportStatusText}}</view>
+    <view wx:else>
+      <view class="hint">任务内容违规、描述不符或对方提出私下交易时，可以在这里举报，管理员会介入处理</view>
+      <view class="btn-ghost top-gap" bindtap="openReport">举报此任务</view>
+    </view>
+
+    <view wx:if="{{reportOpen}}" class="feedback-box">
+      <view class="tags">
+        <view
+          wx:for="{{reportReasons}}"
+          wx:key="*this"
+          class="tag {{reportReason === item ? 'active' : ''}}"
+          data-value="{{item}}"
+          bindtap="pickReason"
+        >{{item}}</view>
+      </view>
+      <textarea
+        class="note-input top-gap"
+        placeholder-class="field-ph"
+        placeholder="补充说明（可选），例如对方原话、要求做的具体内容"
+        value="{{reportDetail}}"
+        bindinput="onReportInput"
+        maxlength="200"
+        auto-height="{{true}}"
+      />
+      <view class="btn-row">
+        <view class="btn-ghost half" bindtap="closeReport">取消</view>
+        <view class="btn-danger half {{reportBusy ? 'disabled' : ''}}" bindtap="submitReport">
+          {{reportBusy ? '提交中…' : '提交举报'}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="footer-bar" wx:if="{{primary}}">
+    <view class="btn-primary {{busy ? 'disabled' : ''}} {{armKey ? 'btn-armed' : ''}}" bindtap="onPrimary">
+      {{armKey ? armLabel : primary.label}}
+    </view>
+    <view class="hint" wx:if="{{armKey === 'cancel'}}">再点一次立即取消，4 秒内不点会自动撤销</view>
+    <view class="hint" wx:if="{{armKey === 'complete'}}">再点一次即提交完成，赏金要等发布方确认</view>
+    <view class="hint" wx:if="{{armKey === 'confirm'}}">再点一次即把赏金打给接单员，请确认物品已送达</view>
+    <view class="hint" wx:if="{{!armKey && primary.key === 'accept'}}">接单后请尽快送达，送达后由发布方确认</view>
+    <view class="hint" wx:if="{{!armKey && primary.key === 'cancel'}}">取消后任务会从大厅撤下，需要重新发布</view>
+    <view class="hint" wx:if="{{!armKey && primary.key === 'complete'}}">送达后点这里，赏金不会立刻结算</view>
+    <view class="hint" wx:if="{{!armKey && primary.key === 'confirm'}}">确认后赏金立刻打进接单员钱包</view>
+  </view>
+  </block>
+</view>

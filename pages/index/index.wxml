@@ -1,0 +1,78 @@
+<view class="page">
+  <view class="notice-bar">
+    <view class="notice-dot"></view>
+    <text class="notice-text">{{notice}}</text>
+  </view>
+
+  <!-- 首页轮播：后台配置、灰度开关控制，没配图时整块不渲染 -->
+  <view wx:if="{{banners.length > 0}}" class="banner-box">
+    <swiper
+      class="banner-swiper"
+      indicator-dots="{{banners.length > 1}}"
+      indicator-color="rgba(255,255,255,0.5)"
+      indicator-active-color="#FF5A7A"
+      autoplay="{{banners.length > 1}}"
+      interval="5000"
+      circular="{{banners.length > 1}}"
+    >
+      <swiper-item wx:for="{{banners}}" wx:key="id">
+        <image
+          class="banner-img"
+          src="{{item.url}}"
+          mode="aspectFill"
+          data-index="{{index}}"
+          bindtap="tapBanner"
+        ></image>
+      </swiper-item>
+    </swiper>
+  </view>
+
+  <view class="hero">
+    <view class="hero-title">不想出门？call 我马上办</view>
+    <view class="hero-sub">{{school}} · 校园跑腿 · 实名接单</view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="section-title">全部服务</text>
+    </view>
+    <view class="grid">
+      <view
+        class="grid-item"
+        wx:for="{{services}}"
+        wx:key="type"
+        bindtap="goCreate"
+        data-type="{{item.type}}"
+      >
+        <view class="grid-icon" style="background:{{item.tint}}">{{item.icon}}</view>
+        <text class="grid-label">{{item.name}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="section-title">热门入口</text>
+    </view>
+    <view class="quick-row">
+      <view class="quick-item" bindtap="goRental">
+        <view class="quick-title">📷 相机租赁</view>
+        <view class="quick-desc">日租起租 · 线下自提</view>
+      </view>
+      <view class="quick-item last" bindtap="goAddress">
+        <view class="quick-title">📍 我的地址</view>
+        <view class="quick-desc">常用地址一键填入</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 任务列表已经整体搬到「任务大厅」页，这里只留入口，
+       同一个列表不在两处各维护一份（筛选、排序、楼栋楼层都在大厅页里） -->
+  <view class="card hall-entry" bindtap="goHall">
+    <view class="hall-entry-main">
+      <view class="hall-entry-title">📋 任务大厅</view>
+      <view class="hall-entry-desc">可接的任务都在这里，支持按服务类型、楼栋楼层筛选</view>
+    </view>
+    <text class="menu-arrow">></text>
+  </view>
+</view>

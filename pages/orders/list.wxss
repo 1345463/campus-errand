@@ -1,0 +1,34 @@
+/* 订单列表：搜索框 */
+
+.search-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.search-input {
+  flex: 1;
+  height: 72rpx;
+  padding: 0 20rpx;
+  border-radius: 36rpx;
+  background: #F3F4F6;
+  font-size: 28rpx;
+  color: #1F2023;
+}
+
+.search-btn {
+  margin-left: 16rpx;
+  padding: 0 28rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  border-radius: 36rpx;
+  background: #FF5A7A;
+  color: #FFFFFF;
+  font-size: 28rpx;
+}
+
+.search-clear {
+  margin-left: 16rpx;
+  font-size: 26rpx;
+  color: #8A8A8F;
+}

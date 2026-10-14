@@ -1,0 +1,75 @@
+/* 首页轮播 */
+
+.banner-box {
+  margin-bottom: 24rpx;
+}
+
+/* 2:1 宽幅比例，和后台上传的建议尺寸一致，超出部分裁掉 */
+.banner-swiper {
+  width: 100%;
+  height: 300rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+}
+
+.banner-img {
+  width: 100%;
+  height: 300rpx;
+  display: block;
+}
+
+/* 大厅筛选区：两行 chip，行间留一点间距 */
+.filter-row {
+  margin-bottom: 16rpx;
+}
+
+.filter-row + .filter-row {
+  margin-top: -4rpx;
+}
+
+/* 大厅门槛卡片：未成为接单员时用它顶掉任务列表 */
+.lock-card {
+  padding: 48rpx 32rpx;
+  text-align: center;
+}
+
+.lock-icon {
+  font-size: 64rpx;
+  line-height: 1;
+}
+
+.lock-title {
+  margin-top: 20rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #2B2B30;
+}
+
+.lock-desc {
+  margin-top: 12rpx;
+  text-align: left;
+}
+
+/* 任务大厅入口卡：列表已经搬到大厅页，首页只留这一个入口 */
+.hall-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hall-entry-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.hall-entry-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1F2023;
+}
+
+.hall-entry-desc {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #8A8A8F;
+}

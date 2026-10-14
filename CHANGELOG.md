@@ -43,3 +43,14 @@ _提交时间：2026-10-14 15:00:00_
 - 踩坑：sed 全量替换时不能把 ui.js 自己内部的 wx.* 也替换掉（会无限递归）。
 
 _提交时间：2026-10-14 16:00:00_
+
+## R5 · 提交任务报错 + 管理员审核接单员
+
+- Bug：pages/order/create.js 的 buildTitle 里 desc 未定义（批量 sed 误删声明），点提交必抛。
+- 教训：批量 sed 后函数级改动必须回归跑一遍，不能只做语法检查。
+- 新增 pages/admin/review 与 RPC：list_runner_applications(p_status, p_limit)（RETURNS TABLE，
+- 因为 RLS 是 owner-only，管理员读不到别人的申请）、review_runner_application（同步写
+- profiles.cert_status 与 role）。
+- 调试入口 insert_demo_application(label) 造合成申请，不污染真实用户认证状态。
+
+_提交时间：2026-10-14 17:00:00_

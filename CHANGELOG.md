@@ -66,3 +66,14 @@ _提交时间：2026-10-14 17:00:00_
 - 新建 pages/mine/points、pages/mine/wallet（钱包如实说明未接支付，不假装能提现）。
 
 _提交时间：2026-10-14 18:00:00_
+
+## R7 · 自接单 / 退出登录 / 双号联调
+
+- 删除管理员自接单入口（secondary 概念及相关 WXML 分支）。
+- 取消按钮消失的原因：服务端关系判定 RPC 失败 → then 链进 catch → setData 没执行。
+- 教训：关键渲染不能依赖单一 RPC，order_relation 加本地兜底。
+- 退出登录无效的真正原因：退出后被 tryAutoLogin 立刻登回同一账号。
+- 修法：写 manualLogout 标记 + 彻底不用 wx.showModal，改页内两步确认（4 秒自动复位）。
+- pages/mine/apply.js 曾出现两个 onLoad → 校验脚本增加"Page 方法名查重"。
+
+_提交时间：2026-10-14 19:00:00_

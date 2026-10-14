@@ -77,3 +77,16 @@ _提交时间：2026-10-14 18:00:00_
 - pages/mine/apply.js 曾出现两个 onLoad → 校验脚本增加"Page 方法名查重"。
 
 _提交时间：2026-10-14 19:00:00_
+
+## R8 · 两段式确认 + OUT 参数歧义
+
+- 根因 1：list_runner_applications 用 RETURNS TABLE 声明 OUT 参数，它们在 PL/pgSQL 里
+- 同时是函数变量；体内写 SELECT is_admin INTO v_admin FROM profiles WHERE owner_id = v_uid
+- （未限定表名）→ column reference "owner_id" is ambiguous，整个函数首次执行即失败。
+- 根因 2：detail 页取消/完成依赖 wx.showModal，预览容器可能缺失或回调不带 confirm 字段。
+- → 改成页面内两段式确认（armKey/armLabel，首次点变字"再点一次，确认取消"，4 秒复位）
+- + errorText 内联错误条 + 重试按钮。这个模式后来成为全项目标准做法。
+- 排障手法：auth.uid() = current_setting('request.jwt.claim.sub')，可建临时 SECURITY DEFINER
+- 探针函数里 PERFORM set_config(...) 再调业务函数，在 SQL 侧复现端上行为。
+
+_提交时间：2026-10-14 20:00:00_

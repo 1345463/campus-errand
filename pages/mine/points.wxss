@@ -1,0 +1,25 @@
+/* 我的积分：流水明细 */
+
+.flow-kind {
+  display: block;
+  font-size: 28rpx;
+  color: #1F2023;
+}
+
+.flow-time {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: #9A9CA1;
+}
+
+/* 积分增减：按校园产品习惯，增加用醒目色，扣减用中性灰 */
+.flow-plus {
+  color: #FF5A7A;
+  font-weight: 600;
+}
+
+.flow-minus {
+  color: #6B6B70;
+  font-weight: 600;
+}

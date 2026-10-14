@@ -1,0 +1,52 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>登录后才能查看积分</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去登录</view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="empty">加载中…</view>
+
+  <view wx:else>
+    <view class="hero">
+      <view class="hero-title">{{points}} 分</view>
+      <view class="hero-sub">{{nickname}} 的当前积分</view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">积分规则</text>
+      </view>
+      <view class="hint" wx:for="{{rules}}" wx:key="*this">{{index + 1}}. {{item}}</view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">积分明细</text>
+        <text wx:if="{{recordsOn}}" class="section-more" bindtap="goMall">去商城 ></text>
+      </view>
+
+      <view wx:if="{{!recordsOn}}" class="hint">积分流水还在内测，暂不展示明细</view>
+      <view wx:elif="{{records.length === 0}}" class="hint">还没有积分变动记录</view>
+      <view wx:else>
+        <view class="detail-row" wx:for="{{records}}" wx:key="id">
+          <view class="detail-label">
+            <text class="flow-kind">{{item.kindText}}</text>
+            <text class="flow-time">{{item.timeText}}</text>
+            <text wx:if="{{item.remark}}" class="flow-time">{{item.remark}}</text>
+          </view>
+          <view class="detail-value {{item.positive ? 'flow-plus' : 'flow-minus'}}">
+            {{item.deltaText}}
+            <text class="flow-time">（余 {{item.balanceText}}）</text>
+          </view>
+        </view>
+        <view wx:if="{{loadingMore}}" class="empty">加载中…</view>
+        <view wx:elif="{{!hasMore}}" class="empty">没有更多了</view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="btn-ghost" bindtap="goOrders">查看已完成的订单</view>
+      <view class="hint">本版本尚未接入支付结算，赏金在订单完成后由双方线下结清</view>
+    </view>
+  </view>
+</view>

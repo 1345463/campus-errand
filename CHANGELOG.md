@@ -54,3 +54,15 @@ _提交时间：2026-10-14 16:00:00_
 - 调试入口 insert_demo_application(label) 造合成申请，不污染真实用户认证状态。
 
 _提交时间：2026-10-14 17:00:00_
+
+## R6 · 大整数 owner_id 精度陷阱
+
+- 根因：owner_id 是超过 JS 安全整数（2^53）的字符串，客户端用 === 或 .eq 匹配不上，
+- RLS 又把不匹配的行静默过滤（返回 data: [] 而非 error）。
+- 解决套路（沿用至今）：所有"本人数据"读写一律改 SECURITY DEFINER 函数，
+- 服务端用 auth.uid() 定位，绝不在客户端拼 owner_id / runner_id。
+- 新增 set_my_role / update_my_profile / set_cert_pending / list_my_orders / order_relation。
+- 第二个坑：ui.confirm 无 defaultConfirm 时预览环境会 resolve(false)，取消/完成/删除全部静默。
+- 新建 pages/mine/points、pages/mine/wallet（钱包如实说明未接支付，不假装能提现）。
+
+_提交时间：2026-10-14 18:00:00_

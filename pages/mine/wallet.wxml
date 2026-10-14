@@ -1,0 +1,53 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>登录后才能查看钱包</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去登录</view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="empty">加载中…</view>
+
+  <view wx:else>
+    <view class="hero">
+      <view class="hero-title">¥ {{balance}}</view>
+      <view class="hero-sub">{{nickname}} 的钱包余额</view>
+    </view>
+
+    <view class="card">
+      <view class="btn-ghost" bindtap="goAccepted">查看我接的单</view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">余额明细</text>
+      </view>
+      <view wx:if="{{records.length === 0}}" class="hint">还没有余额变动记录</view>
+      <view wx:else>
+        <view class="detail-row" wx:for="{{records}}" wx:key="id">
+          <view class="detail-label">
+            <text class="flow-kind">{{item.kindText}}</text>
+            <text class="flow-time">{{item.timeText}}</text>
+            <text wx:if="{{item.remark}}" class="flow-time">{{item.remark}}</text>
+          </view>
+          <view class="detail-value {{item.positive ? 'flow-plus' : 'flow-minus'}}">
+            ¥{{item.deltaText}}
+            <text class="flow-time">（余 {{item.balanceText}}）</text>
+          </view>
+        </view>
+        <view wx:if="{{loadingMore}}" class="empty">加载中…</view>
+        <view wx:elif="{{!hasMore}}" class="empty">没有更多了</view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">说明</text>
+      </view>
+      <view class="hint" wx:for="{{notes}}" wx:key="*this">{{index + 1}}. {{item}}</view>
+    </view>
+
+    <view class="card">
+      <view class="btn-disabled" bindtap="comingSoon">提现（暂未开通）</view>
+      <view class="hint">提现要求小程序主体为企业并开通微信支付商户号，个人主体无法使用</view>
+    </view>
+  </view>
+</view>

@@ -123,3 +123,17 @@ _提交时间：2026-10-14 23:00:00_
 - utils/agreement.js：VERSION + 9 节正文，登录后 agreed_version 不等于当前版本强制跳协议页。
 
 _提交时间：2026-10-14 23:30:00_
+
+## R12 · 微信上传失败 + check-mp.js
+
+- 关键排障手法：WorkBuddy 前端日志 renderer.log 藏着微信 CI 的真实报错，
+- 搜 [miniprogram:publish] publish failed，字段 raw= 是完整错误，displayed=cleaned 是洗过的。
+- 根因：utils/api.js 里 completeOrder 被声明了两次（275 行、284 行）。
+- 为什么 node --check 全绿却上传失败：非严格 Script 里顶层函数声明是 var 作用域，
+- 重复声明合法；微信 CI 用 Babel 按 ES Module 解析，模块顶层函数声明是词法声明 → 直接编译失败。
+- 只有 new vm.SourceTextModule(src)（--experimental-vm-modules）能抓到。
+- 顺带修第二个隐患：node_modules 5.89MB > 主包 2MB，packOptions.ignore 加 node_modules；
+- SDK 产物落到 miniprogram_npm/@tencent-ai/workbuddy-cloud-sdk/miniprogram.js（CJS）。
+- 结果：上传体积 0.69MB / 65 文件。固化工具 tools/check-mp.js（7 项检查）。
+
+_提交时间：2026-10-15 10:00:00_

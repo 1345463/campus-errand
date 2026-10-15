@@ -229,3 +229,19 @@ _提交时间：2026-10-15 20:43:00_
 - 新增 pages/admin/reports 处理举报。
 
 _提交时间：2026-10-15 21:49:00_
+
+## R20 · 挂牌价后台化 + rental_items
+
+- 标题乱码：encodeURIComponent(item.name) 拼进 URL，onLoad 直接展示就成了 %E5%A4%A7...。
+- 规则：凡是从 URL 参数取来要展示的字符串，先解码再渲染。
+- 租期 chip 重叠：chip 是行内 <text> 直接塞进 block，行内元素的 padding 不参与行盒高度计算
+- → 背景与上一行文字叠在一起。修法：<view class="chip-row"> flex-wrap 容器 + .chip nowrap。
+- 取件快捷标签：六个地点放 utils/config.js 的 pickupShortcuts，改配置即可增删；
+- NO_SHORTCUT_LABELS 排除要填房间号/窗口号的字段。
+- rental_items 表：机型清单原写死在 utils/services.js，改价要重发小程序。
+- 建表 + list_rental_items（公开读，不校验登录 —— 逛租赁页不该要求登录）
+- / admin_list_rental_items / admin_update_rental_item / admin_create_rental_item。
+- 前端失败时退回打包清单 + 顶部明确提示"价格可能是旧的"。
+- 下架 ≠ 删除（历史申请仍引用 item_id）；改价要点保存才生效（金额敏感）。
+
+_提交时间：2026-10-15 22:44:00_

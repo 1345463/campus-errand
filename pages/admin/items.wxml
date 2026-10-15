@@ -1,0 +1,89 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>登录后才能使用管理后台</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}" class="empty">
+    <view>没有管理权限</view>
+    <view class="hint top-gap">请到「我的」页用管理员口令开通</view>
+  </view>
+
+  <view wx:else>
+    <view class="err-bar" wx:if="{{errorText}}">
+      <text class="err-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="load">重试</text>
+    </view>
+
+    <view class="tool-row">
+      <view class="doc-btn" bindtap="load">刷新</view>
+      <view class="doc-btn" bindtap="openNew">+ 新增机型</view>
+    </view>
+
+    <view wx:if="{{tipText}}" class="settle-feedback">{{tipText}}</view>
+
+    <view wx:if="{{newOpen}}" class="card">
+      <view class="section-head">
+        <text class="section-title">新增机型</text>
+      </view>
+      <input class="field-input" placeholder="机型名称，例如：索尼 ZV-1F" value="{{newName}}" data-key="newName" bindinput="onNewInput" maxlength="30" />
+      <input class="field-input top-gap" placeholder="简介，例如：卡片机 · Vlog 神器" value="{{newSpec}}" data-key="newSpec" bindinput="onNewInput" maxlength="40" />
+      <input class="field-input top-gap" type="digit" placeholder="挂牌价（元 / 天）" value="{{newPrice}}" data-key="newPrice" bindinput="onNewInput" />
+      <input class="field-input top-gap" type="digit" placeholder="押金（元，不收填 0）" value="{{newDeposit}}" data-key="newDeposit" bindinput="onNewInput" />
+      <view class="btn-row">
+        <view class="btn-ghost half" bindtap="closeNew">取消</view>
+        <view class="btn-primary half" bindtap="createItem">确认新增</view>
+      </view>
+    </view>
+
+    <view wx:if="{{loading}}" class="empty">加载中…</view>
+    <view wx:elif="{{list.length === 0 && !errorText}}" class="empty">
+      <view>还没有机型</view>
+      <view class="hint top-gap">点上方「新增机型」添加第一台相机</view>
+    </view>
+
+    <view class="card apply-card" wx:for="{{list}}" wx:key="id">
+      <view class="apply-head">
+        <text class="apply-name">{{item.name}}</text>
+        <text class="status-text {{item.enabled ? 'status-accepted' : ''}}">{{item.enabled ? '已上架' : '已下架'}}</text>
+      </view>
+
+      <view class="detail-row">
+        <view class="detail-label">简介</view>
+        <view class="detail-value">{{item.spec || '未填写'}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">当前挂牌价</view>
+        <view class="detail-value">¥{{item.priceText}} / 天</view>
+      </view>
+      <view class="detail-row last">
+        <view class="detail-label">押金</view>
+        <view class="detail-value">¥{{item.depositText}}（更新于 {{item.updatedText}}）</view>
+      </view>
+
+      <view wx:if="{{actingId === item.id}}" class="note-box">
+        <input class="field-input" type="digit" placeholder="新的挂牌价（元 / 天）" value="{{price}}" data-key="price" bindinput="onPriceInput" />
+        <input class="field-input top-gap" type="digit" placeholder="押金（元，不收填 0）" value="{{deposit}}" data-key="deposit" bindinput="onPriceInput" />
+        <view class="btn-row">
+          <view class="btn-ghost half" bindtap="closePrice">取消</view>
+          <view class="btn-primary half" data-id="{{item.id}}" bindtap="savePrice">保存</view>
+        </view>
+      </view>
+      <view wx:else class="btn-row">
+        <view class="btn-ghost half" data-id="{{item.id}}" bindtap="openPrice">改价 / 押金</view>
+        <view
+          class="btn-primary half"
+          data-id="{{item.id}}"
+          data-enabled="{{item.enabled}}"
+          bindtap="toggleEnabled"
+        >{{item.enabled ? '下架' : '上架'}}</view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="settle-rule">
+        改完价用户端下次进入「相机租赁」即可看到新价格；下架只是不展示给用户，不会删除历史租赁记录。
+      </view>
+    </view>
+  </view>
+</view>

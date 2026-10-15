@@ -245,3 +245,17 @@ _提交时间：2026-10-15 21:49:00_
 - 下架 ≠ 删除（历史申请仍引用 item_id）；改价要点保存才生效（金额敏感）。
 
 _提交时间：2026-10-15 22:44:00_
+
+## R21 · 软删除（order_hides）
+
+- 方案：public.order_hides(order_id, user_id)，只记"谁隐藏了哪一单"。
+- 不做物理删除 —— 订单是双方共有的，一方删不能影响另一方；结算/举报核查/审计都要用。
+- 新增 hide_my_order / restore_my_order / my_order_hidden / list_my_hidden_orders；
+- cancel_order 补写 finished_at（否则取消的单永远算不满 7 天）；orders 加 takedown boolean
+- （区分"发布方自己取消"和"管理员违规下架"）。
+- 后续改为"整单生效"：list_my_orders 的过滤从 AND h.user_id = v_uid 改为不带人，
+- my_order_hidden → order_hidden，restore_my_order 清掉该单所有人的隐藏记录。
+- 这里的坑：改了库但 .sql 文件本体一直没改（add-order-delete.sql 与线上不一致），
+- 症状是"A 删单后 B 的列表仍在，B 点进去却是已删除空态" → 已改文件 + 加幂等迁移。
+
+_提交时间：2026-10-15 23:30:00_

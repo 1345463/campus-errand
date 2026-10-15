@@ -162,3 +162,15 @@ _提交时间：2026-10-15 11:00:00_
 - 用户真机回报：上传已正常 → wx.request 传 ArrayBuffer 这条通道在真机确实可用。
 
 _提交时间：2026-10-15 12:00:00_
+
+## R15 · 证件照读取 + 失败原因可见
+
+- 根因两层：getSignedUrls 任何失败都只 push 空串，真实原因全丢；底层签名链接接口报错。
+- 本项目反复出现的同一类毛病：不要让失败只剩一句通用文案。
+- 修复：utils/upload.js 新增"带 token 直读字节"通道 —— 上传用的就是同一套鉴权，
+- 只差一个 GET，而上传在真机已验证成功。
+- downloadBuffer → 字节 → writeFileSync 本地路径 → 不用 base64
+- （setData 单次上限 1MB，1MB 图 base64 就是 1.37MB，会直接炸），兜底二才退 data URL。
+- getSignedUrls 改为返回 [{url, error, signError}]（破坏性变更，调用方已同步）。
+
+_提交时间：2026-10-15 14:00:00_

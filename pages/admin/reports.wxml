@@ -1,0 +1,94 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>登录后才能使用管理后台</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}" class="empty">
+    <view>没有管理权限</view>
+    <view class="hint top-gap">请到「我的」页用管理员口令开通</view>
+  </view>
+
+  <view wx:else>
+    <view class="err-bar" wx:if="{{errorText}}">
+      <text class="err-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="load">重试</text>
+    </view>
+
+    <view class="tool-row">
+      <view class="doc-btn" bindtap="load">刷新列表</view>
+    </view>
+
+    <view wx:if="{{loading}}" class="empty">加载中…</view>
+    <view wx:elif="{{list.length === 0 && !errorText}}" class="empty">
+      <view>还没有收到举报</view>
+      <view class="hint top-gap">用户在订单详情页点「举报此任务」后会出现在这里</view>
+    </view>
+
+    <view class="card apply-card" wx:for="{{list}}" wx:key="id">
+      <view class="apply-head">
+        <text class="apply-name">{{item.orderTitle}}</text>
+        <text class="status-text {{item.pending ? 'status-accepted' : ''}}">{{item.statusText}}</text>
+      </view>
+
+      <view class="detail-row">
+        <view class="detail-label">举报人</view>
+        <view class="detail-value">{{item.reporterName}}（{{item.reporterRole}}）</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">举报原因</view>
+        <view class="detail-value">{{item.reason}}</view>
+      </view>
+      <view class="detail-row" wx:if="{{item.detail}}">
+        <view class="detail-label">补充说明</view>
+        <view class="detail-value">{{item.detail}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">被举报订单</view>
+        <view class="detail-value">#{{item.orderId}} · ¥{{item.orderReward}} · 当前状态 {{item.orderStatus}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">发布方 / 接单员</view>
+        <view class="detail-value">{{item.ownerName}} / {{item.runnerName}}</view>
+      </view>
+      <view class="detail-row" wx:if="{{item.orderDesc}}">
+        <view class="detail-label">任务内容</view>
+        <view class="detail-value">{{item.orderDesc}}</view>
+      </view>
+      <view class="detail-row last">
+        <view class="detail-label">举报时间</view>
+        <view class="detail-value">{{item.createdText}}</view>
+      </view>
+
+      <view wx:if="{{item.adminNote}}" class="settle-feedback">处理结果：{{item.adminNote}}</view>
+
+      <block wx:if="{{item.pending}}">
+        <view wx:if="{{noteId === item.id}}" class="note-box">
+          <textarea
+            class="note-input"
+            placeholder-class="field-ph"
+            placeholder="驳回原因（会展示给举报人和订单双方）"
+            value="{{note}}"
+            bindinput="onNoteInput"
+            maxlength="100"
+            auto-height="{{true}}"
+          />
+          <view class="btn-row">
+            <view class="btn-ghost half" bindtap="cancelNote">取消</view>
+            <view class="btn-danger half {{actingId === item.id ? 'disabled' : ''}}" data-id="{{item.id}}" bindtap="reject">
+              确认驳回
+            </view>
+          </view>
+        </view>
+        <view wx:else class="btn-row">
+          <view class="btn-ghost half" wx:if="{{actingId !== item.id}}" data-id="{{item.id}}" bindtap="openNote">驳回</view>
+          <view
+            class="btn-primary half {{actingId === item.id ? 'disabled' : ''}} {{armId === item.id ? 'btn-armed' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="takeDown"
+          >{{armId === item.id ? '再点一次确认下架' : (actingId === item.id ? '处理中…' : '判定成立并下架订单')}}</view>
+        </view>
+      </block>
+    </view>
+  </view>
+</view>

@@ -197,3 +197,19 @@ _提交时间：2026-10-15 16:00:00_
 - 顺手修掉同一类"隐形表面"缺陷（.room-picker/.custom-input/.quick-item/.task-card 等）。
 
 _提交时间：2026-10-15 17:00:00_
+
+## R18 · 图片改存 PostgreSQL
+
+- 现象：证书照片三条读取通道全报 404 STORAGE_OBJECT_NOT_FOUND。
+- 排查到底：MCP 列存储确认对象确实在（31001 字节、路径逐字符一致、owner_id 正确）；
+- storage.objects 表的 version 字段为空字符串；请求头/路由/TTL/路径校验/编码策略全核对无误。
+- 结论：写能成、读不回来，平台侧故障。方案：图片改存库。
+- 新表 public.media_assets（RLS 开启且不建任何策略 → 客户端不可直连）；
+- save_media_asset(scope, mime, data) → bigint，长度上限 2,600,000 字符（≈1.9MB 原图）；
+- get_media_asset(id) 仅本人或管理员可见；路径格式 asset:<id>，旧对象路径仍走旧通道兼容。
+- 自查出两个真问题：wx.compressImage 返回的临时文件不一定带扩展名（按 target 猜会把
+- png 误判成 jpeg）→ resolveMime(原图, 压缩产物)；客户端上限 8MB 但服务端折算只有 1.9MB
+- → 对齐 MAX_UPLOAD_BYTES = 1900*1024 + 两级压缩（60 不达标就从原图再压 35，不叠加压）。
+- 通用经验：小图（≤1.9MB）存 text 列比对象存储更可靠，还天然带上行级权限。
+
+_提交时间：2026-10-15 20:43:00_

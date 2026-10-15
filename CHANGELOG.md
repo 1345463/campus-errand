@@ -149,3 +149,16 @@ _提交时间：2026-10-15 10:00:00_
 - 风险：管理员口令硬编码在包里，本质是调试后门。
 
 _提交时间：2026-10-15 11:00:00_
+
+## R14 · 二进制直传通道（utils/upload.js）
+
+- 现象：选文件/拍照都一样，toast：createMiniProgramFetch: 暂不支持非字符串 body。
+- 根因（SDK 层缺陷）：@tencent-ai/workbuddy-cloud-sdk 小程序适配层 createMiniProgramFetch()
+- 只实现文本请求，body 非字符串直接抛错；cloud.storage.upload() 走 ArrayBuffer 分支 → 必抛。
+- 修复：新增 utils/upload.js，绕开 SDK fetch，用 wx.request 原生二进制直传。
+- 端点与请求头逐一对齐：POST {endpoint}/.cloud/storage/object/runtime/{objectPath}，
+- header x-wb-webapp-access-key + Authorization + X-Client-Info: storage-js/2.112.3。
+- 兜底：主通道失败改走 wx.uploadFile multipart；401/403 不兜底；>1.2MB 先压缩到 60。
+- 用户真机回报：上传已正常 → wx.request 传 ArrayBuffer 这条通道在真机确实可用。
+
+_提交时间：2026-10-15 12:00:00_

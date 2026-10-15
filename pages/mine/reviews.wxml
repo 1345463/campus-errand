@@ -1,0 +1,78 @@
+<view class="page">
+  <view wx:if="{{grayOff}}" class="empty">
+    <view>我的评价暂未开放</view>
+    <view class="hint top-gap">功能还在内测，开放后这里会出现</view>
+  </view>
+
+  <view wx:elif="{{needLogin}}" class="empty">
+    <view>登录后才能查看评价</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="empty">加载中…</view>
+
+  <view wx:else>
+    <view class="card">
+      <view class="filter-row">
+        <view class="chip {{tab === 'todo' ? 'active' : ''}}" data-tab="todo" bindtap="switchTab">
+          待评价{{todo.length > 0 ? ' ' + todo.length : ''}}
+        </view>
+        <view class="chip {{tab === 'received' ? 'active' : ''}}" data-tab="received" bindtap="switchTab">
+          收到的评价
+        </view>
+        <view class="chip" bindtap="goCredit">信誉分 ></view>
+      </view>
+    </view>
+
+    <block wx:if="{{tab === 'todo'}}">
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">还没评价的单</text>
+          <text class="section-more">评完会算进对方信誉分</text>
+        </view>
+        <view wx:if="{{todo.length === 0}}" class="hint">没有待评价的订单，去订单页看看有没有已完成的单</view>
+        <view wx:else>
+          <view class="detail-row" wx:for="{{todo}}" wx:key="orderId">
+            <view class="detail-label">
+              <text class="flow-kind">{{item.title}}</text>
+              <text class="flow-time">赏金 ¥{{item.reward}} · {{item.peerLabel}}：{{item.peerName}}</text>
+              <text class="flow-time">完成于 {{item.timeText}}</text>
+            </view>
+            <view class="detail-value">
+              <view class="mini-btn" data-id="{{item.orderId}}" bindtap="goReview">去评价</view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <block wx:else>
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">我收到的评价</text>
+          <text class="section-more">最近 20 条</text>
+        </view>
+        <view wx:if="{{received.length === 0}}" class="hint">还没有收到评价</view>
+        <view wx:else>
+          <view
+            class="detail-row"
+            wx:for="{{received}}"
+            wx:key="id"
+            data-id="{{item.orderId}}"
+            bindtap="goOrder"
+          >
+            <view class="detail-label">
+              <text class="flow-kind">{{item.orderTitle}}</text>
+              <text class="flow-time">{{item.fromName}} · {{item.timeText}}</text>
+              <text wx:if="{{item.comment}}" class="flow-time">{{item.comment}}</text>
+            </view>
+            <view class="detail-value">
+              <text class="score-star">{{item.score}} 星</text>
+              <text class="flow-time">{{item.scoreText}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </block>
+  </view>
+</view>

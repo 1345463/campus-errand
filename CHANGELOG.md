@@ -281,3 +281,22 @@ _提交时间：2026-10-15 23:30:00_
 -   （服务端限定 scope='banner'）。不能用 getSignedUrls，那是 owner-only，游客读不到。
 
 _提交时间：2026-10-16 01:08:00_
+
+## R23 · 积分/商城/评价/实名
+
+- confirm_order_done：确认完成时按赏金 1:1 发积分（后来在 R26 改为记在下单人账上）。
+- accept_order：runner_name 改用实名认证申请的 real_name（LEFT JOIN LATERAL
+- runner_applications status='approved'）。
+- update_my_profile(p_nickname, p_avatar_path) 签名变了（原单参数版本已 DROP）；
+- 用户名 2-16 字；头像只收本人上传的 asset:<id>。
+- get_public_asset 放开 scope IN ('banner','avatar')。
+- 新表 point_goods + point_redemptions；profiles.boost_until；
+- RPC list_point_goods / exchange_point_goods / list_my_redemptions / my_boost_active。
+- 反馈提交按钮无效的真因：写了 ui.showLoading(...)，而 utils/ui.js 导出的是 loading，
+- 取到 undefined 一调就抛异常整段中断。
+- buildTimeline：「确认完成」节点只在 status==='done' 时出现 —— cancel_order 与违规下架
+- 都会写 finished_at，只看时间戳会让下架单凭空多出"赏金已结算"。
+- 接单员实名卡片改为 canSeeRunnerName（参与方/管理员）才显示，大厅路人看不到别人实名。
+- 所有零散后台入口收进 admin/dashboard，"我的"页只留"管理员口令"+"管理员工作台"。
+
+_提交时间：2026-10-16 01:30:00_

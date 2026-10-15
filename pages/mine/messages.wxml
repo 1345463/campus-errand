@@ -1,0 +1,66 @@
+<view class="page">
+  <view wx:if="{{grayOff}}" class="empty">
+    <view>该功能正在灰度中，暂未开放</view>
+    <view class="hint top-gap">功能还在内测，开放后这里会自动出现</view>
+  </view>
+
+  <view wx:elif="{{needLogin}}" class="empty">
+    <view>请先登录</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:else>
+    <view wx:if="{{errorText}}" class="err-bar">
+      <text class="err-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="retry">重试</text>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">消息中心</text>
+        <text class="badge" wx:if="{{unread > 0}}">未读 {{unread}}</text>
+      </view>
+
+      <view wx:if="{{unread > 0}}">
+        <view class="btn-ghost {{markAllArmed ? 'btn-armed' : ''}}" bindtap="askMarkAll">
+          {{markAllArmed ? '再点一次确认全部已读' : '全部标为已读'}}
+        </view>
+        <view class="hint" wx:if="{{markAllArmed}}">
+          <text class="link-ghost" bindtap="cancelMarkAll">取消</text>
+        </view>
+      </view>
+      <view wx:else class="hint">所有消息都已读</view>
+    </view>
+
+    <view wx:if="{{loading && list.length === 0}}" class="empty">加载中…</view>
+    <view wx:elif="{{list.length === 0}}" class="empty">
+      <view>还没有消息</view>
+      <view class="hint top-gap">订单被接单、送达、确认，以及认证审核结果都会在这里通知你</view>
+    </view>
+
+    <view wx:else>
+      <!-- 已读的整条淡化，未读的保持高亮并带「未读」角标 -->
+      <view
+        class="order-card {{item.unread ? '' : 'muted'}}"
+        wx:for="{{list}}"
+        wx:key="id"
+        data-id="{{item.id}}"
+        data-index="{{index}}"
+        bindtap="openMessage"
+      >
+        <view class="task-row">
+          <text class="task-title">{{item.icon}} {{item.title}}</text>
+          <text class="badge" wx:if="{{item.unread}}">未读</text>
+        </view>
+        <view class="task-meta">{{item.content}}</view>
+        <view class="task-foot">
+          <text class="task-meta">{{item.timeText}} · {{item.kindText}}</text>
+          <text class="menu-arrow" wx:if="{{item.refType === 'order' && item.refId}}">查看订单 ></text>
+        </view>
+      </view>
+
+      <view wx:if="{{loading}}" class="empty">加载中…</view>
+      <view wx:elif="{{!hasMore}}" class="empty">没有更多消息了</view>
+    </view>
+  </view>
+</view>

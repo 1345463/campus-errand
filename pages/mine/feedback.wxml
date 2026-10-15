@@ -1,0 +1,87 @@
+<view class="page">
+  <view wx:if="{{grayOff}}" class="empty">
+    <view>意见反馈暂未开放</view>
+    <view class="hint top-gap">功能还在内测，开放后这里会出现入口</view>
+  </view>
+
+  <view wx:elif="{{needLogin}}" class="empty">
+    <view>登录后才能提交反馈</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:else>
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">反馈类型</text>
+      </view>
+      <view class="chip-row">
+        <view
+          class="chip chip-shortcut {{kind === item.key ? 'active' : ''}}"
+          wx:for="{{kinds}}"
+          wx:key="key"
+          data-key="{{item.key}}"
+          bindtap="pickKind"
+        >{{item.label}}</view>
+      </view>
+      <view class="hint">{{kindDesc}}</view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">具体内容</text>
+        <text class="section-more">{{countText}}</text>
+      </view>
+      <textarea
+        class="field-textarea"
+        placeholder-class="field-ph"
+        placeholder="说说你遇到的问题或想法，最好带上订单号，方便我们定位"
+        value="{{content}}"
+        maxlength="500"
+        bindinput="onContentInput"
+      ></textarea>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">联系方式（选填）</text>
+      </view>
+      <input
+        class="field-input"
+        placeholder-class="field-ph"
+        placeholder="手机号或微信号，方便我们回复你"
+        value="{{contact}}"
+        maxlength="60"
+        bindinput="onContactInput"
+      ></input>
+    </view>
+
+    <view class="card">
+      <view class="btn-primary" bindtap="submit">提交反馈</view>
+      <view class="hint top-gap-sm">客服处理后你会收到一条站内消息，处理结果也会显示在下面</view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">我提交过的</text>
+      </view>
+      <view wx:if="{{!mineLoaded}}" class="hint">加载中…</view>
+      <view wx:elif="{{mine.length === 0}}" class="hint">还没有提交过反馈</view>
+      <view wx:else>
+        <view class="detail-row" wx:for="{{mine}}" wx:key="id" data-id="{{item.id}}" bindtap="openThread">
+          <view class="detail-label">
+            <text class="flow-kind">{{item.kindText}} · {{item.timeText}}</text>
+            <text class="flow-time">{{item.content}}</text>
+            <text wx:if="{{item.note}}" class="flow-time">客服处理：{{item.note}}</text>
+            <text wx:if="{{item.lastPreview}}" class="flow-time">最新（{{item.lastTimeText}}）{{item.lastRoleText}}：{{item.lastPreview}}</text>
+            <text wx:if="{{item.replyCount > 0}}" class="flow-link">💬 共 {{item.replyCount}} 条对话，点这里继续沟通</text>
+            <text wx:elif="{{item.statusText === '已受理'}}" class="flow-link">💬 客服已受理，点这里可以追问</text>
+            <text wx:if="{{item.unreadCount > 0}}" class="flow-unread">{{item.unreadCount}} 条未读</text>
+          </view>
+          <view class="detail-value">
+            <text class="status-block {{item.statusClass}}">{{item.statusText}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

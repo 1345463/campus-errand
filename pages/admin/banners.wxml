@@ -1,0 +1,202 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>请先登录</view>
+    <view class="hint top-gap">登录后才能管理首页轮播</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}" class="empty">
+    <view>只有超级管理员可以管理轮播</view>
+    <view class="hint top-gap">轮播是首页第一屏的内容，配错会影响所有用户</view>
+    <view class="btn-primary top-gap" bindtap="goBack">返回</view>
+  </view>
+
+  <view wx:else>
+    <!-- 开关是关着的时候提前说明：不然上架了看不到会以为接口坏了 -->
+    <view class="tip-bar" wx:if="{{!flagOn}}">
+      <view class="tip-text">灰度开关「首页轮播」当前是关闭的：就算这里上架了，用户端也看不到。开关在「灰度开关」页打开。</view>
+    </view>
+
+    <view class="err-bar" wx:if="{{errorText}}">
+      <text class="err-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="load">重试</text>
+    </view>
+
+    <view class="tool-row">
+      <view class="doc-btn" bindtap="load">刷新</view>
+      <view class="doc-btn" bindtap="openNew">+ 新增轮播</view>
+    </view>
+
+    <view wx:if="{{tipText}}" class="settle-feedback">{{tipText}}</view>
+
+    <!-- 新增表单：新建后默认不上架，页面里把这话说在前面 -->
+    <view wx:if="{{newOpen}}" class="card">
+      <view class="section-head">
+        <text class="section-title">新增轮播</text>
+      </view>
+      <view class="settle-rule">新建后默认不上架，确认图片和跳转都没问题，再回列表点「上架」。</view>
+
+      <input
+        class="field-input top-gap"
+        placeholder="标题（可留空，仅后台识别用）"
+        value="{{newTitle}}"
+        data-key="newTitle"
+        bindinput="onInput"
+        maxlength="30"
+      />
+
+      <view class="pick-row">
+        <view class="img-pick {{newPreview ? 'has' : ''}}" bindtap="chooseImage">
+          <image wx:if="{{newPreview}}" class="pick-img" src="{{newPreview}}" mode="aspectFill" />
+          <text wx:else>{{uploading ? '上传中…' : '+ 选择图片'}}</text>
+        </view>
+        <view class="pick-tip">
+          <view wx:if="{{newImage}}">图片已上传，建议比例 2:1</view>
+          <view wx:else class="hint">必选。图片会按「轮播」权限存储，游客也能看到</view>
+        </view>
+      </view>
+
+      <view class="field-label top-gap">跳转方式</view>
+      <view class="chip-row">
+        <view
+          wx:for="{{linkTypes}}"
+          wx:key="key"
+          class="chip chip-shortcut {{newLinkType === item.key ? 'active' : ''}}"
+          data-key="{{item.key}}"
+          bindtap="pickLinkType"
+        >{{item.label}}</view>
+      </view>
+
+      <!-- 服务：chip 点选常见服务类型，也允许手动改成其它 type -->
+      <block wx:if="{{newLinkType === 'service'}}">
+        <view class="field-chips">
+          <view
+            wx:for="{{serviceOptions}}"
+            wx:key="value"
+            class="chip chip-shortcut {{newLinkValue === item.value ? 'active' : ''}}"
+            data-value="{{item.value}}"
+            bindtap="pickService"
+          >{{item.label}}</view>
+        </view>
+        <input
+          class="field-input top-gap"
+          placeholder="服务 type，例如 express（取快递）"
+          value="{{newLinkValue}}"
+          data-key="newLinkValue"
+          bindinput="onInput"
+          maxlength="30"
+        />
+      </block>
+
+      <!-- 外链：只接受 http(s)，提交前在页面里先拦一道 -->
+      <input
+        wx:elif="{{newLinkType === 'url'}}"
+        class="field-input top-gap"
+        placeholder="外链地址，要以 http:// 或 https:// 开头"
+        value="{{newLinkValue}}"
+        data-key="newLinkValue"
+        bindinput="onInput"
+        maxlength="300"
+      />
+
+      <!-- 不跳转：输入框留空并禁用，避免残留上一次填的值 -->
+      <input
+        wx:else
+        class="field-input top-gap"
+        placeholder="不跳转，无需填写"
+        value=""
+        disabled="{{true}}"
+      />
+
+      <input
+        class="field-input top-gap"
+        type="number"
+        placeholder="排序号（数字越小越靠前）"
+        value="{{newSort}}"
+        data-key="newSort"
+        bindinput="onInput"
+      />
+
+      <view class="btn-row">
+        <view class="btn-ghost half" bindtap="closeNew">取消</view>
+        <view class="btn-primary half" bindtap="createBanner">确认新增</view>
+      </view>
+    </view>
+
+    <view wx:if="{{loading}}" class="empty">加载中…</view>
+    <view wx:elif="{{list.length === 0 && !errorText}}" class="empty">
+      <view>还没有轮播</view>
+      <view class="hint top-gap">点上方「新增轮播」配置第一张</view>
+    </view>
+
+    <view class="card apply-card" wx:for="{{list}}" wx:key="id">
+      <view class="banner-shot">
+        <image wx:if="{{item.thumb}}" class="banner-thumb" src="{{item.thumb}}" mode="aspectFill" />
+        <view wx:else class="banner-thumb banner-thumb-empty">{{item.thumbError || '图片加载中…'}}</view>
+      </view>
+
+      <view class="apply-head">
+        <text class="apply-name">{{item.title}}</text>
+        <text class="status-text {{item.enabled ? 'status-done' : 'status-canceled'}}">{{item.enabled ? '已上架' : '未上架'}}</text>
+      </view>
+
+      <view class="detail-row">
+        <view class="detail-label">跳转</view>
+        <view class="detail-value">{{item.jumpText}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">排序</view>
+        <view class="detail-value">{{item.sortOrder}}（数字越小越靠前）</view>
+      </view>
+      <view class="detail-row last">
+        <view class="detail-label">更新</view>
+        <view class="detail-value">{{item.updatedText || '—'}}</view>
+      </view>
+
+      <!-- 改排序：点开才编辑，失焦不自动提交 -->
+      <view wx:if="{{sortId === item.id}}" class="note-box">
+        <input
+          class="field-input"
+          type="number"
+          placeholder="新的排序号（数字越小越靠前）"
+          value="{{sortValue}}"
+          data-key="sortValue"
+          bindinput="onInput"
+        />
+        <view class="btn-row">
+          <view class="btn-ghost half" bindtap="closeSort">取消</view>
+          <view class="btn-primary half" data-id="{{item.id}}" bindtap="saveSort">保存</view>
+        </view>
+      </view>
+
+      <view wx:else class="btn-row">
+        <view class="btn-ghost half" data-id="{{item.id}}" bindtap="openSort">改排序</view>
+        <view
+          class="btn-primary half {{actingId === item.id ? 'disabled' : ''}}"
+          data-id="{{item.id}}"
+          data-enabled="{{item.enabled}}"
+          bindtap="toggleEnabled"
+        >{{item.enabled ? '下架' : '上架'}}</view>
+      </view>
+
+      <!-- 删除：页内二次点击确认，不用 wx.showModal -->
+      <view class="card-actions">
+        <text
+          class="link-danger {{delArmId === item.id ? 'strong' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="askDelete"
+        >{{delArmId === item.id ? '再点一次确认删除' : '删除'}}</text>
+        <text wx:if="{{delArmId === item.id}}" class="link-ghost" catchtap="cancelDelete">取消</text>
+      </view>
+      <view wx:if="{{delArmId === item.id}}" class="settle-feedback top-gap">
+        删除是真删、不可恢复。再点一次「确认删除」就会永久移除这条轮播。
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="settle-rule">
+        新建的轮播默认不上架；上架后受灰度开关「首页轮播」控制，开关关着时用户端看不到。排序号相同则按创建时间倒序。
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,114 @@
+<view class="page">
+  <!-- 灰度未开：整页不可用，提示由谁在哪个开关里打开 -->
+  <view wx:if="{{grayOff}}" class="empty">
+    <view>人员查找暂未开放</view>
+    <view class="hint top-gap">请超级管理员在「灰度开关」里打开「人员查找」</view>
+    <view class="btn-ghost top-gap" bindtap="goBack">返回</view>
+  </view>
+
+  <!-- 未登录：会话都没有就没必要发请求，直接引导到「我的」页登录 -->
+  <view wx:elif="{{needLogin}}" class="empty">
+    <view>请先登录</view>
+    <view class="hint top-gap">登录后才能使用人员管理</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}" class="empty">
+    <view>你没有人员管理权限</view>
+    <view class="hint top-gap">这个页面需要「人事」或「超级管理员」权限</view>
+    <view class="btn-primary top-gap" bindtap="goBack">返回</view>
+  </view>
+
+  <view wx:else>
+    <view class="err-bar" wx:if="{{errorText}}">
+      <text class="err-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="search">重试</text>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">人员查找</text>
+        <text class="section-more">昵称 / 姓名 / 学号 / 手机号</text>
+      </view>
+      <input
+        class="field-input"
+        placeholder="留空直接搜索 = 看最近注册的人"
+        value="{{keyword}}"
+        bindinput="onKeywordInput"
+        bindconfirm="onSearch"
+        maxlength="30"
+      />
+      <view class="btn-row">
+        <view class="btn-ghost half" bindtap="clearKeyword">清空</view>
+        <view class="btn-primary half" bindtap="onSearch">搜索</view>
+      </view>
+    </view>
+
+    <view wx:if="{{loading}}" class="empty">加载中…</view>
+    <view wx:elif="{{searched && list.length === 0 && !errorText}}" class="empty">
+      <view>没有找到匹配的人</view>
+      <view class="hint top-gap">换个关键词，或留空看最近注册的人</view>
+    </view>
+
+    <view class="card apply-card" wx:for="{{list}}" wx:key="uid">
+      <!-- 头像首字 + 昵称 + ID 尾号；右边是认证状态 -->
+      <view class="apply-head">
+        <view style="display:flex;align-items:center;flex:1;">
+          <view class="rental-icon" style="width:76rpx;height:76rpx;font-size:34rpx;">{{item.avatarText}}</view>
+          <view style="margin-left:20rpx;flex:1;">
+            <view class="apply-name">{{item.nameText}}</view>
+            <view class="task-meta">ID 尾号 {{item.uidTail}} · {{item.roleText}}</view>
+          </view>
+        </view>
+        <text class="status-text {{item.certClass}}">{{item.certText}}</text>
+      </view>
+
+      <view class="detail-row">
+        <view class="detail-label">手机号</view>
+        <view class="detail-value">{{item.phoneText}}<text wx:if="{{item.isMe}}" class="mine-link">（我自己）</text></view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">注册时间</view>
+        <view class="detail-value">{{item.createdText || '—'}}</view>
+      </view>
+      <view class="detail-row last">
+        <view class="detail-label">后台权限</view>
+        <view class="detail-value">已开 {{item.onCount}} / 7 项</view>
+      </view>
+
+      <!-- 权限矩阵：7 项权限铺成 chip，已授权的高亮；非超管看到的「超级管理员」是灰的 -->
+      <view class="chip-row" style="margin-top:20rpx;">
+        <view
+          wx:for="{{item.perms}}"
+          wx:for-item="perm"
+          wx:for-index="pi"
+          wx:key="key"
+          class="chip chip-shortcut {{perm.on ? 'active' : ''}}"
+          style="{{armUid === item.uid && armKey === perm.key ? 'background:#FF8A3D;color:#FFFFFF;' : (perm.locked ? 'opacity:0.45;' : '')}}"
+          data-uid="{{perm.uid}}"
+          data-key="{{perm.key}}"
+          data-on="{{perm.on}}"
+          data-locked="{{perm.locked}}"
+          bindtap="togglePerm"
+        >{{perm.label}}</view>
+      </view>
+
+      <!-- 二次确认：点第一下 chip 只是上膛，这一行告诉用户再点一下会发生什么 -->
+      <view wx:if="{{armUid === item.uid}}" class="card-actions">
+        <text class="link-danger strong" data-uid="{{item.uid}}" bindtap="confirmArmed">
+          再点一次{{armWillGrant ? '授予' : '收回'}}「{{armLabel}}」
+        </text>
+        <text class="link-ghost" catchtap="cancelPerm">取消</text>
+      </view>
+    </view>
+
+    <view wx:if="{{list.length > 0}}" class="card">
+      <view class="settle-rule">
+        点一下权限标签只是「上膛」，4 秒内再点一次才会真正写入，写错还有挽回余地。
+      </view>
+      <view class="settle-rule">
+        人事（没有超级管理员权限）不能授予或收回「超级管理员」；收回最后一个超级管理员会被服务端拒绝 —— 系统至少要保留一个超管，这种时候按提示的报错处理即可。
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,34 @@
+/* 人员查找与授权 */
+
+/* 权限开关矩阵：一行放不下就换行 */
+.chip-row .chip {
+  margin: 0 16rpx 16rpx 0;
+}
+
+/* 已授权的权限高亮；置灰表示当前操作者无权改动 */
+.chip.chip-shortcut.active {
+  background: #FF5A7A;
+  border-color: #FF5A7A;
+  color: #FFFFFF;
+}
+
+/* 搜索结果里"我自己"的标记 */
+.mine-link {
+  color: #FF5A7A;
+  font-size: 24rpx;
+}
+
+/* 卡片头部的头像占位（复用 .rental-icon 的圆形底） */
+.apply-head .rental-icon {
+  border-radius: 50%;
+  background: #F3F4F6;
+  color: #FF5A7A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.detail-row.last {
+  border-bottom: none;
+}

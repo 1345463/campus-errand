@@ -1,0 +1,114 @@
+<view class="page">
+  <view wx:if="{{grayOff}}" class="empty">
+    <view>积分商城暂未开放</view>
+    <view class="hint top-gap">功能还在内测，开放后这里会自动出现</view>
+  </view>
+
+  <view wx:elif="{{needLogin}}" class="empty">
+    <view>登录后才能使用积分商城</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="empty">加载中…</view>
+
+  <view wx:else>
+    <view class="hero">
+      <view class="hero-title">{{points}} 分</view>
+      <view class="hero-sub">我的可用积分</view>
+    </view>
+
+    <view class="tip-bar">
+      <view class="tip-text">积分可兑换礼券，兑换后凭兑换码使用；积分不可提现</view>
+    </view>
+
+    <!-- 刚兑换成功：把兑换码放大摆出来，避免用户找不到 -->
+    <view wx:if="{{justCode}}" class="card code-card">
+      <view class="code-head">
+        <text class="code-name">{{justName}}</text>
+        <text class="link-ghost" bindtap="clearJustCode">收起</text>
+      </view>
+      <view class="code-value">{{justCode}}</view>
+      <view class="code-tip">凭此兑换码使用，也可以到「我的兑换」里再找</view>
+      <view class="code-copy" data-code="{{justCode}}" bindtap="copyCode">复制兑换码</view>
+    </view>
+
+    <view wx:if="{{tipText && !justCode}}" class="settle-feedback">{{tipText}}</view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">可兑换</text>
+        <text class="section-more" bindtap="goPoints">积分明细 ></text>
+      </view>
+
+      <view wx:if="{{goods.length === 0}}" class="empty">暂时没有可兑换的礼券</view>
+      <view wx:else class="mall-grid">
+        <view
+          class="mall-item {{item.disabled ? 'disabled' : ''}}"
+          wx:for="{{goods}}"
+          wx:key="id"
+        >
+          <view class="mall-emoji">{{item.emoji}}</view>
+          <view class="mall-name">{{item.name}}</view>
+          <view class="mall-desc">{{item.desc}}</view>
+          <view class="mall-cost">{{item.cost}} 积分</view>
+          <view class="mall-stock">{{item.stockText}}</view>
+
+          <view
+            wx:if="{{item.disabled}}"
+            class="mall-btn disabled"
+          >{{item.stock === 0 ? '已兑完' : '积分不足'}}</view>
+          <view
+            wx:elif="{{armId === item.id}}"
+            class="mall-btn btn-armed"
+            data-id="{{item.id}}"
+            bindtap="askExchange"
+          >再点一次确认</view>
+          <view
+            wx:else
+            class="mall-btn"
+            data-id="{{item.id}}"
+            bindtap="askExchange"
+          >兑换</view>
+
+          <view wx:if="{{armId === item.id}}" class="card-actions">
+            <text class="link-ghost" catchtap="cancelExchange">取消</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">我的兑换码</text>
+        <text class="section-more">可随时回来查看</text>
+      </view>
+      <view wx:if="{{redemptions.length === 0}}" class="hint">还没有兑换过，攒够积分来试试</view>
+      <view wx:else class="coupon-list">
+        <view
+          class="coupon-row {{itemRow.used ? 'used' : ''}}"
+          wx:for="{{redemptions}}"
+          wx:for-item="itemRow"
+          wx:key="id"
+        >
+          <view class="coupon-main">
+            <view class="coupon-title">
+              <text>{{itemRow.name}} · {{itemRow.cost}} 积分</text>
+              <text class="status-text">{{itemRow.statusText}}</text>
+            </view>
+            <view class="coupon-code">{{itemRow.code}}</view>
+            <view class="coupon-hint">{{itemRow.hintText}} · {{itemRow.timeText}}</view>
+          </view>
+          <view class="coupon-ops">
+            <text class="coupon-op" data-code="{{itemRow.code}}" bindtap="copyCode">复制</text>
+            <text
+              wx:if="{{itemRow.usable}}"
+              class="coupon-op primary"
+              data-code="{{itemRow.code}}"
+              bindtap="useCoupon"
+            >去使用</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

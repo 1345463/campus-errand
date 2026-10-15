@@ -1,0 +1,64 @@
+/* 首页轮播管理：只补 app.wxss 里没有的几块 —— 缩略图、选图框、排序行 */
+
+/* 列表缩略图：固定高度 + aspectFill，图比例不统一时也不会把卡片撑得忽高忽低 */
+.banner-shot {
+  margin-bottom: 16rpx;
+}
+.banner-thumb {
+  width: 100%;
+  height: 220rpx;
+  border-radius: 16rpx;
+  background: #F2F3F5;
+}
+/* 图还没回来 / 取不到时的占位：把原因写在框里，不要留一片空白让人猜 */
+.banner-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22rpx;
+  color: #A0A3AA;
+}
+
+/* 选图框：整块可点，里面直接显示已选的图 */
+.pick-row {
+  display: flex;
+  align-items: center;
+  margin-top: 20rpx;
+}
+.img-pick {
+  width: 240rpx;
+  height: 150rpx;
+  border-radius: 16rpx;
+  background: #F2F3F5;
+  border: 1rpx dashed #DCE0E8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  color: #8A8A8F;
+  overflow: hidden;
+}
+.img-pick.has {
+  border-style: solid;
+  border-color: #FFC9D4;
+}
+.pick-img {
+  width: 100%;
+  height: 100%;
+}
+.pick-tip {
+  flex: 1;
+  margin-left: 20rpx;
+  font-size: 24rpx;
+  color: #5A5D66;
+  line-height: 1.6;
+}
+.pick-tip .hint {
+  font-size: 24rpx;
+}
+
+/* 表单里的字段标题：app.wxss 的 .field-label 带必填星号布局，这里只需一行小标题 */
+.field-label {
+  font-size: 26rpx;
+  color: #5A5D66;
+}

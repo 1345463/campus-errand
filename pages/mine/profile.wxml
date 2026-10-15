@@ -1,0 +1,67 @@
+<view class="page">
+  <view wx:if="{{grayOff}}" class="empty">
+    <view>修改资料暂未开放</view>
+    <view class="hint top-gap">功能还在内测，开放后这里会出现入口</view>
+  </view>
+
+  <view wx:elif="{{needLogin}}" class="empty">
+    <view>登录后才能修改资料</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="empty">加载中…</view>
+
+  <view wx:else>
+    <view wx:if="{{forceMode}}" class="tip-bar force">
+      <view class="tip-text">请先设置用户名，完成后才能发布任务和接单</view>
+      <view class="tip-sub">微信登录不会带昵称，这个名字会展示在订单、评价和消息里</view>
+    </view>
+
+    <view wx:elif="{{isFirstTime}}" class="tip-bar">
+      <view class="tip-text">给自己起个用户名吧，接单和发布时会展示给对方</view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">头像</text>
+        <text class="section-more">点击头像更换</text>
+      </view>
+      <view class="avatar-row">
+        <view class="avatar-wrap" bindtap="chooseAvatar">
+          <image wx:if="{{avatarSrc}}" class="avatar-img" src="{{avatarSrc}}" mode="aspectFill"></image>
+          <view wx:else class="avatar-initial">{{initial}}</view>
+          <view class="avatar-badge">{{uploading ? '上传中' : '更换'}}</view>
+        </view>
+        <view class="avatar-hint">
+          <view>支持 jpg / png，建议用正方形图片</view>
+          <view class="hint">头像会展示在订单和评价里，请勿使用违规图片</view>
+          <view wx:if="{{avatarError}}" class="avatar-err">{{avatarError}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">用户名</text>
+        <text class="section-more">{{nickname.length}} / 16</text>
+      </view>
+      <input
+        class="field-input"
+        placeholder-class="field-ph"
+        placeholder="2 - 16 个字，建议用真名或常用称呼"
+        value="{{nickname}}"
+        maxlength="16"
+        bindinput="onNicknameInput"
+      />
+      <view class="hint top-gap-sm">接单后发布方会看到这个名字，请认真填写</view>
+    </view>
+
+    <view wx:if="{{formError}}" class="login-error">{{formError}}</view>
+
+    <view class="card">
+      <view class="btn-primary {{saving ? 'disabled' : ''}}" bindtap="save">
+        {{saving ? '保存中…' : '保存'}}
+      </view>
+    </view>
+  </view>
+</view>

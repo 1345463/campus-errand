@@ -1,0 +1,87 @@
+<view class="page">
+  <view wx:if="{{grayOff}}" class="empty">该功能暂未开放</view>
+
+  <view wx:elif="{{needLogin}}" class="empty">
+    <view>请先登录</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去登录</view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="empty">加载中…</view>
+
+  <view wx:else>
+    <view wx:if="{{errorText}}" class="mod-bar">
+      <text class="mod-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="retry">重试</text>
+    </view>
+    <view wx:if="{{tipText}}" class="tip-bar">
+      <text class="tip-text">{{tipText}}</text>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">认证状态</text>
+        <text class="status-block {{statusClass}}">{{statusText}}</text>
+      </view>
+      <view class="hint">{{statusHint}}</view>
+    </view>
+
+    <block wx:if="{{submitted}}">
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">提交信息</text>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">真实姓名</view>
+          <view class="detail-value">{{realName}}</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">身份证号</view>
+          <view class="detail-value">{{idNoMasked}}</view>
+        </view>
+        <view class="detail-row last">
+          <view class="detail-label">提交时间</view>
+          <view class="detail-value">{{createdText}}</view>
+        </view>
+        <view class="hint">平台只保存脱敏后的证件号码，完整号码不会入库</view>
+      </view>
+
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">证件照片</text>
+        </view>
+        <view wx:if="{{docsLoading}}" class="hint">加载中…</view>
+        <view wx:elif="{{docs.length === 0}}" class="hint">没有上传证件照片</view>
+        <view wx:else class="doc-list">
+          <view class="doc-item" wx:for="{{docs}}" wx:key="key" data-index="{{index}}" bindtap="previewDoc">
+            <image wx:if="{{item.url}}" class="doc-thumb" src="{{item.url}}" mode="aspectFill"></image>
+            <view wx:else class="doc-thumb doc-fail">加载失败</view>
+            <view class="doc-title">{{item.title}}</view>
+            <view wx:if="{{item.error}}" class="doc-error">{{item.error}}</view>
+          </view>
+        </view>
+        <view class="hint">点击图片可放大查看</view>
+      </view>
+
+      <!-- 驳回原因单独成块：这是用户下一步要照着改的东西，混在信息里会被忽略 -->
+      <view wx:if="{{status === 'rejected'}}" class="reject-box">
+        <view class="reject-title">审核未通过</view>
+        <view class="reject-note">{{reviewNote || '管理员没有填写驳回原因，请检查资料后重新提交'}}</view>
+        <view class="btn-primary top-gap-sm" bindtap="goApply">去修改并重新提交</view>
+      </view>
+    </block>
+
+    <view wx:else class="card">
+      <view class="empty">还没有提交实名认证</view>
+      <view class="btn-primary" bindtap="goApply">去提交认证</view>
+    </view>
+
+    <view class="card">
+      <view class="btn-ghost" bindtap="goMine">返回我的</view>
+    </view>
+  </view>
+
+  <view wx:if="{{previewUrl}}" class="img-mask" bindtap="closePreview">
+    <image class="img-preview" src="{{previewUrl}}" mode="widthFix"></image>
+    <view class="img-tip">点击关闭</view>
+  </view>
+</view>

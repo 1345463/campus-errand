@@ -1,0 +1,125 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>请先登录</view>
+    <view class="hint top-gap">登录后才能处理意见反馈</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}" class="empty">
+    <view>只有客服或超级管理员可以处理反馈</view>
+    <view class="hint top-gap">需要 support 权限，可找超级管理员授权</view>
+    <view class="btn-primary top-gap" bindtap="goBack">返回</view>
+  </view>
+
+  <view wx:else>
+    <!-- 开关关着时用户端没有提交入口，先说明，免得以为列表坏了 -->
+    <view class="tip-bar" wx:if="{{!flagOn}}">
+      <view class="tip-text">灰度开关「意见反馈」当前是关闭的：用户端暂时没有提交入口。开关在「灰度开关」页打开。</view>
+    </view>
+
+    <view class="err-bar" wx:if="{{errorText}}">
+      <text class="err-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="load">重试</text>
+    </view>
+
+    <view class="filter-row">
+      <view
+        wx:for="{{tabs}}"
+        wx:key="key"
+        class="chip {{tab === item.key ? 'active' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="switchTab"
+      >{{item.label}}</view>
+    </view>
+
+    <view class="tool-row">
+      <view class="doc-btn" bindtap="load">刷新列表</view>
+    </view>
+
+    <view wx:if="{{tipText}}" class="settle-feedback">{{tipText}}</view>
+
+    <view wx:if="{{loading}}" class="empty">加载中…</view>
+    <view wx:elif="{{list.length === 0 && !errorText}}" class="empty">
+      <view>没有符合条件的反馈</view>
+      <view class="hint top-gap">换一个筛选，或等用户提交</view>
+    </view>
+
+    <view class="card apply-card" wx:for="{{list}}" wx:key="id">
+      <view class="apply-head">
+        <text class="apply-name">{{item.kindText}}</text>
+        <text class="status-text {{item.statusClass}}">{{item.statusText}}</text>
+      </view>
+
+      <view class="fb-content">{{item.content}}</view>
+
+      <view class="detail-row">
+        <view class="detail-label">联系方式</view>
+        <view class="detail-value">{{item.contact || '未填写'}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">提交时间</view>
+        <view class="detail-value">{{item.createdText || '—'}}</view>
+      </view>
+      <view class="detail-row last">
+        <view class="detail-label">处理时间</view>
+        <view class="detail-value">{{item.handledText || '—'}}</view>
+      </view>
+
+      <view wx:if="{{item.adminNote}}" class="settle-feedback">管理员备注：{{item.adminNote}}</view>
+
+      <!-- 会话入口：受理后的双向跟进对话。列表上的「受理 / 驳回」负责工单状态，
+           后续的一问一答都进会话页，两边不重复做同一件事。 -->
+      <view class="card-actions">
+        <text class="link-ghost strong" data-id="{{item.id}}" bindtap="openThread">💬 进入会话 · {{item.replyCount}} 条</text>
+        <text wx:if="{{item.unreadCount > 0}}" class="link-danger strong">{{item.unreadCount}} 条未读</text>
+      </view>
+      <view wx:if="{{item.lastPreview}}" class="chat-preview">
+        最近（{{item.lastTimeText}}）{{item.lastRoleText}}：{{item.lastPreview}}
+      </view>
+
+      <block wx:if="{{item.pending}}">
+        <!-- 驳回：先展开理由输入，再二次点击确认 -->
+        <view wx:if="{{noteId === item.id}}" class="note-box">
+          <textarea
+            class="note-input"
+            placeholder-class="field-ph"
+            placeholder="驳回理由（必填，会以站内消息发给提交人）"
+            value="{{note}}"
+            bindinput="onNoteInput"
+            maxlength="300"
+            auto-height="{{true}}"
+          />
+          <view class="btn-row">
+            <view class="btn-ghost half" bindtap="cancelNote">取消</view>
+            <view
+              class="btn-danger half {{actingId === item.id ? 'disabled' : ''}} {{armId === item.id && armAction === 'reject' ? 'btn-armed' : ''}}"
+              data-id="{{item.id}}"
+              bindtap="askReject"
+            >{{armId === item.id && armAction === 'reject' ? '再点一次确认驳回' : '确认驳回'}}</view>
+          </view>
+        </view>
+        <view wx:else class="btn-row">
+          <view class="btn-ghost half" wx:if="{{armId !== item.id || armAction !== 'resolve'}}" data-id="{{item.id}}" bindtap="openReject">驳回</view>
+          <view
+            class="btn-primary half {{actingId === item.id ? 'disabled' : ''}} {{armId === item.id && armAction === 'resolve' ? 'btn-armed' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="askResolve"
+          >{{armId === item.id && armAction === 'resolve' ? '再点一次确认受理' : '受理'}}</view>
+        </view>
+        <view wx:if="{{armId === item.id}}" class="card-actions">
+          <text class="link-danger strong">
+            {{armAction === 'resolve' ? '受理后会立刻给提交人发站内消息' : '驳回后会立刻把理由发给提交人'}}
+          </text>
+          <text class="link-ghost" catchtap="cancelArm">取消</text>
+        </view>
+      </block>
+    </view>
+
+    <view class="card">
+      <view class="settle-rule">
+        受理 / 驳回都会给提交人发一条站内消息，发出去撤不回来，所以两个动作都要二次点击确认。驳回必须写理由。
+        受理之后用「💬 进入会话」继续跟进，对方的追问会显示在未读数里。
+      </view>
+    </view>
+  </view>
+</view>

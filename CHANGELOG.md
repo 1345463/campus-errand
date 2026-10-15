@@ -259,3 +259,25 @@ _提交时间：2026-10-15 22:44:00_
 - 症状是"A 删单后 B 的列表仍在，B 点进去却是已删除空态" → 已改文件 + 加幂等迁移。
 
 _提交时间：2026-10-15 23:30:00_
+
+## R22 · 全站大改版（权限/灰度/消息）
+
+- 数据库：
+- - admin_grants(user_id, perm_key, granted_by)：七级权限，配套 admin_has_perm /
+-   admin_can_grant / admin_my_perms / admin_search_staff / admin_set_perm；
+-   super 在 admin_my_perms 里被展开成全部七项，存量 3 个 is_admin 用户自动补 super。
+- - feature_flags：14 个开关，默认全关，只有 super 能切。
+- - 六张新表：banners / messages / order_reviews / point_records / wallet_records / user_feedbacks；
+-   profiles 加 runner_score_sum / runner_score_count。
+- - 消息用触发器挂钩，不改动已跑通的订单函数：trg_order_notify / trg_rental_notify /
+-   trg_cert_notify / trg_report_notify；确认完成那一步同时写钱包流水 + 通知，保证成对出现。
+- - list_my_orders 加 limit/offset（先 DROP 再 CREATE，因为改了参数签名）；
+-   新增 search_my_orders / my_order_review_state / admin_dashboard_stats / list_my_feedbacks。
+- 前端：
+- - 新内核 utils/flags.js（缓存 5 分钟、拉不到一律按关闭）、utils/perms.js。
+- - 新增页面 admin/staff、admin/flags、admin/dashboard、admin/banners、admin/feedback、
+-   mine/messages、mine/cert、mine/mall、mine/feedback、order/review、mine/profile。
+- - 轮播图走公开读通道：upload.publicAssetToLocalFile → RPC get_public_asset
+-   （服务端限定 scope='banner'）。不能用 getSignedUrls，那是 owner-only，游客读不到。
+
+_提交时间：2026-10-16 01:08:00_

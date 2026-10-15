@@ -1,0 +1,88 @@
+/* 认证进度查询 */
+
+/* 顶部状态色块：待审核橙 / 已通过绿 / 未通过红 */
+.status-block {
+  padding: 6rpx 20rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  color: #FFFFFF;
+}
+
+.status-block.status-pending {
+  background: #FF9F43;
+}
+
+.status-block.status-approved {
+  background: #28C76F;
+}
+
+.status-block.status-rejected {
+  background: #EA5455;
+}
+
+.status-block.status-none {
+  background: #C7C9CE;
+}
+
+/* 证件照片列表 */
+.doc-list {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.doc-item {
+  width: 200rpx;
+  margin: 0 20rpx 20rpx 0;
+}
+
+.doc-thumb {
+  width: 200rpx;
+  height: 150rpx;
+  border-radius: 12rpx;
+  background: #F3F4F6;
+}
+
+/* 图片解析失败时的占位，避免出现空白方块 */
+.doc-thumb.doc-fail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  color: #9A9CA1;
+}
+
+.doc-title {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #6B6B70;
+  text-align: center;
+}
+
+.doc-error {
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: #EA5455;
+  text-align: center;
+}
+
+/* 审核未通过：单独用醒目区块承载驳回原因 */
+.reject-box {
+  margin-top: 20rpx;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  background: #FFF1F1;
+  border: 1rpx solid #FFD9D9;
+}
+
+.reject-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #EA5455;
+}
+
+.reject-note {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #6B6B70;
+  line-height: 1.6;
+}

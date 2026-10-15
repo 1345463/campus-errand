@@ -1,0 +1,213 @@
+/* 积分商城 */
+
+/* 两列商品卡 */
+.mall-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.mall-item {
+  width: calc(50% - 12rpx);
+  box-sizing: border-box;
+  margin: 0 24rpx 24rpx 0;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  background: #F7F8FA;
+}
+
+/* 每行第二个去掉右外边距，保证两列等宽 */
+.mall-item:nth-child(2n) {
+  margin-right: 0;
+}
+
+.mall-item.disabled {
+  opacity: 0.55;
+}
+
+.mall-emoji {
+  font-size: 56rpx;
+  line-height: 1;
+}
+
+.mall-name {
+  margin-top: 12rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1F2023;
+}
+
+.mall-desc {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #6B6B70;
+  line-height: 1.5;
+  min-height: 72rpx;
+}
+
+.mall-cost {
+  margin-top: 10rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #FF5A7A;
+}
+
+.mall-stock {
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: #9A9CA1;
+}
+
+.mall-btn {
+  margin-top: 16rpx;
+  padding: 12rpx 0;
+  border-radius: 999rpx;
+  background: #FF5A7A;
+  color: #FFFFFF;
+  font-size: 26rpx;
+  text-align: center;
+}
+
+/* 进入待确认状态后变深色，提示"再点一次" */
+.mall-btn.btn-armed {
+  background: #E03E5F;
+}
+
+.mall-btn.disabled {
+  background: #DCDDE1;
+  color: #8A8A8F;
+}
+
+/* 兑换码卡片 */
+.code-card {
+  margin-bottom: 0;
+}
+
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.code-name {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1F2023;
+}
+
+.code-value {
+  margin-top: 16rpx;
+  padding: 20rpx 0;
+  border-radius: 14rpx;
+  background: #FFF1F4;
+  color: #FF5A7A;
+  font-size: 40rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+  text-align: center;
+}
+
+.code-tip {
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #8A8A8F;
+}
+
+.code-copy {
+  margin-top: 16rpx;
+  padding: 14rpx 0;
+  border-radius: 999rpx;
+  background: #FF5A7A;
+  color: #FFFFFF;
+  font-size: 26rpx;
+  text-align: center;
+}
+
+/* 兑换记录里的兑换码 / 时间，和意见反馈页保持同一套样式 */
+.flow-kind {
+  display: block;
+  font-size: 28rpx;
+  color: #1F2023;
+}
+
+.flow-time {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 24rpx;
+  color: #6B6B70;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+/* 我的兑换码：每行一张券，右侧操作区竖排，窄屏也不挤 */
+.coupon-list {
+  margin-top: 8rpx;
+}
+
+.coupon-row {
+  display: flex;
+  align-items: center;
+  padding: 20rpx 0;
+  border-bottom: 2rpx solid #F0F0F2;
+}
+
+.coupon-row:last-child {
+  border-bottom: none;
+}
+
+.coupon-row.used .coupon-code,
+.coupon-row.used .coupon-title {
+  color: #9A9AA0;
+}
+
+.coupon-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.coupon-title {
+  display: flex;
+  align-items: center;
+  font-size: 28rpx;
+  color: #1F2023;
+}
+
+.coupon-title .status-text {
+  margin-left: 12rpx;
+}
+
+.coupon-code {
+  margin-top: 6rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+  color: #C8364F;
+  word-break: break-all;
+}
+
+.coupon-hint {
+  margin-top: 4rpx;
+  font-size: 24rpx;
+  color: #6B6B70;
+  line-height: 1.5;
+}
+
+.coupon-ops {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-left: 16rpx;
+}
+
+.coupon-op {
+  padding: 8rpx 20rpx;
+  border: 2rpx solid #E3E3E8;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  color: #4A4A50;
+}
+
+.coupon-op.primary {
+  margin-top: 12rpx;
+  border-color: #C8364F;
+  color: #C8364F;
+}

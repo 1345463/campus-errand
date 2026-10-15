@@ -1,0 +1,65 @@
+<view class="page">
+  <!-- 未登录：会话都没有就没必要发请求，直接引导到「我的」页登录 -->
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>请先登录</view>
+    <view class="hint top-gap">登录后才能管理灰度开关</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}" class="empty">
+    <view>只有超级管理员可以改灰度开关</view>
+    <view class="hint top-gap">这是全站功能的总闸，误操作会影响所有用户</view>
+    <view class="btn-primary top-gap" bindtap="goBack">返回</view>
+  </view>
+
+  <view wx:else>
+    <!-- 顶部说明：开关的意义和代价写在最前面，避免当成普通设置随手关 -->
+    <view class="tip-bar">
+      <view class="tip-text">关闭后对应的新功能对所有用户不可见；出问题可以即时关掉，不需要重新发布小程序</view>
+    </view>
+
+    <view class="err-bar" wx:if="{{errorText}}">
+      <text class="err-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="load">重试</text>
+    </view>
+
+    <view class="tool-row">
+      <view class="doc-btn" bindtap="load">刷新</view>
+    </view>
+
+    <view wx:if="{{loading}}" class="empty">加载中…</view>
+    <view wx:elif="{{list.length === 0 && !errorText}}" class="empty">
+      <view>还没有灰度开关</view>
+      <view class="hint top-gap">开关由服务端 feature_flags 表维护</view>
+    </view>
+
+    <view class="card" wx:for="{{list}}" wx:key="key">
+      <view class="apply-head">
+        <text class="apply-name">{{item.label}}</text>
+        <text class="status-text {{item.enabled ? 'status-approved' : 'status-canceled'}}">{{item.enabled ? '已开启' : '已关闭'}}</text>
+      </view>
+      <view class="settle-rule">{{item.desc || '暂无说明'}}</view>
+      <view class="task-meta" wx:if="{{item.updatedText}}">最近变更：{{item.updatedText}}</view>
+
+      <view class="card-actions">
+        <!-- 开关用按钮而不是 switch 组件：
+             切换要「上膛 + 再点一次确认」，switch 点一下内部就翻面了，
+             第一次点击还没生效时它会显示成已切换，和二次确认的语义打架。 -->
+        <view
+          class="chip chip-shortcut {{item.enabled ? 'active' : ''}}"
+          style="{{armKey === item.key ? 'background:#FF8A3D;color:#FFFFFF;' : ''}}"
+          data-key="{{item.key}}"
+          data-on="{{item.enabled}}"
+          data-label="{{item.label}}"
+          bindtap="askToggle"
+        >{{armKey === item.key ? (armWillOn ? '再点一次开启' : '再点一次关闭') : (item.enabled ? '已开启' : '已关闭')}}</view>
+        <text wx:if="{{armKey === item.key}}" class="link-ghost" catchtap="cancelToggle">取消</text>
+      </view>
+
+      <!-- 上膛后的后果说明：让用户看清这一步到底放开了什么 / 关掉了什么 -->
+      <view wx:if="{{armKey === item.key}}" class="settle-feedback top-gap">
+        再点一次{{armWillOn ? '开启' : '关闭'}}「{{armLabel}}」：{{armWillOn ? '该功能将对所有用户可见' : '该功能会对所有用户隐藏'}}。客户端缓存 5 分钟，最长 5 分钟内在所有用户端生效。
+      </view>
+    </view>
+  </view>
+</view>

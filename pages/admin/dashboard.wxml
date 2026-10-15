@@ -1,0 +1,78 @@
+<view class="page">
+  <view wx:if="{{grayOff}}" class="empty">
+    <view>该功能正在灰度中，暂未开放</view>
+    <view class="hint top-gap">功能还在内测，超级管理员开启「管理员工作台」开关后可用</view>
+  </view>
+
+  <view wx:elif="{{needLogin}}" class="empty">
+    <view>登录后才能使用管理后台</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}" class="empty">
+    <view>没有后台权限</view>
+    <view class="hint top-gap">请让超级管理员在「人员与授权」里给你开通对应权限</view>
+  </view>
+
+  <view wx:else>
+    <view wx:if="{{errorText}}" class="err-bar">
+      <text class="err-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="load">重试</text>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">待办概览</text>
+        <text class="section-more" bindtap="load">刷新</text>
+      </view>
+
+      <view wx:if="{{loading}}" class="empty">加载中…</view>
+      <view wx:elif="{{cardRows.length === 0}}" class="empty">
+        <view>没有可查看的统计</view>
+        <view class="hint top-gap">你当前权限范围内没有待办数据</view>
+      </view>
+      <view wx:else>
+        <view class="quick-row" wx:for="{{cardRows}}" wx:for-item="row" wx:key="key">
+          <view
+            class="quick-item {{card.isLast ? 'last' : ''}} {{card.dim ? 'disabled' : ''}}"
+            wx:for="{{row.items}}"
+            wx:for-item="card"
+            wx:key="key"
+            data-url="{{card.url}}"
+            bindtap="openCard"
+          >
+            <view class="quick-title">{{card.value}}</view>
+            <view class="quick-desc">{{card.label}}</view>
+          </view>
+        </view>
+        <view class="hint">数字为 0 的卡片已置灰，但仍可点进去查看</view>
+      </view>
+    </view>
+
+    <view wx:if="{{entries.length > 0}}">
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">后台入口</text>
+          <text class="section-more">按你的权限显示</text>
+        </view>
+        <view class="hint">所有后台功能都收在这里，「我的」页只留一个进工作台的入口</view>
+      </view>
+      <view class="menu-list">
+        <view
+          class="menu-item {{entry.isLast ? 'last' : ''}}"
+          wx:for="{{entries}}"
+          wx:for-item="entry"
+          wx:key="key"
+          data-url="{{entry.url}}"
+          data-action="{{entry.action}}"
+          bindtap="openEntry"
+        >
+          <text class="menu-icon">{{entry.icon}}</text>
+          <text class="menu-label">{{entry.label}}</text>
+          <text wx:if="{{entry.desc}}" class="menu-value">{{entry.desc}}</text>
+          <text class="menu-arrow">></text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

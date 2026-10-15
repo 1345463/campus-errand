@@ -1,0 +1,92 @@
+/* 顶部提示条 */
+.tip-bar {
+  margin: 20rpx 20rpx 0;
+  padding: 24rpx 28rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid #F3DDB0;
+  background: #FFF7E8;
+  color: #8A5A00;
+  font-size: 26rpx;
+  line-height: 1.6;
+}
+
+/* 强制补名：换成主色，强调这一步绕不过去 */
+.tip-bar.force {
+  border-color: #FBC7D2;
+  background: #FFF1F4;
+  color: #C8364F;
+}
+
+.tip-bar .tip-text {
+  font-weight: 600;
+}
+
+.tip-bar .tip-sub {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  opacity: 0.85;
+}
+
+/* 头像与用户名 */
+
+.avatar-row {
+  display: flex;
+  align-items: center;
+}
+
+.avatar-wrap {
+  position: relative;
+  width: 150rpx;
+  height: 150rpx;
+  flex: none;
+}
+
+.avatar-img {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 50%;
+  background: #F2F3F5;
+}
+
+/* 没有头像时用首字兜底，和「我的」页顶部保持同一套视觉 */
+.avatar-initial {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 50%;
+  background: #FFF1F4;
+  color: #FF5A7A;
+  font-size: 60rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-badge {
+  position: absolute;
+  right: -6rpx;
+  bottom: -6rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  background: #FF5A7A;
+  color: #FFFFFF;
+  font-size: 20rpx;
+}
+
+.avatar-hint {
+  flex: 1;
+  margin-left: 28rpx;
+  font-size: 24rpx;
+  color: #6B6B70;
+  line-height: 1.6;
+}
+
+.avatar-hint .hint {
+  margin-top: 6rpx;
+}
+
+.avatar-err {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #EA5455;
+}

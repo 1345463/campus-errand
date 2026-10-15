@@ -1,0 +1,46 @@
+/* 页面私有样式：公共 class 全部复用 app.wxss，这里只写评价页特有的部分 */
+
+/* 星星行：用 ★ / ☆ 字符，不依赖图片资源 */
+.star-row {
+  display: flex;
+  align-items: center;
+}
+.star {
+  font-size: 40rpx;
+  color: #D8DBE1;
+  margin-right: 12rpx;
+  line-height: 1.2;
+}
+.star.on {
+  color: #FFB020;
+}
+/* 可点的大星星：把点击区域撑大，避免小屏上点不中 */
+.star.big {
+  font-size: 64rpx;
+  margin-right: 20rpx;
+  padding: 6rpx 4rpx;
+}
+.score-word {
+  font-size: 26rpx;
+  color: #8A8A8F;
+  margin-left: 18rpx;
+}
+
+.review-text {
+  margin-top: 16rpx;
+  padding: 20rpx;
+  border-radius: 14rpx;
+  background: #F7F8FA;
+  font-size: 27rpx;
+  color: #3A3D45;
+  line-height: 1.7;
+  word-break: break-all;
+}
+
+/* 字数统计靠右，和 textarea 右下角对齐 */
+.count-line {
+  text-align: right;
+  font-size: 22rpx;
+  color: #A0A3AA;
+  margin-top: 10rpx;
+}

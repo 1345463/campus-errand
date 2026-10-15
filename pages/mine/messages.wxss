@@ -1,0 +1,39 @@
+/* 消息中心 */
+
+/* 未读徽标 */
+.badge {
+  display: inline-block;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  background: #FF5A7A;
+  color: #FFFFFF;
+  font-size: 22rpx;
+  line-height: 1.6;
+}
+
+/* 已读消息整条压暗，和未读拉开对比 */
+.order-card.muted {
+  opacity: 0.62;
+}
+
+/* 消息之间留呼吸位 */
+.order-card + .order-card {
+  margin-top: 20rpx;
+}
+
+.task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1F2023;
+}
+
+/* 点击整条消息跳转订单，给出可按的反馈 */
+.order-card:active {
+  background: #FAFAFB;
+}

@@ -1,0 +1,48 @@
+/* 管理员工作台：待办数字卡片 + 后台入口列表 */
+
+/* 一行两列的数字卡片，数量超过 2 时自动换行 */
+.quick-row {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.quick-row .quick-item {
+  width: 50%;
+  box-sizing: border-box;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #F0F1F3;
+}
+
+/* 每行最后一个去掉右侧分隔，避免和卡片内边距打架 */
+.quick-row .quick-item.last {
+  border-right: none;
+}
+
+.quick-title {
+  font-size: 48rpx;
+  font-weight: 600;
+  color: #FF5A7A;
+  line-height: 1.1;
+}
+
+/* 计数为 0 的卡片置灰，但仍可点击进入 */
+.quick-row .quick-item.disabled .quick-title {
+  color: #C7C9CE;
+}
+
+.quick-desc {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #6B6B70;
+}
+
+/* 后台入口列表：复用公共 .menu-* ，这里只补尾部箭头颜色 */
+.menu-item .menu-icon {
+  width: 56rpx;
+  text-align: center;
+}
+
+.menu-item .menu-arrow {
+  color: #C7C9CE;
+  font-size: 26rpx;
+}

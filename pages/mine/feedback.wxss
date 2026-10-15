@@ -1,0 +1,51 @@
+/* 意见反馈 */
+
+.flow-kind {
+  display: block;
+  font-size: 28rpx;
+  color: #1F2023;
+}
+
+.flow-time {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 24rpx;
+  color: #6B6B70;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+/* 处理状态色块 */
+.status-block {
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: #FFFFFF;
+}
+
+.status-block.status-pending {
+  background: #FF9F43;
+}
+
+.status-block.status-approved {
+  background: #28C76F;
+}
+
+.status-block.status-rejected {
+  background: #EA5455;
+}
+
+/* 会话入口：客服受理后可以在里面继续追问 */
+.flow-link {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #07C160;
+}
+
+.flow-unread {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #EA5455;
+}

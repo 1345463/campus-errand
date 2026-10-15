@@ -1,0 +1,132 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>登录后才能评价订单</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}">
+    <view class="empty">{{deniedText}}</view>
+    <view class="card">
+      <view class="btn-ghost" bindtap="goBack">返回</view>
+    </view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="empty">加载中…</view>
+
+  <view wx:else>
+    <view wx:if="{{errorText}}" class="mod-bar">
+      <text class="mod-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="retry">重试</text>
+    </view>
+
+    <view class="card">
+      <view class="task-row">
+        <text class="task-title">{{title}}</text>
+        <text class="status-done">{{statusText}}</text>
+      </view>
+      <view class="task-meta">{{serviceName}} · {{createdText}}</view>
+    </view>
+
+    <!-- 已评价过：只读展示 -->
+    <block wx:if="{{submitted}}">
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">我给{{otherLabel}}的评价</text>
+        </view>
+        <view class="star-row">
+          <text
+            wx:for="{{starList}}"
+            wx:key="*this"
+            class="star {{item <= myScore ? 'on' : ''}}"
+          >{{item <= myScore ? '★' : '☆'}}</text>
+          <text class="score-word">{{myScore}} 分</text>
+        </view>
+        <view class="chip-row" wx:if="{{myTags.length}}">
+          <text class="chip active" wx:for="{{myTags}}" wx:key="*this">{{item}}</text>
+        </view>
+        <view class="review-text" wx:if="{{myComment}}">{{myComment}}</view>
+        <view class="hint">评价已提交，不能修改</view>
+      </view>
+
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">{{otherLabel}}给我的评价</text>
+        </view>
+        <block wx:if="{{peerHas}}">
+          <view class="star-row">
+            <text
+              wx:for="{{starList}}"
+              wx:key="*this"
+              class="star {{item <= peerScore ? 'on' : ''}}"
+            >{{item <= peerScore ? '★' : '☆'}}</text>
+            <text class="score-word">{{peerScore}} 分</text>
+          </view>
+          <view class="review-text" wx:if="{{peerComment}}">{{peerComment}}</view>
+          <view class="hint" wx:else>对方没有填写备注</view>
+        </block>
+        <view wx:else class="hint">对方还没有评价</view>
+      </view>
+
+      <view class="card">
+        <view class="btn-ghost" bindtap="goBack">返回</view>
+      </view>
+    </block>
+
+    <!-- 还没评价：填写 -->
+    <block wx:else>
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">评价{{otherLabel}}</text>
+        </view>
+        <view class="star-row">
+          <text
+            wx:for="{{starList}}"
+            wx:key="*this"
+            class="star big {{item <= score ? 'on' : ''}}"
+            data-n="{{item}}"
+            bindtap="pickScore"
+          >{{item <= score ? '★' : '☆'}}</text>
+        </view>
+        <view class="score-word">{{scoreWord || '点击星星评分'}}</view>
+      </view>
+
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">快捷标签（可多选）</text>
+        </view>
+        <view class="chip-row">
+          <text
+            class="chip {{item.on ? 'active' : ''}}"
+            wx:for="{{tagOptions}}"
+            wx:key="label"
+            data-index="{{index}}"
+            bindtap="toggleTag"
+          >{{item.label}}</text>
+        </view>
+      </view>
+
+      <view class="card">
+        <view class="field">
+          <view class="field-label">补充说明</view>
+          <textarea
+            class="field-textarea"
+            placeholder="说说这次服务的感受（选填）"
+            value="{{comment}}"
+            bindinput="onComment"
+            maxlength="200"
+          />
+          <view class="count-line">{{commentLen}}/200</view>
+        </view>
+      </view>
+
+      <view class="card">
+        <block wx:if="{{submitArmed}}">
+          <view class="btn-primary btn-armed" bindtap="askSubmit">{{submitting ? '提交中…' : '再点一次确认提交'}}</view>
+          <view class="btn-ghost top-gap-sm" bindtap="cancelSubmit">取消</view>
+        </block>
+        <view wx:else class="btn-primary {{submitting ? 'disabled' : ''}}" bindtap="askSubmit">提交评价</view>
+        <view class="hint">评价提交后不能修改</view>
+      </view>
+    </block>
+  </view>
+</view>

@@ -183,3 +183,17 @@ _提交时间：2026-10-15 14:00:00_
 - 灰底页面和白底卡片上都成立，一套规则通吃。
 
 _提交时间：2026-10-15 16:00:00_
+
+## R17 · 输入框盒子几何挪到外层 view
+
+- 发现方式：装 pngjs 解 PNG 做色值直方图 + 逐行扫描，用已知尺寸元素标定 px/rpx
+- （本例 750rpx = 820px，1rpx ≈ 1.093px）。
+- 实测：占位文字字高应为 ≈25rpx 只剩 13.7rpx；输入框高度应为 86rpx 只有 55rpx。
+- 26×2 padding + 2×2 描边 = 56rpx ≈ 实测 55rpx → 盒子只剩 padding 和描边，内容高度塌成 0。
+- 根因：小程序给 input 自带约 1.4em 固定默认高度；同时加 padding:26rpx 与
+- box-sizing:border-box 时 padding 从这个固定高度里扣，height(auto) < padding+border 就钳成 0。
+- 修复决策：盒子几何从 input 挪到外层 view（.login-box 负责 flex/height/padding/描边，
+- .login-input 只留 flex/字号/颜色）。这是 renderer 无关的稳妥写法。
+- 顺手修掉同一类"隐形表面"缺陷（.room-picker/.custom-input/.quick-item/.task-card 等）。
+
+_提交时间：2026-10-15 17:00:00_

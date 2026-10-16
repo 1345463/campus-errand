@@ -309,3 +309,20 @@ _提交时间：2026-10-16 01:30:00_
 - 用户还在联调，擅自关会打断测试。
 
 _提交时间：2026-10-16 10:30:00_
+
+## R24 · orders 写守卫 + 更新管理器
+
+- 背景：这是 must-after-publish 的动作 —— 旧版小程序是客户端直写 orders 表发单，
+- 这条策略是它唯一写通道，删早了没更新的用户发不了单。
+- 让这条 DROP 不再紧急：sql/add-order-write-guard.sql 加 BEFORE INSERT 守卫，
+- ① 只能给自己发单 ② 伪造 status/runner/时间戳一律复位成 pending ③ 重跑 scan_moderation_words。
+- 设计原则 fail-open：整个函数体包在 EXCEPTION 里，WHEN raise_exception THEN RAISE，
+- WHEN OTHERS THEN RETURN NEW —— 守卫出任何意外都退回原行为，绝不卡住发单。
+- app.js 新增 checkUpdate()：wx.getUpdateManager() 检测到新版立刻下载并弹窗重启。
+- 关键手法：默认 session 的 current_user 是表 owner 且 rolbypassrls=true，直接测会被 RLS 放过，
+- 必须 SET LOCAL ROLE authenticated 才是真实前端语义。
+- 重要发现：INSERT 报 row-level security 被拒；UPDATE 不报错但影响行数 = 0 ——
+- 所以用 GET DIAGNOSTICS ROW_COUNT 判才是准的，只 catch 异常会误判为"没拦住"。
+- 复核：create_order（SECURITY DEFINER）在 authenticated 角色下照样能发单成功。
+
+_提交时间：2026-10-16 11:00:00_

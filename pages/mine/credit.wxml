@@ -1,0 +1,78 @@
+<view class="page">
+  <view wx:if="{{grayOff}}" class="empty">
+    <view>信誉分暂未开放</view>
+    <view class="hint top-gap">功能还在内测，开放后这里会出现</view>
+  </view>
+
+  <view wx:elif="{{needLogin}}" class="empty">
+    <view>登录后才能查看信誉分</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="empty">加载中…</view>
+
+  <view wx:else>
+    <view class="hero">
+      <view class="hero-title">{{scoreText}}</view>
+      <view class="hero-sub">{{hasScore ? scoreLevel : '还没有收到评价'}}</view>
+    </view>
+
+    <view class="stat-row">
+      <view class="stat-item">
+        <view class="stat-num">{{receivedCount}}</view>
+        <view class="stat-label">收到评价</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-num">{{goodRate}}%</view>
+        <view class="stat-label">好评率</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-num">{{doneCount}}</view>
+        <view class="stat-label">完成订单</view>
+      </view>
+    </view>
+
+    <view wx:if="{{boostOn}}" class="tip-bar">
+      <view class="tip-text">你已开启接单优先展示：{{boostText}}</view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">信誉分怎么算</text>
+      </view>
+      <view class="hint">发布方给你打的星级累计成接单信誉分，你给接单员打的分累计成发布信誉分，两条分账各算各的</view>
+      <view class="hint top-gap-sm">接单信誉分：被评价 {{runnerCount}} 次，平均 {{hasScore ? scoreText : '暂无'}} 分</view>
+      <view class="hint top-gap-sm">发布信誉分：被评价 {{ownerCount}} 次，平均 {{ownerScoreText}} 分</view>
+      <view wx:if="{{strikeCount > 0}}" class="hint top-gap-sm">违规记录 {{strikeCount}} 次，每次会记一条最差评</view>
+      <view class="hint top-gap-sm">信誉分不影响接单资格，但会影响对方对你的选择</view>
+      <view class="btn-ghost top-gap" bindtap="goReviews">去看看还有哪些单没评价</view>
+    </view>
+
+    <view class="card">
+      <view class="section-head">
+        <text class="section-title">收到的评价</text>
+        <text class="section-more">最近 20 条</text>
+      </view>
+      <view wx:if="{{reviews.length === 0}}" class="hint">还没有收到评价，完成订单后对方可以给你打分</view>
+      <view wx:else>
+        <view
+          class="detail-row"
+          wx:for="{{reviews}}"
+          wx:key="id"
+          data-id="{{item.orderId}}"
+          bindtap="goOrder"
+        >
+          <view class="detail-label">
+            <text class="flow-kind">{{item.orderTitle}}</text>
+            <text class="flow-time">{{item.fromName}} · {{item.fromRoleText}} · {{item.timeText}}</text>
+            <text wx:if="{{item.comment}}" class="flow-time">{{item.comment}}</text>
+          </view>
+          <view class="detail-value">
+            <text class="score-star">{{item.score}} 星</text>
+            <text class="flow-time">{{item.scoreText}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

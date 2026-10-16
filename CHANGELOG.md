@@ -326,3 +326,21 @@ _提交时间：2026-10-16 10:30:00_
 - 复核：create_order（SECURITY DEFINER）在 authenticated 角色下照样能发单成功。
 
 _提交时间：2026-10-16 11:00:00_
+
+## R25 · 第四轮（积分归属/大厅门槛）
+
+- 关键 bug：wx:for 循环变量名写错。pages/admin/dashboard.wxml 里 wx:for="{{entries}}"
+- 没写 wx:for-item="entry"，但标签内全用 {{entry.icon}}。WXML 默认循环变量叫 item，
+- 于是所有字段取到 undefined —— 页面不报错，只渲染出"只剩 > 箭头"的空白行。
+- 这类错误永远不报错，只能靠扫：正则找 wx:for → 检查有没有 wx:for-item →
+- 比对紧随其后 400 字内 {{变量.}} 用到的变量名。
+- 积分归属改为下单人（用户明确要求）：confirm_order_done 改为记在 owner_id 账上，
+- 赏金仍打给接单员钱包；站内消息拆成两条。
+- 新增 order_peer_credit(p_order_id)：参与方互看信誉分，非参与方且非管理员直接抛错。
+- 新增 admin_is_any()、is_certified_runner()。
+- orders_read_all 从 USING (true) 收紧成参与方/认证接单员/管理员 ——
+- 原来任何登录用户都能直读大厅全部任务（标题/描述/取件地点/发布人）。
+- 三档实测：未认证用户可见 0 行、认证接单员 18 行、管理员 18 行。
+- 首页大厅加门槛：checkRunner() 先判登录 + 接单员资格，不达标渲染锁定卡，完全不拉取。
+
+_提交时间：2026-10-16 11:44:00_

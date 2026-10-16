@@ -300,3 +300,12 @@ _提交时间：2026-10-16 01:08:00_
 - 所有零散后台入口收进 admin/dashboard，"我的"页只留"管理员口令"+"管理员工作台"。
 
 _提交时间：2026-10-16 01:30:00_
+
+## R21-补 · 全页面审查
+
+- 已修：pages/orders/list.js 向未声明的 errorText 写值；utils/config.js 删掉明文管理员口令
+- （会被反编译看到）；getSignedUrls 串行 await → Promise.all；"我的订单"四个 chip 补选中态。
+- 仅提示未动：config.js 的 rememberPassword/autoLogin/presetAccount 仍为调试态 ——
+- 用户还在联调，擅自关会打断测试。
+
+_提交时间：2026-10-16 10:30:00_

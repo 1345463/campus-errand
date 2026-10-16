@@ -1,0 +1,345 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>请先登录</view>
+    <view class="hint top-gap">登录后才能管理积分商城</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}" class="empty">
+    <view>只有结算员或超级管理员能管理积分商城</view>
+    <view class="hint top-gap">积分可以直接换成券和抵扣，改错了要人工对账</view>
+    <view class="btn-primary top-gap" bindtap="goBack">返回</view>
+  </view>
+
+  <view wx:else>
+    <!-- 开关关着时提前说明：否则改完看不到效果会以为接口坏了 -->
+    <view class="tip-bar" wx:if="{{!flagOn}}">
+      <view class="tip-text">灰度开关「积分商城」当前是关闭的：用户端看不到商城入口。开关在「灰度开关」页打开。</view>
+    </view>
+
+    <view class="err-bar" wx:if="{{errorText}}">
+      <text class="err-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="loadGoods">重试</text>
+    </view>
+
+    <view wx:if="{{tipText}}" class="settle-feedback">{{tipText}}</view>
+
+    <!-- Tab：商品 / 积分 / 核销 三件事分开，避免一页里塞太多表单 -->
+    <view class="tab-row">
+      <view
+        wx:for="{{tabs}}"
+        wx:for-item="tabItem"
+        wx:key="key"
+        class="tab-item {{tabItem.key === tab ? 'active' : ''}}"
+        data-key="{{tabItem.key}}"
+        bindtap="switchTab"
+      >{{tabItem.label}}</view>
+    </view>
+
+    <!-- ================= 商品管理 ================= -->
+    <block wx:if="{{tab === 'goods'}}">
+      <view class="tool-row">
+        <view class="doc-btn" bindtap="loadGoods">刷新</view>
+        <view class="doc-btn" bindtap="openNew">+ 新增商品</view>
+      </view>
+
+      <view wx:if="{{formOpen}}" class="card">
+        <view class="section-head">
+          <text class="section-title">{{editingId ? '编辑商品' : '新增商品'}}</text>
+          <text class="section-more">{{editingId ? '改完点保存立即生效' : '保存后默认上架'}}</text>
+        </view>
+
+        <input
+          class="field-input top-gap"
+          placeholder="商品名称（最多 30 字）"
+          value="{{form.name}}"
+          data-key="name"
+          bindinput="onInput"
+          maxlength="30"
+        />
+
+        <view class="form-2col">
+          <input
+            class="field-input col"
+            placeholder="图标 emoji"
+            value="{{form.emoji}}"
+            data-key="emoji"
+            bindinput="onInput"
+            maxlength="8"
+          />
+          <input
+            class="field-input col"
+            type="number"
+            placeholder="所需积分"
+            value="{{form.cost}}"
+            data-key="cost"
+            bindinput="onInput"
+          />
+        </view>
+
+        <view class="form-2col">
+          <input
+            class="field-input col"
+            type="number"
+            placeholder="库存"
+            value="{{form.stock}}"
+            data-key="stock"
+            bindinput="onInput"
+          />
+          <input
+            class="field-input col"
+            type="number"
+            placeholder="排序号（小靠前）"
+            value="{{form.sortOrder}}"
+            data-key="sortOrder"
+            bindinput="onInput"
+          />
+        </view>
+
+        <input
+          class="field-input top-gap"
+          placeholder="说明（最多 120 字，展示在商品卡片上）"
+          value="{{form.descr}}"
+          data-key="descr"
+          bindinput="onInput"
+          maxlength="120"
+        />
+
+        <view class="field-label top-gap">怎么用（抵扣方式）</view>
+        <view class="chip-row">
+          <view
+            wx:for="{{benefitTypes}}"
+            wx:for-item="type"
+            wx:key="key"
+            class="chip chip-shortcut {{form.benefitType === type.key ? 'active' : ''}}"
+            data-key="{{type.key}}"
+            bindtap="pickBenefit"
+          >{{type.label}}</view>
+        </view>
+        <view class="settle-rule">当前选择：{{form.benefitType === 'deduct' ? '下单时直接抵扣赏金，需要填抵扣面额' : form.benefitType === 'verify' ? '兑换码拿到「核销」页手动核销' : '兑换后立刻生效，无需再操作'}}</view>
+
+        <input
+          wx:if="{{form.benefitType === 'deduct'}}"
+          class="field-input top-gap"
+          type="digit"
+          placeholder="抵扣面额（元），例如 2 或 2.5"
+          value="{{form.deductValue}}"
+          data-key="deductValue"
+          bindinput="onInput"
+        />
+
+        <view class="switch-row" bindtap="toggleFormEnabled">
+          <text class="switch-label">上架（关掉用户端就看不到）</text>
+          <text class="switch-value {{form.enabled ? 'on' : ''}}">{{form.enabled ? '已上架' : '未上架'}}</text>
+        </view>
+
+        <view wx:if="{{formError}}" class="login-error">{{formError}}</view>
+
+        <view class="btn-row">
+          <view class="btn-ghost half" bindtap="closeForm">取消</view>
+          <view class="btn-primary half {{saving ? 'disabled' : ''}}" bindtap="saveGoods">
+            {{saving ? '保存中…' : '保存'}}
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{loading}}" class="empty">加载中…</view>
+      <view wx:elif="{{list.length === 0 && !errorText}}" class="empty">
+        <view>还没有兑换商品</view>
+        <view class="hint top-gap">点上方「新增商品」配置第一个</view>
+      </view>
+
+      <view class="card apply-card" wx:for="{{list}}" wx:for-item="good" wx:key="id">
+        <view class="apply-head">
+          <text class="apply-name">{{good.emoji}} {{good.name}}</text>
+          <text class="status-text {{good.enabled ? 'status-done' : 'status-canceled'}}">
+            {{good.enabled ? '已上架' : '未上架'}}
+          </text>
+        </view>
+
+        <view class="detail-row">
+          <view class="detail-label">积分价</view>
+          <view class="detail-value">{{good.cost}} 分</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">库存</view>
+          <view class="detail-value">{{good.stock}} 份</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">怎么用</view>
+          <view class="detail-value">{{good.benefitText}}（{{good.benefitHint}}）</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">面额</view>
+          <view class="detail-value">{{good.deductText}}</view>
+        </view>
+        <view class="detail-row" wx:if="{{good.descr}}">
+          <view class="detail-label">说明</view>
+          <view class="detail-value">{{good.descr}}</view>
+        </view>
+        <view class="detail-row last">
+          <view class="detail-label">排序</view>
+          <view class="detail-value">{{good.sortOrder}}（数字越小越靠前）</view>
+        </view>
+
+        <view class="btn-row">
+          <view class="btn-ghost half" data-id="{{good.id}}" bindtap="openEdit">编辑</view>
+          <view
+            class="btn-primary half {{actingId === good.id ? 'disabled' : ''}}"
+            data-id="{{good.id}}"
+            bindtap="toggleGoods"
+          >{{good.enabled ? '下架' : '上架'}}</view>
+        </view>
+      </view>
+
+      <view class="card">
+        <view class="settle-rule">
+          改「怎么用」会改变已发出兑换码的兑现方式：抵扣券由系统自动核销、核销券要在这里手动核销、自动生效券兑换后立刻生效。库存为 0 时用户端会显示已兑完。
+        </view>
+      </view>
+    </block>
+
+    <!-- ================= 积分调整 ================= -->
+    <block wx:elif="{{tab === 'points'}}">
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">找人</text>
+          <text class="section-more">按昵称或 ID 后几位搜</text>
+        </view>
+        <input
+          class="field-input top-gap"
+          placeholder="输入昵称或用户 ID"
+          value="{{kw}}"
+          bindinput="onKwInput"
+          maxlength="30"
+        />
+        <view class="btn-row">
+          <view class="btn-primary full {{searching ? 'disabled' : ''}}" bindtap="searchUsers">
+            {{searching ? '搜索中…' : '搜索'}}
+          </view>
+        </view>
+
+        <view wx:if="{{users.length > 0}}" class="user-list">
+          <view
+            wx:for="{{users}}"
+            wx:for-item="user"
+            wx:key="uid"
+            class="user-row {{pickedUid === user.uid ? 'active' : ''}}"
+            data-uid="{{user.uid}}"
+            bindtap="pickUser"
+          >
+            <view class="user-main">
+              <text class="user-name">{{user.nickname}}</text>
+              <text class="user-role">{{user.role}}</text>
+            </view>
+            <text class="user-points">{{user.points}} 分</text>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{pickedUid}}" class="card">
+        <view class="section-head">
+          <text class="section-title">调整 {{pickedName}} 的积分</text>
+          <text class="section-more" bindtap="clearUser">换个人</text>
+        </view>
+        <view class="settle-rule">当前 {{pickedPoints}} 分。填正数加分、负数减分，一次最多 5000。</view>
+
+        <input
+          class="field-input top-gap"
+          type="number"
+          placeholder="调整数量，例如 100 或 -50"
+          value="{{adjustDelta}}"
+          data-key="adjustDelta"
+          bindinput="onAdjustInput"
+        />
+
+        <view class="chip-row">
+          <view class="chip chip-shortcut" data-value="10" bindtap="quickDelta">+10</view>
+          <view class="chip chip-shortcut" data-value="50" bindtap="quickDelta">+50</view>
+          <view class="chip chip-shortcut" data-value="100" bindtap="quickDelta">+100</view>
+          <view class="chip chip-shortcut" data-value="-10" bindtap="quickDelta">-10</view>
+          <view class="chip chip-shortcut" data-value="-50" bindtap="quickDelta">-50</view>
+        </view>
+
+        <input
+          class="field-input top-gap"
+          placeholder="调整原因（必填，会记进积分流水并通知本人）"
+          value="{{adjustRemark}}"
+          data-key="adjustRemark"
+          bindinput="onAdjustInput"
+          maxlength="60"
+        />
+
+        <view class="btn-row">
+          <view class="btn-primary full {{adjusting ? 'disabled' : ''}}" bindtap="doAdjust">
+            {{adjusting ? '提交中…' : '确认调整'}}
+          </view>
+        </view>
+      </view>
+
+      <view class="card">
+        <view class="settle-rule">
+          手工调整会写进积分流水、并给本人发一条消息，原因请写清楚（例如「活动补发」「误扣退回」）。积分扣到 0 为止，不会出现负数。
+        </view>
+      </view>
+    </block>
+
+    <!-- ================= 兑换核销 ================= -->
+    <block wx:else>
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">兑换码核销</text>
+          <text class="section-more">只用于「管理员核销」类券</text>
+        </view>
+        <view class="settle-rule">
+          抵扣券在用户下单时由系统自动抵扣、自动生效券兑换后立刻生效，这两类都不需要在这里操作。
+        </view>
+
+        <input
+          class="field-input top-gap"
+          placeholder="输入兑换码（大小写都行）"
+          value="{{code}}"
+          bindinput="onCodeInput"
+          maxlength="20"
+        />
+
+        <view class="btn-row">
+          <view class="btn-ghost half" bindtap="clearVerify">清空</view>
+          <view class="btn-primary half {{verifying ? 'disabled' : ''}}" bindtap="doVerify">
+            {{verifying ? '核销中…' : '核销'}}
+          </view>
+        </view>
+
+        <view wx:if="{{verifyResult}}" class="verify-box">
+          <view class="verify-title">✅ 核销成功</view>
+          <view class="detail-row">
+            <view class="detail-label">商品</view>
+            <view class="detail-value">{{verifyResult.goodsName}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">兑换码</view>
+            <view class="detail-value">{{verifyResult.code}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">同学</view>
+            <view class="detail-value">{{verifyResult.nickname}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">消耗</view>
+            <view class="detail-value">{{verifyResult.cost}} 分</view>
+          </view>
+          <view class="detail-row last">
+            <view class="detail-label">时间</view>
+            <view class="detail-value">{{verifyResult.usedAtText}}</view>
+          </view>
+        </view>
+      </view>
+
+      <view class="card">
+        <view class="settle-rule">
+          核销是不可撤销的：码一旦核销，用户端会立刻标记已使用。重复核销同一个码会被服务端拒绝。
+        </view>
+      </view>
+    </block>
+  </view>
+</view>

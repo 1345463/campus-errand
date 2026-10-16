@@ -1,0 +1,99 @@
+<view class="page">
+  <!-- 接单员门槛：没通过认证就整页只显示这张卡，任务列表一个字都不拉 -->
+  <view wx:if="{{locked}}" class="card lock-card">
+    <view class="lock-icon">🔒</view>
+    <view class="lock-title">{{lockTitle}}</view>
+    <view class="hint lock-desc">{{lockDesc}}</view>
+    <view class="btn-primary top-gap" bindtap="tapLock">{{lockBtn}}</view>
+  </view>
+
+  <block wx:else>
+    <!-- 筛选与排序：沿用灰度 hall_filter，没开的时候整块不出现 -->
+    <view wx:if="{{filterOn}}" class="card">
+      <view class="section-head">
+        <text class="section-title">服务类型</text>
+      </view>
+      <view class="filter-row">
+        <view
+          class="chip {{filterType === item.type ? 'active' : ''}}"
+          wx:for="{{filters}}"
+          wx:key="type"
+          data-type="{{item.type}}"
+          bindtap="pickFilter"
+        >{{item.name}}</view>
+      </view>
+
+      <view class="section-head">
+        <text class="section-title">排序</text>
+      </view>
+      <view class="filter-row">
+        <view
+          class="chip {{sortKey === item.key ? 'active' : ''}}"
+          wx:for="{{sorts}}"
+          wx:key="key"
+          data-key="{{item.key}}"
+          bindtap="pickSort"
+        >{{item.name}}</view>
+      </view>
+    </view>
+
+    <!-- 楼栋 / 楼层：单独一个灰度开关，超管可以只关这一块 -->
+    <view wx:if="{{buildingOn}}" class="card">
+      <view class="section-head">
+        <text class="section-title">按送达位置筛选</text>
+        <text class="section-more" bindtap="resetFilter">重置</text>
+      </view>
+      <view class="pick-row">
+        <picker
+          class="pick-item"
+          mode="selector"
+          range="{{buildingNames}}"
+          value="{{buildingIndex}}"
+          bindchange="pickBuilding"
+        >
+          <view class="pick-text">🏢 {{building || '全部楼栋'}}</view>
+        </picker>
+        <picker
+          class="pick-item"
+          mode="selector"
+          range="{{floorNames}}"
+          value="{{floorIndex}}"
+          bindchange="pickFloor"
+        >
+          <view class="pick-text">🛗 {{floor || '全部楼层'}}</view>
+        </picker>
+      </view>
+      <view class="hint">楼栋取的是任务的送达地址，取件点（比如南门快递柜）不在筛选范围内</view>
+    </view>
+
+    <view wx:if="{{totalText}}" class="hall-count">{{totalText}}</view>
+
+    <view wx:if="{{loading}}" class="empty">加载中…</view>
+    <view wx:elif="{{hallError}}" class="empty" bindtap="retry">加载失败，点这里重试</view>
+    <view wx:elif="{{hall.length === 0}}" class="empty">
+      <view>这个条件下暂时没有任务</view>
+      <view class="hint top-gap">换个筛选，或者晚点再来看看</view>
+    </view>
+
+    <view
+      class="card hall-card"
+      wx:for="{{hall}}"
+      wx:for-item="task"
+      wx:key="id"
+      data-id="{{task.id}}"
+      bindtap="openDetail"
+    >
+      <view class="hall-head">
+        <text class="hall-title">{{task.title}}</text>
+        <text class="hall-reward">¥{{task.reward}}</text>
+      </view>
+      <view wx:if="{{task.boosted}}" class="hall-boost">🚀 优先推送</view>
+      <view class="hall-meta">{{task.serviceName}} · {{task.createdText}}</view>
+      <view class="hall-where">{{task.whereText}}</view>
+      <view wx:if="{{task.discountText}}" class="hall-discount">{{task.discountText}}</view>
+    </view>
+
+    <view wx:if="{{loadingMore}}" class="empty">加载更多…</view>
+    <view wx:elif="{{hasMore && hall.length > 0}}" class="empty" bindtap="loadMore">上拉或点这里加载更多</view>
+  </block>
+</view>

@@ -377,3 +377,32 @@ _提交时间：2026-10-16 13:20:00_
 - scroll-into-view 定位最新一条（setData 后延 80ms 再滚）；不能发言时底部换成说明文案。
 
 _提交时间：2026-10-16 13:58:00_
+
+## R28 · 第六轮（大厅/佐证/抵扣券）
+
+- 数据库：
+- - orders 新增 deliver_images text[]、pickup_building/floor、deliver_building/floor、
+-   discount_code、discount_amount；索引 (status, deliver_building, deliver_floor, created_at DESC)。
+- - point_redemptions 新增 used_by / order_id；point_goods 新增 benefit_type
+-   （deduct 抵扣 / verify 核销 / auto 自动生效）与 deduct_value。
+- - create_order 扩到 17 个参数：赏金 < 1 元直接 RAISE EXCEPTION；抵扣券只认
+-   "本人 + unused + benefit_type='deduct'"，v_discount = LEAST(deduct_value, reward)。
+-   抵扣只记在订单上，接单员仍拿全额赏金（差价平台承担）。
+- - complete_order(p_order_id, p_images)：灰度 deliver_photo 开着时必须 1–3 张，关着时可选；
+-   只认 ^asset:[0-9]+$。
+- - get_order_detail：非发布方/非接单员/非管理员 → images、deliver_images 置空、contact 置空串。
+- - 积分商城后台（全部 admin_has_perm('settle')）与用户端 list_my_coupons。
+- 本轮最大的坑：私有图读不到。get_media_asset 的条件是 owner_id = 调用者 OR is_admin，
+- 但订单里的图天然跨人 —— 任务图是发布方传的、送达佐证是接单员传的，对方根本读不出来。
+- → 新增 get_order_asset(p_asset_id, p_order_id)：① 调用方是这一单的发布方或接单员（或管理员）
+- ② 这张图确实挂在 orders.images / deliver_images 里，两道条件缺一不可。
+- 前端配套 upload.orderAssetToLocalFile/DataUrl + api.getOrderImageUrls(paths, orderId)。
+- 以后凡是"订单相关的图"都不能用 getSignedUrls。
+- 前端：新建 pages/hall/index（接单员门槛锁卡、服务类型/排序、楼栋楼层 picker、上拉分页）；
+- pages/index/index 清掉列表与筛选，只留一个"任务大厅"入口卡；onLoad 不发请求。
+- pages/mine/profile 支持 ?force=1：wx.enableAlertBeforeUnload 拦返回与右滑手势。
+- 新建 pages/admin/points：商品管理 / 积分调整 / 兑换核销 三个 Tab。
+- 灰度新增 hall_building_filter、coupon_deduct、deliver_photo；
+- hall_page 开关被删除 —— 大厅是任务列表唯一入口，关掉等于直接下掉功能。
+
+_提交时间：2026-10-16 22:38:00_

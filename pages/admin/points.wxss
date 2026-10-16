@@ -1,0 +1,135 @@
+/* 积分商城管理：商品 / 积分 / 核销 三个 Tab */
+
+.tab-row {
+  display: flex;
+  padding: 20rpx 20rpx 0;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx 0;
+  font-size: 28rpx;
+  color: #6B6B70;
+  background: #FFFFFF;
+  border: 1rpx solid #E3E6EB;
+  border-right-width: 0;
+}
+
+.tab-item:first-child {
+  border-radius: 16rpx 0 0 16rpx;
+}
+
+.tab-item:last-child {
+  border-right-width: 1rpx;
+  border-radius: 0 16rpx 16rpx 0;
+}
+
+.tab-item.active {
+  color: #FFFFFF;
+  background: #FF5A7A;
+  border-color: #FF5A7A;
+  font-weight: 600;
+}
+
+/* 表单：两个短字段并排，比上下各占一行省一屏 */
+.form-2col {
+  display: flex;
+  margin-top: 16rpx;
+}
+
+.form-2col .col {
+  flex: 1;
+}
+
+.form-2col .col:first-child {
+  margin-right: 16rpx;
+}
+
+/* 上架开关：没有 switch 组件，用一行可点的文字开关代替 */
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 16rpx;
+  background: #F7F8FA;
+}
+
+.switch-label {
+  font-size: 28rpx;
+  color: #1F2126;
+}
+
+.switch-value {
+  font-size: 26rpx;
+  color: #9A9AA0;
+}
+
+.switch-value.on {
+  color: #FF5A7A;
+  font-weight: 600;
+}
+
+/* 占满一行的主按钮 */
+.btn-row .full {
+  flex: 1;
+  margin-right: 0;
+}
+
+/* 找人结果列表 */
+.user-list {
+  margin-top: 20rpx;
+  border-top: 1rpx solid #F2F3F5;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 4rpx;
+  border-bottom: 1rpx solid #F2F3F5;
+}
+
+.user-row.active {
+  background: #FFF1F4;
+}
+
+.user-main {
+  display: flex;
+  align-items: center;
+}
+
+.user-name {
+  font-size: 28rpx;
+  color: #1F2126;
+  font-weight: 600;
+}
+
+.user-role {
+  margin-left: 12rpx;
+  font-size: 22rpx;
+  color: #9A9AA0;
+}
+
+.user-points {
+  font-size: 26rpx;
+  color: #FF5A7A;
+}
+
+/* 核销结果 */
+.verify-box {
+  margin-top: 24rpx;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  background: #F3FBF6;
+  border: 1rpx solid #C8EBD5;
+}
+
+.verify-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1E8A4B;
+  padding-bottom: 16rpx;
+}

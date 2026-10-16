@@ -1,0 +1,106 @@
+/* 任务大厅 */
+
+.hall-count {
+  padding: 16rpx 32rpx;
+  font-size: 24rpx;
+  color: #8A8A8F;
+}
+
+.hall-card {
+  margin: 0 20rpx 20rpx;
+}
+
+.hall-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.hall-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1F2023;
+  word-break: break-all;
+}
+
+.hall-reward {
+  margin-left: 16rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #FF5A7A;
+}
+
+.hall-meta {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #8A8A8F;
+}
+
+.hall-where {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #1F2023;
+  word-break: break-all;
+}
+
+.hall-discount {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #07C160;
+}
+
+/* 优先推送标记：这单用了优先展示券，排在前面是有原因的 */
+.hall-boost {
+  display: inline-block;
+  margin-top: 8rpx;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  background: #FFF1F4;
+  color: #C8364F;
+  font-size: 22rpx;
+}
+
+/* 楼栋 / 楼层选择器 */
+.pick-row {
+  display: flex;
+  gap: 16rpx;
+}
+
+.pick-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.pick-text {
+  padding: 18rpx 20rpx;
+  border-radius: 12rpx;
+  background: #F7F8FA;
+  font-size: 26rpx;
+  color: #1F2023;
+  text-align: center;
+}
+
+/* 锁定卡 */
+.lock-card {
+  margin: 40rpx 20rpx;
+  padding: 48rpx 32rpx;
+  text-align: center;
+}
+
+.lock-icon {
+  font-size: 64rpx;
+  line-height: 1;
+}
+
+.lock-title {
+  margin-top: 20rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #2B2B30;
+}
+
+.lock-desc {
+  text-align: left;
+}

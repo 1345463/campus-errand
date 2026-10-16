@@ -1,0 +1,163 @@
+/* 工单跟进会话：上半屏对话、下半屏输入框，整页不滚动，只有会话区滚动 */
+
+.chat-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  padding-bottom: 0;
+}
+
+.chat-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 16rpx 24rpx;
+  box-sizing: border-box;
+}
+
+.chat-empty {
+  padding: 60rpx 0;
+  text-align: center;
+  font-size: 26rpx;
+  color: #8A8A8F;
+}
+
+/* 最后一条消息下面留一段空，避免贴着输入框 */
+.chat-pad {
+  height: 24rpx;
+}
+
+.msg-row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 28rpx;
+}
+
+.msg-row.mine {
+  align-items: flex-end;
+}
+
+.msg-row.peer {
+  align-items: flex-start;
+}
+
+.msg-meta {
+  font-size: 22rpx;
+  color: #8A8A8F;
+  margin-bottom: 8rpx;
+}
+
+.msg-bubble {
+  max-width: 78%;
+  padding: 18rpx 24rpx;
+  border-radius: 20rpx;
+  font-size: 28rpx;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.msg-row.peer .msg-bubble {
+  background: #FFFFFF;
+  color: #1F2023;
+  border-top-left-radius: 6rpx;
+}
+
+.msg-row.mine .msg-bubble {
+  background: #07C160;
+  color: #FFFFFF;
+  border-top-right-radius: 6rpx;
+}
+
+/* 输入区固定在底部，不随会话滚动 */
+.chat-input {
+  flex: none;
+  padding: 16rpx 24rpx 24rpx;
+  background: #FFFFFF;
+  border-top: 1rpx solid #EFEFF2;
+}
+
+.chat-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 96rpx;
+  max-height: 240rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 16rpx;
+  background: #F7F8FA;
+  font-size: 28rpx;
+  color: #1F2023;
+}
+
+.chat-send-row {
+  margin-top: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-count {
+  font-size: 22rpx;
+  color: #8A8A8F;
+}
+
+.chat-send {
+  padding: 14rpx 48rpx;
+  border-radius: 999rpx;
+  background: #07C160;
+  color: #FFFFFF;
+  font-size: 28rpx;
+}
+
+.chat-send.disabled {
+  background: #DCDDE1;
+  color: #8A8A8F;
+}
+
+.chat-locked {
+  flex: none;
+  padding: 28rpx 24rpx;
+  background: #FFFFFF;
+  border-top: 1rpx solid #EFEFF2;
+  font-size: 26rpx;
+  color: #8A8A8F;
+  text-align: center;
+}
+
+/* 工单概要 */
+.ticket-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ticket-kind {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1F2023;
+}
+
+.ticket-content {
+  margin: 16rpx 0;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background: #F7F8FA;
+  font-size: 28rpx;
+  color: #1F2023;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.ticket-note {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #8A8A8F;
+}

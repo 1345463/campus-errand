@@ -1,0 +1,92 @@
+<view class="page chat-page">
+  <view wx:if="{{loading}}" class="empty">加载中…</view>
+
+  <view wx:elif="{{errorText}}" class="empty">
+    <view>{{errorText}}</view>
+    <view class="btn-ghost top-gap" bindtap="retry">重试</view>
+    <view class="btn-primary top-gap" bindtap="goBack">返回</view>
+  </view>
+
+  <view wx:else class="chat-body">
+    <!-- 工单概要：先把这次在聊什么讲清楚，再进对话 -->
+    <view class="card ticket-card">
+      <view class="ticket-head">
+        <text class="ticket-kind">{{kindText}}</text>
+        <text class="status-text {{statusClass}}">{{statusText}}</text>
+      </view>
+      <view class="ticket-content" bindtap="copyContent">{{detail.content}}</view>
+      <view class="detail-row">
+        <view class="detail-label">提交人</view>
+        <view class="detail-value">{{detail.author_name}}（点上方正文可复制）</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">联系方式</view>
+        <view class="detail-value">{{detail.contact || '未填写'}}</view>
+      </view>
+      <view class="detail-row last">
+        <view class="detail-label">提交时间</view>
+        <view class="detail-value">{{createdText}}</view>
+      </view>
+      <view wx:if="{{handledText}}" class="ticket-note">处理时间：{{handledText}}</view>
+      <view wx:if="{{detail.admin_note}}" class="ticket-note">处理备注：{{detail.admin_note}}</view>
+    </view>
+
+    <view wx:if="{{tipText}}" class="tip-bar">
+      <view class="tip-text">{{tipText}}</view>
+    </view>
+
+    <!-- 客服视角：待处理时说明「第一条回复即受理」，避免多点一次受理按钮 -->
+    <view wx:if="{{isAdmin && statusText === '待处理'}}" class="tip-bar">
+      <view class="tip-text">客服视角：你现在发出的第一条回复会同时把这条反馈置为「已受理」，不用再去列表点受理。</view>
+    </view>
+
+    <!-- 驳回后只有客服能重开，用户看到的是等待重开 -->
+    <view wx:if="{{isAdmin && statusText === '已驳回'}}" class="card">
+      <view class="hint">这条工单当前是「已驳回」，对话已关闭。确认要继续的话先重新受理。</view>
+      <view class="btn-primary top-gap {{reopening ? 'disabled' : ''}}" bindtap="reopen">
+        {{reopening ? '受理中…' : '重新受理并开放对话'}}
+      </view>
+    </view>
+
+    <!-- 会话区 -->
+    <scroll-view class="chat-scroll" scroll-y="true" scroll-into-view="{{toView}}" scroll-with-animation="true">
+      <view wx:if="{{thread.length === 0}}" class="chat-empty">
+        还没有对话记录{{canReply ? '，说句话开始吧' : ''}}
+      </view>
+      <view
+        wx:for="{{thread}}"
+        wx:for-item="msg"
+        wx:key="id"
+        id="msg-{{msg.id}}"
+        class="msg-row {{msg.align}}"
+      >
+        <view class="msg-meta">{{msg.author}} · {{msg.timeText}}</view>
+        <view class="msg-bubble">{{msg.content}}</view>
+      </view>
+      <view class="chat-pad"></view>
+    </scroll-view>
+
+    <!-- 输入区：不能发言时换成说明文案，不留一个点了没反应的按钮 -->
+    <view wx:if="{{canReply}}" class="chat-input">
+      <textarea
+        class="chat-textarea"
+        placeholder-class="field-ph"
+        placeholder="写回复，最多 500 字"
+        value="{{input}}"
+        bindinput="onInput"
+        maxlength="500"
+        fixed="{{true}}"
+        show-confirm-bar="{{false}}"
+        auto-height="{{true}}"
+      />
+      <view class="chat-send-row">
+        <text class="chat-count">{{countText}}</text>
+        <view class="chat-send {{sending ? 'disabled' : ''}}" bindtap="send">{{sending ? '发送中…' : '发送'}}</view>
+      </view>
+    </view>
+    <view wx:else class="chat-locked">
+      <text wx:if="{{closeHint}}">{{closeHint}}</text>
+      <text wx:else>当前不能发言</text>
+    </view>
+  </view>
+</view>

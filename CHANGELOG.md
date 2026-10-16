@@ -355,3 +355,25 @@ _提交时间：2026-10-16 11:44:00_
 - 按 url 聚合。
 
 _提交时间：2026-10-16 13:20:00_
+
+## R27 · 客服工单双向对话
+
+- 新表 feedback_replies；user_feedbacks 加 user_seen_at / admin_seen_at 两个已读水位。
+- 列表接口改返回类型（加 reply_count / unread_count / last_reply_at / last_role / last_preview），
+- 必须先 DROP 再 CREATE。
+- 会话接口（客服与用户共用同一套，服务端按 support 权限或 owner_id 判定可见性）：
+- feedback_detail / feedback_thread / feedback_reply / feedback_mark_read / admin_reopen_feedback。
+- 对话开放规则：pending → 只有客服能说，且第一条回复＝受理；resolved → 双方都能说；
+- rejected → 双方都不能说，客服先"重新受理"。
+- 四个踩坑：
+- 1. SELECT ... FOR UPDATE 在 RLS 环境会报 permission denied，取缔行锁并注释写清原因。
+- 2. 冒充用户自检时不能直读业务表（SET LOCAL ROLE authenticated 后 SELECT 直接 42501），
+-    状态一律走 SECURITY DEFINER 接口读。
+- 3. now() 在事务内是同一个事务时间戳。自动受理时若顺手把 admin_seen_at 推到 now()，
+-    同一事务里用户后来发的追评会被判成"已读"，客服未读数永远是 0。
+-    → 已读水位只由 feedback_mark_read 负责。
+- 4. plpgsql 里 BEGIN ... EXCEPTION 捕获异常会回滚该块内的所有修改。
+- 前端新建 pages/feedback/thread：两端共用这一个会话页，10 秒轮询（onHide/onUnload 清 timer），
+- scroll-into-view 定位最新一条（setData 后延 80ms 再滚）；不能发言时底部换成说明文案。
+
+_提交时间：2026-10-16 13:58:00_

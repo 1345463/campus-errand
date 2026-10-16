@@ -406,3 +406,31 @@ _提交时间：2026-10-16 13:58:00_
 - hall_page 开关被删除 —— 大厅是任务列表唯一入口，关掉等于直接下掉功能。
 
 _提交时间：2026-10-16 22:38:00_
+
+## R29 · 第七轮（多单发单 + 修复）
+
+- 数据库（sql/add-round7.sql）：
+- - profiles 加 owner_score_sum / owner_score_count / credit_strikes；
+-   orders 加 boosted / batch_no 及 orders_dispatch_idx；新增 parse_addr_part()。
+- - create_order 扩为 19 参（含 p_boost_code、p_batch_no），赏金 < 1 抛错，
+-   boost 券核销置 boosted。
+- - admin_batch_create_orders(..., jsonb)：≤50 笔，生成 batch_no；admin_list_dispatch_orders()。
+- - admin_handle_report 加 status='pending' 守卫，防同一条举报重复处理重复扣信誉分。
+- - submit_order_review 改双轨：给接单员累 runner_score_*，给发布方累 owner_score_*。
+- - my_credit_summary / order_peer_credit 拆分 owner/runner 分 + credit_strikes。
+- - list_hall_orders RPC：按 o.boosted OR pf.boost_until > now() 置顶、楼栋/楼层筛选、
+-   count(*) OVER() 分页。
+- - exchange_point_goods / list_my_coupons 兼容 boost；历史订单 deliver_building/floor 回填。
+- 前端：
+- - utils/perms.js 加 dispatch；utils/flags.js 加 admin_batch_order(220)、order_boost(230)。
+- - 新建 pages/admin/dispatch（批量发单 + 批次列表）。
+- - pages/mine/mall 券列表 + 历史兑换码复制按钮。
+- - pages/order/detail 的 previewImage 按 data-group 分组取图（任务图 / 送达佐证）。
+- - pages/order/create 优先券选择器；pages/hall/index 改 RPC + .hall-boost 标记。
+- - pages/mine/credit 双轨分 / 违规次数展示。
+- 校验：角色化 DO 块自检全过且全部回滚（批量发单 3 笔/空/低赏金/越权；优先券核销 +
+- 不可复用 + 类型隔离；楼栋筛选命中只传地址的旧单；举报下架 strikes 0→1 且重复被拒；
+- 双轨评分 5★改 runner、3★改 owner、重复/0★被拒），脏数据 0；
+- 50 个 JS node --check 通过，verify-mp.js 通过，check-mp.js 1.13MB/2.00MB 通过。
+
+_提交时间：2026-10-17 00:54:00_

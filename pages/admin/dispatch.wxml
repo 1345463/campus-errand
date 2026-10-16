@@ -1,0 +1,207 @@
+<view class="page">
+  <view wx:if="{{grayOff}}" class="empty">
+    <view>批量发单暂未开放</view>
+    <view class="hint top-gap">功能开关打开后这里会自动出现</view>
+  </view>
+
+  <view wx:elif="{{needLogin}}" class="empty">
+    <view>登录后才能使用后台</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}" class="empty">
+    <view>没有发单员权限</view>
+    <view class="hint top-gap">让超级管理员在「人员与授权」里给你开通「发单员」</view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="empty">加载中…</view>
+
+  <view wx:else>
+    <view class="tab-row">
+      <view
+        class="tab-item {{tabItem.key === tab ? 'active' : ''}}"
+        wx:for="{{tabs}}"
+        wx:for-item="tabItem"
+        wx:key="key"
+        data-key="{{tabItem.key}}"
+        bindtap="switchTab"
+      >{{tabItem.label}}</view>
+    </view>
+
+    <view wx:if="{{errorText}}" class="err-bar">{{errorText}}</view>
+    <view wx:if="{{tipText}}" class="settle-feedback">{{tipText}}</view>
+
+    <!-- ================= 批量发单 ================= -->
+    <block wx:if="{{tab === 'create'}}">
+      <view class="tip-bar">
+        <view class="tip-text">一次填写，按「楼层 × 房间」生成多笔订单。内容、赏金、联系方式全部相同，只有送达地址不同。一次最多 50 笔。</view>
+      </view>
+
+      <view class="card">
+        <view class="section-head"><text class="section-title">任务内容</text></view>
+
+        <view class="field-label">服务类型</view>
+        <picker mode="selector" range="{{serviceNames}}" value="{{serviceIndex}}" bindchange="pickService">
+          <view class="field-input">{{serviceNames[serviceIndex]}}</view>
+        </picker>
+
+        <view class="field-label">任务标题</view>
+        <input
+          class="field-input"
+          data-key="title"
+          value="{{title}}"
+          bindinput="onInput"
+          maxlength="30"
+          placeholder="例如：快递批量配送"
+        />
+
+        <view class="field-label">补充说明</view>
+        <textarea
+          class="field-input field-area"
+          data-key="description"
+          value="{{description}}"
+          bindinput="onInput"
+          maxlength="200"
+          placeholder="取件码、注意事项等，会原样复制到每一单"
+        />
+
+        <view class="field-label">取件 / 出发地址</view>
+        <input
+          class="field-input"
+          data-key="pickupAddr"
+          value="{{pickupAddr}}"
+          bindinput="onInput"
+          maxlength="60"
+          placeholder="例如：南门快递柜"
+        />
+
+        <view class="field-row">
+          <view class="field-col">
+            <view class="field-label">每笔赏金（元）</view>
+            <input
+              class="field-input"
+              type="digit"
+              data-key="reward"
+              value="{{reward}}"
+              bindinput="onInput"
+              placeholder="最少 {{minReward}}"
+            />
+          </view>
+          <view class="field-col">
+            <view class="field-label">期望时间</view>
+            <input
+              class="field-input"
+              data-key="expectTime"
+              value="{{expectTime}}"
+              bindinput="onInput"
+              maxlength="20"
+              placeholder="例如：今天 18:00 前"
+            />
+          </view>
+        </view>
+
+        <view class="field-row">
+          <view class="field-col">
+            <view class="field-label">联系方式</view>
+            <input
+              class="field-input"
+              data-key="contact"
+              value="{{contact}}"
+              bindinput="onInput"
+              maxlength="40"
+              placeholder="手机号或微信号"
+            />
+          </view>
+          <view class="field-col">
+            <view class="field-label">性别要求</view>
+            <picker mode="selector" range="{{genderNames}}" value="{{genderIndex}}" bindchange="pickGender">
+              <view class="field-input">{{genderLimit}}</view>
+            </picker>
+          </view>
+        </view>
+      </view>
+
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">目标宿舍</text>
+          <text class="section-more">{{targetCount}} 笔</text>
+        </view>
+
+        <view class="field-label">楼栋</view>
+        <picker mode="selector" range="{{buildingNames}}" value="{{buildingIndex}}" bindchange="pickBuilding">
+          <view class="field-input">{{buildingNames[buildingIndex]}}</view>
+        </picker>
+
+        <view class="pick-head">
+          <text class="pick-title">楼层</text>
+          <text class="pick-op" data-group="floor" data-on="true" bindtap="selectAll">全选</text>
+          <text class="pick-op" data-group="floor" data-on="false" bindtap="selectAll">清空</text>
+        </view>
+        <view class="chip-row">
+          <text
+            class="chip {{floorItem.on ? 'active' : ''}}"
+            wx:for="{{floors}}"
+            wx:for-item="floorItem"
+            wx:for-index="floorIndex"
+            wx:key="name"
+            data-group="floor"
+            data-index="{{floorIndex}}"
+            bindtap="toggleItem"
+          >{{floorItem.name}}</text>
+        </view>
+
+        <view class="pick-head">
+          <text class="pick-title">房间号</text>
+          <text class="pick-op" data-group="room" data-on="true" bindtap="selectAll">全选</text>
+          <text class="pick-op" data-group="room" data-on="false" bindtap="selectAll">清空</text>
+        </view>
+        <view class="chip-row">
+          <text
+            class="chip chip-sq {{roomItem.on ? 'active' : ''}}"
+            wx:for="{{rooms}}"
+            wx:for-item="roomItem"
+            wx:for-index="roomIndex"
+            wx:key="name"
+            data-group="room"
+            data-index="{{roomIndex}}"
+            bindtap="toggleItem"
+          >{{roomItem.name}}</text>
+        </view>
+
+        <view wx:if="{{targetCount > 0}}" class="err-bar ok">本次将生成 {{targetCount}} 笔订单<text wx:if="{{previewText}}">：{{previewText}}</text></view>
+        <view wx:else class="hint">勾选楼层和房间号后，这里会显示将生成多少笔订单</view>
+
+        <view class="btn-row top-gap">
+          <view class="btn-primary" bindtap="submit">{{submitting ? '发布中…' : '批量发布'}}</view>
+        </view>
+      </view>
+    </block>
+
+    <!-- ================= 我发的批次 ================= -->
+    <block wx:if="{{tab === 'batches'}}">
+      <view wx:if="{{batches.length === 0}}" class="empty">
+        <view>还没有发出过批量订单</view>
+        <view class="hint top-gap">切到「批量发单」页，勾选楼层和房间号就能发</view>
+      </view>
+      <view wx:else class="card">
+        <view class="section-head">
+          <text class="section-title">我发的批次</text>
+          <text class="section-more">最近 50 批</text>
+        </view>
+        <view
+          class="batch-row"
+          wx:for="{{batches}}"
+          wx:for-item="batchItem"
+          wx:key="batchNo"
+        >
+          <view class="batch-head">
+            <text class="batch-title">{{batchItem.title}}</text>
+            <text class="status-text">{{batchItem.rewardText}}</text>
+          </view>
+          <view class="batch-line">{{batchItem.runningText}} · {{batchItem.finishText}}</view>
+          <view class="batch-line batch-meta">{{batchItem.batchNo}} · {{batchItem.timeText}}</view>
+        </view>
+      </view>
+    </block>
+  </view>
+</view>

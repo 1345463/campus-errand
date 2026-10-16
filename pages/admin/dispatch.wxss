@@ -1,0 +1,130 @@
+/* 管理员批量发单 */
+
+.tab-row {
+  display: flex;
+  padding: 20rpx 20rpx 0;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx 0;
+  font-size: 28rpx;
+  color: #6B6B70;
+  background: #FFFFFF;
+  border: 1rpx solid #E3E6EB;
+  border-right-width: 0;
+}
+
+.tab-item:first-child {
+  border-radius: 16rpx 0 0 16rpx;
+}
+
+.tab-item:last-child {
+  border-right-width: 1rpx;
+  border-radius: 0 16rpx 16rpx 0;
+}
+
+.tab-item.active {
+  color: #FFFFFF;
+  background: #FF5A7A;
+  border-color: #FF5A7A;
+  font-weight: 600;
+}
+
+/* 赏金 / 期望时间 这种短字段并排，比上下各占一行省一屏 */
+.field-row {
+  display: flex;
+  margin-top: 16rpx;
+}
+
+.field-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-col:first-child {
+  margin-right: 16rpx;
+}
+
+.field-col .field-label {
+  margin-top: 0;
+}
+
+/* 目标数量是「成功」的提示，不是报错，所以换个颜色 */
+.err-bar.ok {
+  background: #ECF9F1;
+  color: #1E7A45;
+}
+
+/* 楼层 / 房间号的选择区 */
+.pick-head {
+  display: flex;
+  align-items: center;
+  margin: 24rpx 0 8rpx;
+}
+
+.pick-title {
+  flex: 1;
+  font-size: 26rpx;
+  color: #4A4A50;
+  font-weight: 600;
+}
+
+.pick-op {
+  margin-left: 24rpx;
+  font-size: 24rpx;
+  color: #C8364F;
+}
+
+/* 房间号多且短，用方形 chip 比胶囊更省地方 */
+.chip.chip-sq {
+  min-width: 76rpx;
+  padding: 12rpx 10rpx;
+  margin: 0 12rpx 12rpx 0;
+  border: 2rpx solid #E3E3E8;
+  text-align: center;
+  border-radius: 12rpx;
+}
+
+.chip.chip-sq.active {
+  border-color: #FFC9D4;
+}
+
+/* 批次列表 */
+.batch-row {
+  padding: 20rpx 0;
+  border-bottom: 2rpx solid #F0F0F2;
+}
+
+.batch-row:last-child {
+  border-bottom: none;
+}
+
+.batch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.batch-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 28rpx;
+  color: #1F2023;
+}
+
+.batch-head .status-text {
+  margin-left: 12rpx;
+}
+
+.batch-line {
+  margin-top: 6rpx;
+  font-size: 26rpx;
+  color: #4A4A50;
+}
+
+.batch-meta {
+  font-size: 24rpx;
+  color: #9A9AA0;
+}

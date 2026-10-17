@@ -16,9 +16,11 @@
   opacity: 0.62;
 }
 
-/* 消息之间留呼吸位 */
-.order-card + .order-card {
-  margin-top: 20rpx;
+/* 消息之间留呼吸位。
+   不能写 .order-card + .order-card —— WXSS 不支持兄弟选择器（+ 和 ~），
+   编译器会直接报错。改成给每条统一加下边距，间隔一致。 */
+.order-card {
+  margin-bottom: 20rpx;
 }
 
 .task-row {

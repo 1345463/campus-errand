@@ -14,7 +14,9 @@
  *   4. 去注释后仍有全角标点 —— 属性名或值里出现必炸
  *   5. {{ }} 模板语法残留在样式里
  *   6. var(--x) 引用了从未定义的变量 —— 不报错，但整条样式静默失效
- *   7. wxml 里 {{ }} 与反引号
+ *   7. 选择器里的通配符 * —— WXSS 不支持，编译报 error at token '*'
+ *      （真事：.stagger > *:nth-child(n) 让整个包发布失败两次）
+ *   8. wxml 里 {{ }} 与反引号
  *
  * 用法：node tools/style-lint.js [项目根目录]
  */
@@ -86,6 +88,23 @@ function lintWxss(file, src) {
   if (depth !== 0) {
     report(file, 0, `花括号不配对，最终层级 ${depth}（正数为缺 }）`, '')
   }
+
+  // 4) 选择器合法性：WXSS 不支持通配符 *
+  bare.split('\n').forEach((text, i) => {
+    const code = text.trim()
+    if (!code || code.startsWith('@')) return
+    const sel = code.split('{')[0]
+    if (!sel) return
+    // 先剥掉括号内（nth-child 里的 n + 11 这类运算）与方括号内（属性选择器的值）
+    const scrubbed = sel.replace(/\([^)]*\)/g, '').replace(/\[[^\]]*\]/g, '')
+    if (scrubbed.indexOf('*') !== -1) {
+      report(file, i + 1,
+        "选择器里出现通配符 * —— WXSS 不支持，编译报 error at token '*'", code)
+    }
+    if (/[+~]/.test(scrubbed)) {
+      report(file, i + 1, '选择器用了兄弟选择器 + / ~ —— WXSS 官方不支持，改用 class', code)
+    }
+  })
 }
 
 function main() {

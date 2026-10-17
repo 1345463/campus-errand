@@ -1,23 +1,21 @@
 /* 积分商城 */
 
-/* 两列商品卡 */
+/* 两列商品卡。
+   用 space-between 自动分配列间距，不要写 :nth-child(2n) 去摘右外边距 ——
+   WXSS 对伪类支持不稳，能不用就不用。 */
 .mall-grid {
   display: flex;
   flex-wrap: wrap;
+  justify-content: space-between;
 }
 
 .mall-item {
-  width: calc(50% - 12rpx);
+  width: 48%;
   box-sizing: border-box;
-  margin: 0 24rpx 24rpx 0;
+  margin-bottom: 24rpx;
   padding: 24rpx;
   border-radius: 16rpx;
   background: var(--fill);
-}
-
-/* 每行第二个去掉右外边距，保证两列等宽 */
-.mall-item:nth-child(2n) {
-  margin-right: 0;
 }
 
 .mall-item.disabled {

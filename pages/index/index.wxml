@@ -75,7 +75,7 @@
         <text class="section-title">全部服务</text>
         <text class="section-more">点一下直接下单 ›</text>
       </view>
-      <view class="grid stagger">
+      <view class="grid">
         <view
           class="grid-item pressable"
           wx:for="{{services}}"
@@ -152,7 +152,7 @@
     <view class="sheet-grip"></view>
     <view class="sheet-title">想发个什么单？</view>
     <view class="sheet-sub">选一个常用服务，直接进入填写页</view>
-    <view class="sheet-grid stagger">
+    <view class="sheet-grid">
       <view
         class="sheet-cell pressable"
         wx:for="{{quickItems}}"

@@ -1659,18 +1659,13 @@ page {
 .anim-slow { animation-duration: var(--dur-slow); }
 .anim-fast { animation-duration: var(--dur-fast); }
 
-/* 容器挂 .stagger，子项自动获得阶梯延迟（第 11 项起统一封顶，避免长列表越等越久） */
-.stagger > *:nth-child(1) { --d: 0ms; }
-.stagger > *:nth-child(2) { --d: 45ms; }
-.stagger > *:nth-child(3) { --d: 90ms; }
-.stagger > *:nth-child(4) { --d: 135ms; }
-.stagger > *:nth-child(5) { --d: 180ms; }
-.stagger > *:nth-child(6) { --d: 225ms; }
-.stagger > *:nth-child(7) { --d: 270ms; }
-.stagger > *:nth-child(8) { --d: 315ms; }
-.stagger > *:nth-child(9) { --d: 360ms; }
-.stagger > *:nth-child(10) { --d: 405ms; }
-.stagger > *:nth-child(n + 11) { --d: 450ms; }
+/* 阶梯延迟不要用 CSS 写。
+   WXSS 不支持通配符选择器：只要选择器里出现星号，编译器就直接报
+   error at token，整个包都传不上去（报的是 app.wxss 的行列号）。
+   同理也不支持兄弟选择器，别写加号或波浪号连接两个选择器。
+   正确做法是让 JS 算好延迟再内联进去：
+   motion.stagger(list) 给每项塞 delay，WXML 上写 style 变量 --d，
+   .anim 的 animation-delay 读的就是 --d，没给时默认 0ms。 */
 
 /* ---------- 按压反馈（hover-class 用）---------- */
 .pressable { transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) linear; }

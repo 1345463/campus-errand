@@ -219,7 +219,10 @@ if (withoutNm > LIMIT) {
 // ---------- 7. npm 依赖必须能在 miniprogram_npm 里解析到 ----------
 // 上传包里不含 node_modules 时，require('包名/子路径') 靠 miniprogram_npm 解析；
 // 缺了它，真机会直接报 module not found。
-for (const f of jsFiles) {
+// 只扫"真正会被上传"的 JS：被 packOptions.ignore 排除的目录（sql/ docs/ tools/）
+// 根本不进包，里面用 require('fs') 这类 Node 内置模块是完全正常的。
+const jsUploaded = jsFiles.filter((f) => !isIgnored(path.relative(ROOT, f)))
+for (const f of jsUploaded) {
   const src = fs.readFileSync(f, 'utf8')
   const re = /require\(\s*['"]([^'"]+)['"]\s*\)/g
   let m

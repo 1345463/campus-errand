@@ -1,7 +1,12 @@
 # 校园跑腿（广东邮电职业技术学院）
 
+> 仓库：https://github.com/1345463/campus-errand （私有） · 默认分支 `main`
+
 微信小程序「校园跑腿」—— 校园互助任务发布与接单平台。原生小程序 + PostgreSQL（WorkBuddy Cloud）后端，
 所有跨用户写操作走 `SECURITY DEFINER` 函数，全表 RLS。
+
+**历史可回溯**：`main` 上有 31 次提交，按 R1 → R29 的迭代顺序排列，
+里程碑打了 `v0.1.0` ~ `v0.5.0` 五个 tag。`git log --reverse` 即可顺着时间线回到任意一轮。
 
 > 📘 **29 轮迭代的完整过程、踩坑知识库、数据库演进与函数清单见 [`docs/ITERATIONS.md`](docs/ITERATIONS.md)**
 > 📄 逐轮变更见 [`CHANGELOG.md`](CHANGELOG.md)（正序）
@@ -102,14 +107,35 @@ node --experimental-vm-modules tools/check-mp.js .
 > 重复声明合法；微信 CI 按 ES Module 解析会直接编译失败。只有 `vm.SourceTextModule` 能抓到，
 > 这正是 R12 那个「上传失败」的真因。
 
-## 六、部署
+## 六、关于 Git 历史（务必知情）
+
+仓库在 2026-10-17 立项，此前 29 轮迭代只留有「最终态」文件，**没有逐行 diff 可还原**。
+因此历史按下述方式重建：
+
+```
+每一轮提交 = 该轮首次引入的文件（以最终内容入库） + CHANGELOG.md 追加一节
+提交时间   = 该轮真实发生时间（锚点取自 sql/*.sql 的 mtime 与迭代记录）
+```
+
+即：**文件级快照可回溯，行级 diff 不可回溯**。想看某一轮"改了什么"，读 `CHANGELOG.md`
+对应小节 + `docs/ITERATIONS.md`；想看某一轮"引入了哪些文件"，`git show --stat <commit>`。
+从这个提交往后的所有改动都是真实 diff，不再有这个限制。
+
+推送：
+
+```bash
+git remote add origin https://github.com/1345463/campus-errand.git
+git push -u origin main && git push --tags
+```
+
+## 七、部署
 
 1. 微信开发者工具打开本目录（`miniprogram_npm` 必须在，`node_modules` 被 `packOptions.ignore` 排除）。
 2. 上传体积需 ≤ 2MB 主包限制，当前约 1.1MB。
 3. 灰度开关默认**全关**，发布后由 super 管理员在「管理员工作台 → 总闸」逐个打开。
 4. 环境选型与发布注意事项见 `docs/ENVIRONMENT.md`、`docs/RELEASE.md`。
 
-## 七、已知风险
+## 八、已知风险
 
 - 管理员口令硬编码（`activate_admin`），本质是调试后门，正式运营需替换。
 - 未接支付，钱包不可提现（页面已如实说明）。

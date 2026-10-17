@@ -24,7 +24,7 @@
   width: 16rpx;
   height: 16rpx;
   border-radius: 50%;
-  background: #FF5A7A;
+  background: var(--brand);
 }
 
 .tl-body {
@@ -34,17 +34,17 @@
 .tl-title {
   font-size: 28rpx;
   font-weight: 600;
-  color: #1F2023;
+  color: var(--t1);
 }
 
 .tl-desc {
   margin-top: 4rpx;
   font-size: 24rpx;
-  color: #6B6B70;
+  color: var(--t2);
 }
 
 .tl-time {
   margin-top: 4rpx;
   font-size: 22rpx;
-  color: #9A9CA1;
+  color: var(--t3);
 }

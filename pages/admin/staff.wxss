@@ -7,22 +7,22 @@
 
 /* 已授权的权限高亮；置灰表示当前操作者无权改动 */
 .chip.chip-shortcut.active {
-  background: #FF5A7A;
-  border-color: #FF5A7A;
+  background: var(--brand);
+  border-color: var(--brand);
   color: #FFFFFF;
 }
 
 /* 搜索结果里"我自己"的标记 */
 .mine-link {
-  color: #FF5A7A;
+  color: var(--brand);
   font-size: 24rpx;
 }
 
 /* 卡片头部的头像占位（复用 .rental-icon 的圆形底） */
 .apply-head .rental-icon {
   border-radius: 50%;
-  background: #F3F4F6;
-  color: #FF5A7A;
+  background: var(--fill);
+  color: var(--brand);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -8,7 +8,7 @@
   width: 100%;
   height: 220rpx;
   border-radius: 16rpx;
-  background: #F2F3F5;
+  background: var(--fill);
 }
 /* 图还没回来 / 取不到时的占位：把原因写在框里，不要留一片空白让人猜 */
 .banner-thumb-empty {
@@ -16,7 +16,7 @@
   align-items: center;
   justify-content: center;
   font-size: 22rpx;
-  color: #A0A3AA;
+  color: var(--t3);
 }
 
 /* 选图框：整块可点，里面直接显示已选的图 */
@@ -29,18 +29,18 @@
   width: 240rpx;
   height: 150rpx;
   border-radius: 16rpx;
-  background: #F2F3F5;
+  background: var(--fill);
   border: 1rpx dashed #DCE0E8;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 24rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   overflow: hidden;
 }
 .img-pick.has {
   border-style: solid;
-  border-color: #FFC9D4;
+  border-color: var(--brand-100);
 }
 .pick-img {
   width: 100%;
@@ -50,7 +50,7 @@
   flex: 1;
   margin-left: 20rpx;
   font-size: 24rpx;
-  color: #5A5D66;
+  color: var(--t2);
   line-height: 1.6;
 }
 .pick-tip .hint {
@@ -60,5 +60,5 @@
 /* 表单里的字段标题：app.wxss 的 .field-label 带必填星号布局，这里只需一行小标题 */
 .field-label {
   font-size: 26rpx;
-  color: #5A5D66;
+  color: var(--t2);
 }

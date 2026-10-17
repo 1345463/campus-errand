@@ -18,5 +18,5 @@
 .cert-entry-desc {
   margin-top: 6rpx;
   font-size: 22rpx;
-  color: #8A8A8F;
+  color: var(--t3);
 }

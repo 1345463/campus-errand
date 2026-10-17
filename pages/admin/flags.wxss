@@ -12,15 +12,15 @@
 }
 
 .chip.chip-shortcut.active {
-  background: #FF5A7A;
-  border-color: #FF5A7A;
+  background: var(--brand);
+  border-color: var(--brand);
   color: #FFFFFF;
 }
 
 /* 二次确认时出现的行动区说明 */
 .settle-feedback {
   font-size: 26rpx;
-  color: #6B6B70;
+  color: var(--t2);
   background: #FFF6F7;
   border-radius: 12rpx;
   padding: 16rpx 20rpx;

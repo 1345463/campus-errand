@@ -5,7 +5,7 @@
   display: inline-block;
   padding: 4rpx 14rpx;
   border-radius: 999rpx;
-  background: #FF5A7A;
+  background: var(--brand);
   color: #FFFFFF;
   font-size: 22rpx;
   line-height: 1.6;
@@ -30,7 +30,7 @@
 .task-title {
   font-size: 30rpx;
   font-weight: 600;
-  color: #1F2023;
+  color: var(--t1);
 }
 
 /* 点击整条消息跳转订单，给出可按的反馈 */

@@ -40,7 +40,7 @@ const SERVICES = [
     type: 'express',
     name: '取快递',
     icon: '📦',
-    tint: '#FFF0F3',
+    tint: '#FFF0E4',
     hint: '快递柜、驿站代取送到宿舍',
     fields: [
       { key: 'pickup_addr', label: '取件地址', type: 'address', placeholder: '例如：进取楼快递柜', required: true },
@@ -55,7 +55,7 @@ const SERVICES = [
     type: 'buy',
     name: '帮我买',
     icon: '🛒',
-    tint: '#FFF4E8',
+    tint: '#FFF5E3',
     hint: '超市、食堂、水果店代买',
     fields: [
       { key: 'description', label: '想买什么', type: 'textarea', placeholder: '写清楚商品、规格、数量', required: true },
@@ -70,7 +70,7 @@ const SERVICES = [
     type: 'milk',
     name: '取奶咖',
     icon: '🥤',
-    tint: '#F1F5FF',
+    tint: '#E4EEFF',
     hint: '奶茶咖啡代取，送到楼下',
     fields: [
       { key: 'pickup_addr', label: '门店', type: 'address', placeholder: '例如：南门蜜雪冰城', required: true },
@@ -85,7 +85,7 @@ const SERVICES = [
     type: 'takeout',
     name: '拿外卖',
     icon: '🍜',
-    tint: '#FFF7E6',
+    tint: '#FFF5E3',
     hint: '外卖放久了会凉，帮你跑一趟',
     fields: [
       { key: 'pickup_addr', label: '取餐点', type: 'address', placeholder: '例如：进取楼外卖柜', required: true },
@@ -101,7 +101,7 @@ const SERVICES = [
     type: 'print',
     name: '打印服务',
     icon: '🖨️',
-    tint: '#F0F7FF',
+    tint: '#E4EEFF',
     hint: '文档打印、复印、装订',
     fields: [
       { key: 'description', label: '打印要求', type: 'textarea', placeholder: '份数、单双面、黑白/彩印、装订方式', required: true },
@@ -117,7 +117,7 @@ const SERVICES = [
     type: 'clean',
     name: '宿舍清洁',
     icon: '🧹',
-    tint: '#EAF7F1',
+    tint: '#E6F6EC',
     hint: '扫地拖地、倒垃圾、整理桌面',
     fields: [
       { key: 'pickup_addr', label: '宿舍地址', type: 'address', placeholder: '例如：进取楼 · 5层 · 12号', required: true },
@@ -138,7 +138,7 @@ const SERVICES = [
     type: 'queue',
     name: '代排队',
     icon: '🙋',
-    tint: '#F6F1FF',
+    tint: '#EAF1FF',
     hint: '取号排队、窗口办事代排',
     fields: [
       { key: 'pickup_addr', label: '排队地点', type: 'address', placeholder: '例如：行政楼 3 号窗口', required: true },
@@ -152,7 +152,7 @@ const SERVICES = [
     type: 'meal',
     name: '到店取餐',
     icon: '🍱',
-    tint: '#FFF0F0',
+    tint: '#FDECEC',
     hint: '食堂打包，热乎送到',
     fields: [
       { key: 'pickup_addr', label: '取餐地址', type: 'address', placeholder: '例如：第一食堂二楼兰州拉面', required: true },
@@ -167,7 +167,7 @@ const SERVICES = [
     type: 'luggage',
     name: '行李代搬',
     icon: '🧳',
-    tint: '#FDF1F6',
+    tint: '#FFF0E4',
     hint: '开学、搬宿舍、寄行李',
     fields: [
       { key: 'pickup_addr', label: '搬出地址', type: 'address', placeholder: '例如：进取楼 · 5层 · 12号', required: true },
@@ -189,7 +189,7 @@ const SERVICES = [
     type: 'other',
     name: '其它服务',
     icon: '✨',
-    tint: '#EEF6FF',
+    tint: '#E4EEFF',
     hint: '说清楚需求，总有人能帮',
     fields: [
       {
@@ -214,7 +214,7 @@ const RENTAL_SERVICE = {
   type: 'rental',
   name: '相机租赁',
   icon: '📷',
-  tint: '#F3F0FF',
+  tint: '#EAF1FF',
   hint: '日租起租，线下自提',
   fields: [
     { key: 'description', label: '租赁说明', type: 'textarea', placeholder: '机型、租几天、取还时间', required: true },

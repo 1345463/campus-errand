@@ -1,6 +1,35 @@
 page {
-  background: #F5F6F8;
-  color: #1F2229;
+  background: var(--bg);
+  color: var(--t1);
+  /* ===== v2 设计令牌 =====
+     校园蓝 = 校园/可靠；活力橙 = 跑腿/速度。改这一个块就能整体换肤。 */
+  --brand: #2E7CF6;
+  --brand-600: #1D5FD0;
+  --brand-100: #E4EEFF;
+  --brand-50: #F2F7FF;
+  --accent: #FF8A3D;
+  --accent-100: #FFF0E4;
+  --success: #16A34A;
+  --success-100: #E6F6EC;
+  --warn: #F59E0B;
+  --warn-100: #FFF5E3;
+  --danger: #EF4444;
+  --danger-100: #FDECEC;
+  --bg: #F4F6FB;
+  --card: #FFFFFF;
+  --fill: #F1F4FA;
+  --line: #E6EAF2;
+  --t1: #131A2A;
+  --t2: #5A6478;
+  --t3: #98A2B3;
+  --r-sm: 12rpx;
+  --r: 20rpx;
+  --r-lg: 28rpx;
+  --r-pill: 999rpx;
+  --sd-1: 0 2rpx 10rpx rgba(19, 26, 42, 0.05);
+  --sd-2: 0 8rpx 28rpx rgba(19, 26, 42, 0.08);
+  --sd-brand: 0 10rpx 26rpx rgba(46, 124, 246, 0.28);
+
   font-size: 28rpx;
   font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
 }
@@ -16,7 +45,7 @@ page {
   margin: 20rpx 20rpx 0;
   padding: 20rpx 24rpx;
   border-radius: 18rpx;
-  background: #FFF4E5;
+  background: var(--warn-100);
 }
 .login-tip-text {
   font-size: 24rpx;
@@ -25,7 +54,7 @@ page {
 }
 .login-tip-btn {
   font-size: 24rpx;
-  color: #FF5A7A;
+  color: var(--brand);
   padding: 8rpx 24rpx;
   border-radius: 999rpx;
   background: #FFFFFF;
@@ -35,13 +64,13 @@ page {
   display: flex;
   align-items: center;
   padding: 16rpx 24rpx;
-  background: #FFF4E5;
+  background: var(--warn-100);
 }
 .notice-dot {
   width: 12rpx;
   height: 12rpx;
   border-radius: 50%;
-  background: #FF9F43;
+  background: var(--warn);
   margin-right: 12rpx;
 }
 .notice-text {
@@ -54,7 +83,7 @@ page {
   margin: 20rpx;
   padding: 36rpx;
   border-radius: 24rpx;
-  background: #FF5A7A;
+  background: var(--brand);
   color: #FFFFFF;
 }
 .hero-title {
@@ -85,7 +114,7 @@ page {
 }
 .section-more {
   font-size: 24rpx;
-  color: #8A8A8F;
+  color: var(--t3);
 }
 
 .grid {
@@ -111,7 +140,7 @@ page {
 .grid-label {
   font-size: 24rpx;
   margin-top: 10rpx;
-  color: #3A3D45;
+  color: var(--t1);
 }
 
 .quick-row {
@@ -123,7 +152,7 @@ page {
   padding: 26rpx;
   border-radius: 20rpx;
   background: #FFFFFF;
-  border: 2rpx solid #E3E6EB;
+  border: 2rpx solid var(--line);
 }
 .quick-item.last {
   margin-right: 0;
@@ -134,7 +163,7 @@ page {
 }
 .quick-desc {
   font-size: 22rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   margin-top: 8rpx;
 }
 
@@ -142,7 +171,7 @@ page {
   padding: 24rpx;
   border-radius: 20rpx;
   background: #FFFFFF;
-  border: 2rpx solid #E3E6EB;
+  border: 2rpx solid var(--line);
   margin-bottom: 20rpx;
 }
 .task-row {
@@ -158,11 +187,11 @@ page {
 .reward {
   font-size: 32rpx;
   font-weight: 600;
-  color: #FF5A7A;
+  color: var(--brand);
 }
 .task-meta {
   font-size: 24rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   margin-top: 10rpx;
 }
 .task-foot {
@@ -175,20 +204,20 @@ page {
   font-size: 22rpx;
   padding: 6rpx 18rpx;
   border-radius: 999rpx;
-  background: #FFEAF0;
-  color: #FF5A7A;
+  background: var(--brand-100);
+  color: var(--brand);
 }
 .task-btn {
   font-size: 24rpx;
   padding: 10rpx 30rpx;
   border-radius: 999rpx;
-  background: #FF5A7A;
+  background: var(--brand);
   color: #FFFFFF;
 }
 
 .empty {
   text-align: center;
-  color: #A0A3AA;
+  color: var(--t3);
   font-size: 26rpx;
   padding: 48rpx 0;
 }
@@ -198,14 +227,14 @@ page {
 }
 .field-label {
   font-size: 26rpx;
-  color: #5A5D66;
+  color: var(--t2);
   margin-bottom: 12rpx;
 }
 .field-star {
-  color: #FF5A7A;
+  color: var(--brand);
 }
 /* 输入框统一成「白底 + 描边」的实体框。
-   原来只有一层 #F7F8FA 底色：放在 #F5F6F8 页面上几乎看不见，
+   原来只有一层 var(--fill) 底色：放在 var(--bg) 页面上几乎看不见，
    放进 #FFFFFF 卡片里也只是隐约一片，用户根本分不清哪里能输入、有几项。
 
    ⚠ 这里**不要**给 input 加 `box-sizing: border-box`，也**不要**加 `width: 100%`：
@@ -216,19 +245,19 @@ page {
    让 input 保持默认的「块级 + width:auto」，宽高都交给它自己算。 */
 .field-input {
   background: #FFFFFF;
-  border: 2rpx solid #E3E6EB;
+  border: 2rpx solid var(--line);
   border-radius: 16rpx;
   padding: 20rpx;
   font-size: 28rpx;
-  color: #1F2233;
+  color: var(--t1);
 }
 .field-textarea {
   background: #FFFFFF;
-  border: 2rpx solid #E3E6EB;
+  border: 2rpx solid var(--line);
   border-radius: 16rpx;
   padding: 20rpx;
   font-size: 28rpx;
-  color: #1F2233;
+  color: var(--t1);
   height: 160rpx;
   width: 100%;
   box-sizing: border-box;
@@ -239,7 +268,7 @@ page {
 }
 .hint {
   font-size: 22rpx;
-  color: #A0A3AA;
+  color: var(--t3);
   margin-top: 10rpx;
 }
 
@@ -250,14 +279,14 @@ page {
 .tag {
   padding: 12rpx 26rpx;
   border-radius: 999rpx;
-  background: #F2F3F5;
+  background: var(--fill);
   font-size: 24rpx;
   margin: 0 16rpx 16rpx 0;
-  color: #5A5D66;
+  color: var(--t2);
 }
 .tag.active {
-  background: #FFEAF0;
-  color: #FF5A7A;
+  background: var(--brand-100);
+  color: var(--brand);
 }
 .gender-row {
   display: flex;
@@ -272,7 +301,7 @@ page {
   height: 150rpx;
   margin: 0 16rpx 16rpx 0;
   border-radius: 16rpx;
-  background: #F2F3F5;
+  background: var(--fill);
   position: relative;
 }
 .upload-item image {
@@ -287,7 +316,7 @@ page {
   width: 40rpx;
   height: 40rpx;
   border-radius: 50%;
-  background: #FF5A7A;
+  background: var(--brand);
   color: #FFFFFF;
   font-size: 24rpx;
   text-align: center;
@@ -297,12 +326,12 @@ page {
   width: 150rpx;
   height: 150rpx;
   border-radius: 16rpx;
-  background: #F2F3F5;
+  background: var(--fill);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 52rpx;
-  color: #A0A3AA;
+  color: var(--t3);
 }
 
 .footer-bar {
@@ -311,7 +340,7 @@ page {
   border-top: 1rpx solid #EFEFEF;
 }
 .btn-primary {
-  background: #FF5A7A;
+  background: var(--brand);
   color: #FFFFFF;
   text-align: center;
   padding: 26rpx;
@@ -320,8 +349,8 @@ page {
   font-weight: 600;
 }
 .btn-ghost {
-  background: #F2F3F5;
-  color: #5A5D66;
+  background: var(--fill);
+  color: var(--t2);
   text-align: center;
   padding: 26rpx;
   border-radius: 999rpx;
@@ -363,7 +392,7 @@ page {
 .err-retry {
   flex: none;
   margin-left: 20rpx;
-  color: #FF5A7A;
+  color: var(--brand);
   font-size: 26rpx;
   font-weight: 600;
 }
@@ -384,26 +413,26 @@ page {
 }
 .settle-text {
   font-size: 28rpx;
-  color: #1F2229;
+  color: var(--t1);
   line-height: 1.6;
 }
 .settle-rule {
   margin-top: 10rpx;
   font-size: 24rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   line-height: 1.6;
 }
 .settle-sub {
   margin-top: 10rpx;
   font-size: 24rpx;
-  color: #A0A3AA;
+  color: var(--t3);
 }
 .settle-feedback {
   margin-top: 14rpx;
   padding: 16rpx 20rpx;
   border-radius: 14rpx;
-  background: #FFF7E8;
-  color: #B26A00;
+  background: var(--warn-100);
+  color: var(--warn);
   font-size: 25rpx;
   line-height: 1.6;
 }
@@ -413,11 +442,11 @@ page {
 .field-area {
   width: 100%;
   background: #FFFFFF;
-  border: 2rpx solid #E3E6EB;
+  border: 2rpx solid var(--line);
   border-radius: 14rpx;
   padding: 18rpx 20rpx;
   font-size: 28rpx;
-  color: #1F2229;
+  color: var(--t1);
   min-height: 120rpx;
 }
 .top-gap-sm {
@@ -425,21 +454,21 @@ page {
 }
 .mine-link {
   margin-left: 12rpx;
-  color: #FF5A7A;
+  color: var(--brand);
   font-size: 24rpx;
 }
 .agree-line {
   font-size: 26rpx;
-  color: #3A3D45;
+  color: var(--t1);
   line-height: 1.8;
   margin-bottom: 12rpx;
 }
 .agree-note {
-  background: #FFF7E8;
-  border: 1rpx solid #FFE2B0;
+  background: var(--warn-100);
+  border: 1rpx solid var(--warn-100);
   border-radius: 14rpx;
   padding: 18rpx 20rpx;
-  color: #B26A00;
+  color: var(--warn);
   font-size: 25rpx;
   line-height: 1.7;
 }
@@ -453,7 +482,7 @@ page {
   width: 34rpx;
   height: 34rpx;
   border-radius: 8rpx;
-  border: 2rpx solid #C0C3CA;
+  border: 2rpx solid var(--line);
   margin-right: 14rpx;
   margin-top: 4rpx;
   display: flex;
@@ -461,8 +490,8 @@ page {
   justify-content: center;
 }
 .agree-box.checked {
-  background: #FF5A7A;
-  border-color: #FF5A7A;
+  background: var(--brand);
+  border-color: var(--brand);
 }
 .agree-tick {
   color: #FFFFFF;
@@ -472,16 +501,16 @@ page {
 .agree-text {
   flex: 1;
   font-size: 26rpx;
-  color: #3A3D45;
+  color: var(--t1);
   line-height: 1.6;
 }
 .field-tip {
-  background: #FFF7E8;
-  border: 1rpx solid #FFE2B0;
+  background: var(--warn-100);
+  border: 1rpx solid var(--warn-100);
   border-radius: 12rpx;
   padding: 14rpx 16rpx;
   margin: 10rpx 0 14rpx;
-  color: #B26A00;
+  color: var(--warn);
   font-size: 24rpx;
   line-height: 1.7;
 }
@@ -491,19 +520,19 @@ page {
   padding: 20rpx 24rpx;
   border-radius: 18rpx;
   background: #FFEBEC;
-  border: 1rpx solid #FFC9CD;
+  border: 1rpx solid var(--danger-100);
 }
 .mod-title {
   display: block;
   font-size: 26rpx;
   font-weight: 600;
-  color: #C8354A;
+  color: var(--brand-600);
   margin-bottom: 8rpx;
 }
 .mod-text {
   display: block;
   font-size: 24rpx;
-  color: #C8354A;
+  color: var(--brand-600);
   line-height: 1.6;
 }
 .mod-sub {
@@ -518,8 +547,8 @@ page {
   padding: 14rpx 16rpx;
   border-radius: 12rpx;
   background: #FFF0F1;
-  border: 1rpx solid #FFC9CD;
-  color: #C8354A;
+  border: 1rpx solid var(--danger-100);
+  color: var(--brand-600);
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -535,7 +564,7 @@ page {
   display: flex;
   align-items: center;
   padding: 22rpx 0;
-  border-bottom: 1rpx solid #F2F3F5;
+  border-bottom: 1rpx solid var(--fill);
 }
 .addr-item:last-child {
   border-bottom: none;
@@ -548,23 +577,23 @@ page {
 }
 .addr-sub {
   font-size: 24rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   margin-top: 8rpx;
 }
 .addr-use {
   font-size: 24rpx;
-  color: #FF5A7A;
+  color: var(--brand);
   padding: 10rpx 22rpx;
   border-radius: 999rpx;
-  background: #FFEAF0;
+  background: var(--brand-100);
 }
 .addr-del {
   font-size: 24rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   margin-left: 20rpx;
   padding: 10rpx 22rpx;
   border-radius: 999rpx;
-  background: #F2F3F5;
+  background: var(--fill);
 }
 
 .filter-row {
@@ -578,15 +607,15 @@ page {
   background: #FFFFFF;
   font-size: 24rpx;
   margin: 0 16rpx 16rpx 0;
-  color: #5A5D66;
+  color: var(--t2);
   /* 关键：chip 是行内 text 时必须禁止内部换行，
      否则「7 天」会在数字和「天」之间断开，且行内元素的 padding
      不撑高行盒 —— 背景圆角就会和上一行文字叠在一起。 */
   white-space: nowrap;
 }
 .chip.active {
-  background: #FFEAF0;
-  color: #FF5A7A;
+  background: var(--brand-100);
+  color: var(--brand);
 }
 /* chip 排布容器：必须显式 flex 换行。
    直接把一串行内 text 塞进 .detail-value（block）里时，
@@ -605,7 +634,7 @@ page {
   margin-bottom: 12rpx;
 }
 .chip-shortcut.active {
-  border-color: #FFC9D4;
+  border-color: var(--brand-100);
 }
 /* 订单卡片底部操作：删除 / 恢复 */
 .card-actions {
@@ -613,22 +642,22 @@ page {
   align-items: center;
   margin-top: 18rpx;
   padding-top: 16rpx;
-  border-top: 1rpx solid #F2F3F5;
+  border-top: 1rpx solid var(--fill);
 }
 .link-danger {
-  color: #C8354A;
+  color: var(--brand-600);
   font-size: 24rpx;
 }
 .link-danger.strong {
   font-weight: 600;
 }
 .link-ghost {
-  color: #8A8A8F;
+  color: var(--t3);
   font-size: 24rpx;
   margin-left: 24rpx;
 }
 .link-primary {
-  color: #FF5A7A;
+  color: var(--brand);
   font-size: 24rpx;
 }
 .hidden-foot {
@@ -642,7 +671,7 @@ page {
 
 .rent-total {
   font-size: 24rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   line-height: 1.6;
 }
 .order-card {
@@ -652,23 +681,23 @@ page {
   border-radius: 24rpx;
 }
 .status-pending {
-  color: #FF9F43;
+  color: var(--warn);
 }
 .status-accepted {
   color: #3B82F6;
 }
 .status-done {
-  color: #22A06B;
+  color: var(--success);
 }
 .status-canceled {
-  color: #A0A3AA;
+  color: var(--t3);
 }
 
 .profile-head {
   margin: 20rpx;
   padding: 34rpx;
   border-radius: 24rpx;
-  background: #FF5A7A;
+  background: var(--brand);
   color: #FFFFFF;
   display: flex;
   align-items: center;
@@ -678,7 +707,7 @@ page {
   height: 110rpx;
   border-radius: 50%;
   background: #FFFFFF;
-  color: #FF5A7A;
+  color: var(--brand);
   font-size: 46rpx;
   display: flex;
   align-items: center;
@@ -721,7 +750,7 @@ page {
 }
 .stat-label {
   font-size: 22rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   margin-top: 6rpx;
 }
 .menu-list {
@@ -734,7 +763,7 @@ page {
   display: flex;
   align-items: center;
   padding: 28rpx;
-  border-bottom: 1rpx solid #F2F3F5;
+  border-bottom: 1rpx solid var(--fill);
 }
 .menu-item.last {
   border-bottom: none;
@@ -748,12 +777,12 @@ page {
   font-size: 28rpx;
 }
 .menu-value {
-  color: #8A8A8F;
+  color: var(--t3);
   font-size: 26rpx;
   margin-right: 12rpx;
 }
 .menu-arrow {
-  color: #C0C3CA;
+  color: var(--line);
   font-size: 26rpx;
 }
 
@@ -776,7 +805,7 @@ page {
 }
 .login-desc {
   font-size: 26rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   margin-bottom: 48rpx;
 }
 .top-gap {
@@ -797,7 +826,7 @@ page {
 }
 .login-label {
   font-size: 26rpx;
-  color: #5A5D66;
+  color: var(--t2);
   margin-bottom: 12rpx;
   padding-left: 6rpx;
 }
@@ -807,12 +836,12 @@ page {
   height: 88rpx;
   padding: 0 24rpx;
   background: #FFFFFF;
-  border: 2rpx solid #E3E6EB;
+  border: 2rpx solid var(--line);
   border-radius: 18rpx;
   box-sizing: border-box;
 }
 .login-box.focused {
-  border-color: #FF5A7A;
+  border-color: var(--brand);
   background: #FFF8FA;
 }
 .login-input {
@@ -823,7 +852,7 @@ page {
   min-width: 0;
   font-size: 30rpx;
   line-height: normal;
-  color: #1F2233;
+  color: var(--t1);
   text-align: left;
   background: transparent;
   border: 0;
@@ -858,27 +887,27 @@ page {
   justify-content: center;
   padding: 0 26rpx;
   border-radius: 18rpx;
-  background: #FFEAF0;
-  color: #FF5A7A;
+  background: var(--brand-100);
+  color: var(--brand);
   font-size: 26rpx;
   white-space: nowrap;
 }
 .code-btn.disabled {
-  background: #F2F3F5;
-  color: #A0A3AA;
+  background: var(--fill);
+  color: var(--t3);
 }
 .switch-line {
   text-align: center;
   font-size: 26rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   margin-top: 30rpx;
 }
 .link {
-  color: #FF5A7A;
+  color: var(--brand);
 }
 .divider {
   text-align: center;
-  color: #C0C3CA;
+  color: var(--line);
   font-size: 24rpx;
   margin: 50rpx 0 30rpx;
   position: relative;
@@ -889,7 +918,7 @@ page {
   display: flex;
   align-items: center;
   background: #FFFFFF;
-  border: 2rpx solid #E3E6EB;
+  border: 2rpx solid var(--line);
   border-radius: 16rpx;
   padding: 20rpx;
   justify-content: space-between;
@@ -899,10 +928,10 @@ page {
   flex: 1;
 }
 .room-placeholder {
-  color: #A0A3AA;
+  color: var(--t3);
 }
 .room-arrow {
-  color: #C0C3CA;
+  color: var(--line);
   font-size: 26rpx;
 }
 .picker-mask {
@@ -929,11 +958,11 @@ page {
   align-items: center;
   justify-content: space-between;
   padding: 26rpx 30rpx;
-  border-bottom: 1rpx solid #F2F3F5;
+  border-bottom: 1rpx solid var(--fill);
 }
 .picker-cancel {
   font-size: 28rpx;
-  color: #8A8A8F;
+  color: var(--t3);
 }
 .picker-title {
   font-size: 30rpx;
@@ -941,7 +970,7 @@ page {
 }
 .picker-done {
   font-size: 28rpx;
-  color: #FF5A7A;
+  color: var(--brand);
   font-weight: 600;
 }
 .picker-body {
@@ -954,7 +983,7 @@ page {
   text-align: center;
   font-size: 30rpx;
   line-height: 88rpx;
-  color: #3A3D45;
+  color: var(--t1);
 }
 
 .rental-item {
@@ -985,30 +1014,30 @@ page {
 }
 .rental-spec {
   font-size: 24rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   margin-top: 8rpx;
 }
 .rental-price {
-  color: #FF5A7A;
+  color: var(--brand);
   font-size: 34rpx;
   font-weight: 600;
 }
 .rental-unit {
   font-size: 22rpx;
-  color: #8A8A8F;
+  color: var(--t3);
 }
 
 .detail-row {
   display: flex;
   padding: 22rpx 0;
-  border-bottom: 1rpx solid #F2F3F5;
+  border-bottom: 1rpx solid var(--fill);
 }
 .detail-row.last {
   border-bottom: none;
 }
 .detail-label {
   width: 180rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   font-size: 26rpx;
 }
 .detail-value {
@@ -1017,7 +1046,7 @@ page {
   word-break: break-all;
 }
 .hidden-tip {
-  color: #A0A3AA;
+  color: var(--t3);
   font-size: 25rpx;
 }
 .img-row {
@@ -1034,8 +1063,8 @@ page {
 
 /* ===== 管理后台：接单员审核 ===== */
 .btn-danger {
-  background: #F2F3F5;
-  color: #E5484D;
+  background: var(--fill);
+  color: var(--danger);
   text-align: center;
   padding: 26rpx;
   border-radius: 999rpx;
@@ -1060,21 +1089,21 @@ page {
   align-items: center;
   justify-content: space-between;
   padding-bottom: 18rpx;
-  border-bottom: 1rpx solid #F2F3F5;
+  border-bottom: 1rpx solid var(--fill);
 }
 .apply-name {
   font-size: 32rpx;
   font-weight: 600;
-  color: #1F2126;
+  color: var(--t1);
 }
 .status-text {
   font-size: 24rpx;
 }
 .status-approved {
-  color: #22A06B;
+  color: var(--success);
 }
 .status-rejected {
-  color: #E5484D;
+  color: var(--danger);
 }
 .doc-row {
   display: flex;
@@ -1084,8 +1113,8 @@ page {
   flex: 1;
   text-align: center;
   font-size: 26rpx;
-  color: #FF5A7A;
-  background: #FFEAF0;
+  color: var(--brand);
+  background: var(--brand-100);
   padding: 18rpx 0;
   border-radius: 999rpx;
 }
@@ -1097,11 +1126,11 @@ page {
 }.note-input {
   width: 100%;
   background: #FFFFFF;
-  border: 2rpx solid #E3E6EB;
+  border: 2rpx solid var(--line);
   border-radius: 16rpx;
   padding: 20rpx;
   font-size: 26rpx;
-  color: #1F2233;
+  color: var(--t1);
   min-height: 120rpx;
   box-sizing: border-box;
 }
@@ -1130,18 +1159,18 @@ page {
 /* ===== 身份切换 / 积分钱包 ===== */
 .role-switch {
   display: flex;
-  background: #F2F3F5;
+  background: var(--fill);
   border-radius: 999rpx;
   padding: 6rpx;
 }
 .role-opt {
   padding: 12rpx 26rpx;
   font-size: 24rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   border-radius: 999rpx;
 }
 .role-opt.on {
-  background: #FF5A7A;
+  background: var(--brand);
   color: #FFFFFF;
   font-weight: 600;
 }
@@ -1151,7 +1180,7 @@ page {
 }
 .btn-disabled {
   background: #E9EAED;
-  color: #A0A3AA;
+  color: var(--t3);
   text-align: center;
   padding: 26rpx;
   border-radius: 999rpx;
@@ -1178,7 +1207,7 @@ page {
   width: 110rpx;
   height: 110rpx;
   border-radius: 50%;
-  background: #F2F3F5;
+  background: var(--fill);
 }
 /* 头像右下角的小角标，提示这里可以点 */
 .avatar-edit {
@@ -1191,16 +1220,16 @@ page {
   padding: 0 6rpx;
   border-radius: 999rpx;
   background: #FFFFFF;
-  color: #FF5A7A;
+  color: var(--brand);
   font-size: 20rpx;
   text-align: center;
-  border: 2rpx solid #FF5A7A;
+  border: 2rpx solid var(--brand);
   box-sizing: border-box;
 }
 
 /* 注册表单里的必填标记 */
 .required-mark {
-  color: #FF5A7A;
+  color: var(--brand);
   margin-left: 6rpx;
   font-size: 26rpx;
 }
@@ -1208,3 +1237,368 @@ page {
   margin: 4rpx 0 12rpx;
 }
 
+
+/* =========================================================================
+   v2 设计系统覆盖层（2026-10-17）
+   上面是 v1 的旧定义，这里统一覆盖：白卡 + 浅描边 + 柔和阴影 + 品牌蓝渐变。
+   全项目共用这一套，改主题只动「设计令牌」这一块。
+   ========================================================================= */
+
+/* ---------- 容器与卡片 ---------- */
+.card {
+  background: var(--card);
+  margin: 20rpx;
+  padding: 28rpx;
+  border-radius: var(--r-lg);
+  border: 1rpx solid var(--line);
+  box-shadow: var(--sd-1);
+}
+
+.card-elevated {
+  box-shadow: var(--sd-2);
+}
+
+.order-card {
+  background: var(--card);
+  margin: 0 20rpx 20rpx;
+  padding: 28rpx;
+  border-radius: var(--r-lg);
+  border: 1rpx solid var(--line);
+  box-shadow: var(--sd-1);
+}
+
+.task-card {
+  padding: 24rpx;
+  border-radius: var(--r);
+  background: var(--card);
+  border: 1rpx solid var(--line);
+  box-shadow: var(--sd-1);
+  margin-bottom: 20rpx;
+}
+
+/* ---------- 顶部主视觉 ---------- */
+.hero {
+  margin: 20rpx;
+  padding: 40rpx 36rpx;
+  border-radius: var(--r-lg);
+  background: linear-gradient(135deg, #2E7CF6 0%, #4FA1FF 60%, #63B3FF 100%);
+  color: #FFFFFF;
+  box-shadow: var(--sd-brand);
+}
+.hero-title {
+  font-size: 42rpx;
+  font-weight: 700;
+  letter-spacing: 1rpx;
+}
+.hero-sub {
+  font-size: 24rpx;
+  margin-top: 14rpx;
+  opacity: 0.9;
+}
+
+/* ---------- 公告条 ---------- */
+.notice-bar {
+  display: flex;
+  align-items: center;
+  padding: 18rpx 24rpx;
+  background: var(--brand-50);
+  border-bottom: 1rpx solid var(--line);
+}
+.notice-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-right: 12rpx;
+}
+.notice-text {
+  font-size: 24rpx;
+  color: var(--t2);
+  flex: 1;
+}
+
+/* ---------- 区块标题：左侧品牌竖条 ---------- */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+.section-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--t1);
+}
+.section-title::before {
+  content: '';
+  display: inline-block;
+  width: 8rpx;
+  height: 28rpx;
+  border-radius: 4rpx;
+  background: var(--brand);
+  margin-right: 12rpx;
+  vertical-align: -4rpx;
+}
+.section-more {
+  font-size: 24rpx;
+  color: var(--t3);
+}
+
+/* ---------- 服务宫格 ---------- */
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+.grid-item {
+  width: 20%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 26rpx;
+}
+.grid-icon {
+  width: 92rpx;
+  height: 92rpx;
+  border-radius: 26rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42rpx;
+  box-shadow: var(--sd-1);
+}
+.grid-label {
+  font-size: 24rpx;
+  margin-top: 10rpx;
+  color: var(--t2);
+}
+
+/* ---------- 快捷入口 ---------- */
+.quick-item {
+  flex: 1;
+  min-width: 0;
+  background: var(--fill);
+  border-radius: var(--r);
+  padding: 24rpx;
+  margin-right: 16rpx;
+}
+.quick-item.last {
+  margin-right: 0;
+}
+.quick-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--t1);
+}
+.quick-desc {
+  font-size: 22rpx;
+  color: var(--t3);
+  margin-top: 8rpx;
+}
+
+/* ---------- 按钮 ---------- */
+.btn-primary {
+  background: linear-gradient(135deg, #2E7CF6 0%, #4FA1FF 100%);
+  color: #FFFFFF;
+  text-align: center;
+  padding: 26rpx;
+  border-radius: var(--r-pill);
+  font-size: 30rpx;
+  font-weight: 600;
+  box-shadow: var(--sd-brand);
+}
+.btn-accent {
+  background: linear-gradient(135deg, #FF8A3D 0%, #FFA45F 100%);
+  color: #FFFFFF;
+  text-align: center;
+  padding: 26rpx;
+  border-radius: var(--r-pill);
+  font-size: 30rpx;
+  font-weight: 600;
+  box-shadow: 0 10rpx 26rpx rgba(255, 138, 61, 0.28);
+}
+.btn-ghost {
+  background: var(--card);
+  color: var(--t2);
+  text-align: center;
+  padding: 26rpx;
+  border-radius: var(--r-pill);
+  font-size: 30rpx;
+  border: 1rpx solid var(--line);
+}
+.btn-disabled {
+  opacity: 0.45;
+}
+
+/* ---------- chip / tag ---------- */
+.chip {
+  padding: 12rpx 26rpx;
+  border-radius: var(--r-pill);
+  background: var(--card);
+  border: 1rpx solid var(--line);
+  font-size: 24rpx;
+  margin: 0 16rpx 16rpx 0;
+  color: var(--t2);
+  white-space: nowrap;
+}
+.chip.active {
+  background: var(--brand-100);
+  color: var(--brand);
+  border-color: var(--brand);
+  font-weight: 600;
+}
+.tag {
+  padding: 12rpx 26rpx;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  font-size: 24rpx;
+  margin: 0 16rpx 16rpx 0;
+  color: var(--t2);
+}
+.tag.active {
+  background: var(--brand-100);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+/* ---------- 列表项 ---------- */
+.menu-list {
+  background: var(--card);
+  margin: 20rpx;
+  border-radius: var(--r-lg);
+  border: 1rpx solid var(--line);
+  box-shadow: var(--sd-1);
+  overflow: hidden;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 28rpx;
+  border-bottom: 1rpx solid var(--line);
+}
+.menu-item.last {
+  border-bottom: none;
+}
+.menu-label {
+  flex: 1;
+  font-size: 28rpx;
+  color: var(--t1);
+}
+.menu-value {
+  font-size: 26rpx;
+  color: var(--t3);
+}
+.menu-arrow {
+  color: var(--t3);
+  font-size: 26rpx;
+  margin-left: 12rpx;
+}
+
+/* ---------- 统计栏 ---------- */
+.stat-row {
+  display: flex;
+  background: var(--card);
+  margin: 20rpx;
+  padding: 26rpx 0;
+  border-radius: var(--r-lg);
+  border: 1rpx solid var(--line);
+  box-shadow: var(--sd-1);
+}
+.stat-item {
+  flex: 1;
+  text-align: center;
+}
+.stat-num {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: var(--brand);
+}
+.stat-label {
+  font-size: 22rpx;
+  color: var(--t3);
+  margin-top: 6rpx;
+}
+
+/* ---------- 个人中心头部 ---------- */
+.profile-head {
+  padding: 40rpx 32rpx;
+  background: linear-gradient(135deg, #2E7CF6 0%, #4FA1FF 60%, #63B3FF 100%);
+  color: #FFFFFF;
+}
+.avatar {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  border: 2rpx solid rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+  overflow: hidden;
+}
+.uname {
+  font-size: 34rpx;
+  font-weight: 600;
+}
+
+/* ---------- 空态 / 提示 ---------- */
+.empty {
+  text-align: center;
+  color: var(--t3);
+  font-size: 26rpx;
+  padding: 64rpx 0;
+}
+.err-bar, .tip-bar {
+  margin: 20rpx;
+  padding: 20rpx 24rpx;
+  border-radius: var(--r);
+  background: var(--danger-100);
+  color: var(--danger);
+  font-size: 24rpx;
+}
+.tip-bar {
+  background: var(--brand-50);
+  color: var(--brand);
+}
+
+/* ---------- 状态圆标（pill 系列，新增可复用组件） ---------- */
+.pill {
+  display: inline-block;
+  padding: 6rpx 18rpx;
+  border-radius: var(--r-pill);
+  font-size: 22rpx;
+  line-height: 1.6;
+}
+.pill-brand { background: var(--brand-100); color: var(--brand); }
+.pill-accent { background: var(--accent-100); color: var(--accent); }
+.pill-success { background: var(--success-100); color: var(--success); }
+.pill-warn { background: var(--warn-100); color: var(--warn); }
+.pill-danger { background: var(--danger-100); color: var(--danger); }
+.pill-gray { background: var(--fill); color: var(--t3); }
+
+/* ---------- 小工具类 ---------- */
+.text-brand { color: var(--brand); }
+.text-danger { color: var(--danger); }
+.text-muted { color: var(--t3); }
+.shadow-1 { box-shadow: var(--sd-1); }
+.shadow-2 { box-shadow: var(--sd-2); }
+.row-between { display: flex; align-items: center; justify-content: space-between; }
+.divider-line { height: 1rpx; background: var(--line); margin: 20rpx 0; }
+
+/* ---------- 底部操作条（保持静态定位，页面自己决定要不要吸底） ---------- */
+.footer-bar {
+  padding: 20rpx 24rpx 40rpx;
+  background: var(--card);
+  border-top: 1rpx solid var(--line);
+  box-shadow: 0 -4rpx 16rpx rgba(19, 26, 42, 0.05);
+}
+
+/* ---------- 提示文字 / 辅助 ---------- */
+.hint {
+  font-size: 24rpx;
+  color: var(--t3);
+}
+
+/* ---------- 顶部间距 ---------- */
+.top-gap { margin-top: 24rpx; }
+.top-gap-sm { margin-top: 12rpx; }

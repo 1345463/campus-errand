@@ -22,7 +22,7 @@
 }
 .score-word {
   font-size: 26rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   margin-left: 18rpx;
 }
 
@@ -30,9 +30,9 @@
   margin-top: 16rpx;
   padding: 20rpx;
   border-radius: 14rpx;
-  background: #F7F8FA;
+  background: var(--fill);
   font-size: 27rpx;
-  color: #3A3D45;
+  color: var(--t1);
   line-height: 1.7;
   word-break: break-all;
 }
@@ -41,6 +41,6 @@
 .count-line {
   text-align: right;
   font-size: 22rpx;
-  color: #A0A3AA;
+  color: var(--t3);
   margin-top: 10rpx;
 }

@@ -10,9 +10,9 @@
   text-align: center;
   padding: 18rpx 0;
   font-size: 28rpx;
-  color: #6B6B70;
+  color: var(--t2);
   background: #FFFFFF;
-  border: 1rpx solid #E3E6EB;
+  border: 1rpx solid var(--line);
   border-right-width: 0;
 }
 
@@ -27,8 +27,8 @@
 
 .tab-item.active {
   color: #FFFFFF;
-  background: #FF5A7A;
-  border-color: #FF5A7A;
+  background: var(--brand);
+  border-color: var(--brand);
   font-weight: 600;
 }
 
@@ -54,21 +54,21 @@
   margin-top: 20rpx;
   padding: 20rpx 24rpx;
   border-radius: 16rpx;
-  background: #F7F8FA;
+  background: var(--fill);
 }
 
 .switch-label {
   font-size: 28rpx;
-  color: #1F2126;
+  color: var(--t1);
 }
 
 .switch-value {
   font-size: 26rpx;
-  color: #9A9AA0;
+  color: var(--t3);
 }
 
 .switch-value.on {
-  color: #FF5A7A;
+  color: var(--brand);
   font-weight: 600;
 }
 
@@ -81,7 +81,7 @@
 /* 找人结果列表 */
 .user-list {
   margin-top: 20rpx;
-  border-top: 1rpx solid #F2F3F5;
+  border-top: 1rpx solid var(--fill);
 }
 
 .user-row {
@@ -89,11 +89,11 @@
   align-items: center;
   justify-content: space-between;
   padding: 20rpx 4rpx;
-  border-bottom: 1rpx solid #F2F3F5;
+  border-bottom: 1rpx solid var(--fill);
 }
 
 .user-row.active {
-  background: #FFF1F4;
+  background: var(--brand-100);
 }
 
 .user-main {
@@ -103,19 +103,19 @@
 
 .user-name {
   font-size: 28rpx;
-  color: #1F2126;
+  color: var(--t1);
   font-weight: 600;
 }
 
 .user-role {
   margin-left: 12rpx;
   font-size: 22rpx;
-  color: #9A9AA0;
+  color: var(--t3);
 }
 
 .user-points {
   font-size: 26rpx;
-  color: #FF5A7A;
+  color: var(--brand);
 }
 
 /* 核销结果 */

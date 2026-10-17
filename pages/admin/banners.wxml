@@ -51,7 +51,7 @@
           <text wx:else>{{uploading ? '上传中…' : '+ 选择图片'}}</text>
         </view>
         <view class="pick-tip">
-          <view wx:if="{{newImage}}">图片已上传，建议比例 2:1</view>
+          <view wx:if="{{newImage}}">图片已上传，建议尺寸 1500×600（2.5:1，与首页轮播一致）</view>
           <view wx:else class="hint">必选。图片会按「轮播」权限存储，游客也能看到</view>
         </view>
       </view>

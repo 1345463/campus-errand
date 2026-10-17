@@ -26,7 +26,7 @@
   padding: 60rpx 0;
   text-align: center;
   font-size: 26rpx;
-  color: #8A8A8F;
+  color: var(--t3);
 }
 
 /* 最后一条消息下面留一段空，避免贴着输入框 */
@@ -50,7 +50,7 @@
 
 .msg-meta {
   font-size: 22rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   margin-bottom: 8rpx;
 }
 
@@ -66,12 +66,12 @@
 
 .msg-row.peer .msg-bubble {
   background: #FFFFFF;
-  color: #1F2023;
+  color: var(--t1);
   border-top-left-radius: 6rpx;
 }
 
 .msg-row.mine .msg-bubble {
-  background: #07C160;
+  background: var(--success);
   color: #FFFFFF;
   border-top-right-radius: 6rpx;
 }
@@ -81,7 +81,7 @@
   flex: none;
   padding: 16rpx 24rpx 24rpx;
   background: #FFFFFF;
-  border-top: 1rpx solid #EFEFF2;
+  border-top: 1rpx solid var(--fill);
 }
 
 .chat-textarea {
@@ -91,9 +91,9 @@
   max-height: 240rpx;
   padding: 16rpx 20rpx;
   border-radius: 16rpx;
-  background: #F7F8FA;
+  background: var(--fill);
   font-size: 28rpx;
-  color: #1F2023;
+  color: var(--t1);
 }
 
 .chat-send-row {
@@ -105,29 +105,29 @@
 
 .chat-count {
   font-size: 22rpx;
-  color: #8A8A8F;
+  color: var(--t3);
 }
 
 .chat-send {
   padding: 14rpx 48rpx;
   border-radius: 999rpx;
-  background: #07C160;
+  background: var(--success);
   color: #FFFFFF;
   font-size: 28rpx;
 }
 
 .chat-send.disabled {
-  background: #DCDDE1;
-  color: #8A8A8F;
+  background: var(--line);
+  color: var(--t3);
 }
 
 .chat-locked {
   flex: none;
   padding: 28rpx 24rpx;
   background: #FFFFFF;
-  border-top: 1rpx solid #EFEFF2;
+  border-top: 1rpx solid var(--fill);
   font-size: 26rpx;
-  color: #8A8A8F;
+  color: var(--t3);
   text-align: center;
 }
 
@@ -141,16 +141,16 @@
 .ticket-kind {
   font-size: 30rpx;
   font-weight: 600;
-  color: #1F2023;
+  color: var(--t1);
 }
 
 .ticket-content {
   margin: 16rpx 0;
   padding: 20rpx;
   border-radius: 12rpx;
-  background: #F7F8FA;
+  background: var(--fill);
   font-size: 28rpx;
-  color: #1F2023;
+  color: var(--t1);
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-all;
@@ -159,5 +159,5 @@
 .ticket-note {
   margin-top: 12rpx;
   font-size: 24rpx;
-  color: #8A8A8F;
+  color: var(--t3);
 }

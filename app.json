@@ -36,16 +36,16 @@
     "pages/order/review"
   ],
   "window": {
-    "navigationBarBackgroundColor": "#FF5A7A",
+    "navigationBarBackgroundColor": "#2E7CF6",
     "navigationBarTitleText": "校园跑腿",
     "navigationBarTextStyle": "white",
-    "backgroundColor": "#F5F6F8",
+    "backgroundColor": "#F4F6FB",
     "backgroundTextStyle": "dark",
     "enablePullDownRefresh": false
   },
   "tabBar": {
-    "color": "#8A8A8F",
-    "selectedColor": "#FF5A7A",
+    "color": "#98A2B3",
+    "selectedColor": "#2E7CF6",
     "backgroundColor": "#FFFFFF",
     "borderStyle": "white",
     "list": [

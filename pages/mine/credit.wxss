@@ -3,14 +3,14 @@
 .flow-kind {
   display: block;
   font-size: 28rpx;
-  color: #1F2023;
+  color: var(--t1);
 }
 
 .flow-time {
   display: block;
   margin-top: 4rpx;
   font-size: 24rpx;
-  color: #6B6B70;
+  color: var(--t2);
   line-height: 1.5;
   word-break: break-all;
 }
@@ -19,5 +19,5 @@
   display: block;
   font-size: 30rpx;
   font-weight: 600;
-  color: #FF5A7A;
+  color: var(--brand);
 }

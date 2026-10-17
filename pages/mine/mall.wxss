@@ -12,7 +12,7 @@
   margin: 0 24rpx 24rpx 0;
   padding: 24rpx;
   border-radius: 16rpx;
-  background: #F7F8FA;
+  background: var(--fill);
 }
 
 /* 每行第二个去掉右外边距，保证两列等宽 */
@@ -33,13 +33,13 @@
   margin-top: 12rpx;
   font-size: 30rpx;
   font-weight: 600;
-  color: #1F2023;
+  color: var(--t1);
 }
 
 .mall-desc {
   margin-top: 6rpx;
   font-size: 24rpx;
-  color: #6B6B70;
+  color: var(--t2);
   line-height: 1.5;
   min-height: 72rpx;
 }
@@ -48,20 +48,20 @@
   margin-top: 10rpx;
   font-size: 28rpx;
   font-weight: 600;
-  color: #FF5A7A;
+  color: var(--brand);
 }
 
 .mall-stock {
   margin-top: 4rpx;
   font-size: 22rpx;
-  color: #9A9CA1;
+  color: var(--t3);
 }
 
 .mall-btn {
   margin-top: 16rpx;
   padding: 12rpx 0;
   border-radius: 999rpx;
-  background: #FF5A7A;
+  background: var(--brand);
   color: #FFFFFF;
   font-size: 26rpx;
   text-align: center;
@@ -73,8 +73,8 @@
 }
 
 .mall-btn.disabled {
-  background: #DCDDE1;
-  color: #8A8A8F;
+  background: var(--line);
+  color: var(--t3);
 }
 
 /* 兑换码卡片 */
@@ -91,15 +91,15 @@
 .code-name {
   font-size: 28rpx;
   font-weight: 600;
-  color: #1F2023;
+  color: var(--t1);
 }
 
 .code-value {
   margin-top: 16rpx;
   padding: 20rpx 0;
   border-radius: 14rpx;
-  background: #FFF1F4;
-  color: #FF5A7A;
+  background: var(--brand-100);
+  color: var(--brand);
   font-size: 40rpx;
   font-weight: 700;
   letter-spacing: 4rpx;
@@ -109,14 +109,14 @@
 .code-tip {
   margin-top: 12rpx;
   font-size: 22rpx;
-  color: #8A8A8F;
+  color: var(--t3);
 }
 
 .code-copy {
   margin-top: 16rpx;
   padding: 14rpx 0;
   border-radius: 999rpx;
-  background: #FF5A7A;
+  background: var(--brand);
   color: #FFFFFF;
   font-size: 26rpx;
   text-align: center;
@@ -126,14 +126,14 @@
 .flow-kind {
   display: block;
   font-size: 28rpx;
-  color: #1F2023;
+  color: var(--t1);
 }
 
 .flow-time {
   display: block;
   margin-top: 4rpx;
   font-size: 24rpx;
-  color: #6B6B70;
+  color: var(--t2);
   line-height: 1.5;
   word-break: break-all;
 }
@@ -147,7 +147,7 @@
   display: flex;
   align-items: center;
   padding: 20rpx 0;
-  border-bottom: 2rpx solid #F0F0F2;
+  border-bottom: 2rpx solid var(--fill);
 }
 
 .coupon-row:last-child {
@@ -156,7 +156,7 @@
 
 .coupon-row.used .coupon-code,
 .coupon-row.used .coupon-title {
-  color: #9A9AA0;
+  color: var(--t3);
 }
 
 .coupon-main {
@@ -168,7 +168,7 @@
   display: flex;
   align-items: center;
   font-size: 28rpx;
-  color: #1F2023;
+  color: var(--t1);
 }
 
 .coupon-title .status-text {
@@ -180,14 +180,14 @@
   font-size: 30rpx;
   font-weight: 600;
   letter-spacing: 2rpx;
-  color: #C8364F;
+  color: var(--brand-600);
   word-break: break-all;
 }
 
 .coupon-hint {
   margin-top: 4rpx;
   font-size: 24rpx;
-  color: #6B6B70;
+  color: var(--t2);
   line-height: 1.5;
 }
 
@@ -200,14 +200,14 @@
 
 .coupon-op {
   padding: 8rpx 20rpx;
-  border: 2rpx solid #E3E3E8;
+  border: 2rpx solid var(--line);
   border-radius: 999rpx;
   font-size: 24rpx;
-  color: #4A4A50;
+  color: var(--t2);
 }
 
 .coupon-op.primary {
   margin-top: 12rpx;
-  border-color: #C8364F;
-  color: #C8364F;
+  border-color: var(--brand-600);
+  color: var(--brand-600);
 }

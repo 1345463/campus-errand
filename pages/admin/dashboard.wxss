@@ -21,19 +21,19 @@
 .quick-title {
   font-size: 48rpx;
   font-weight: 600;
-  color: #FF5A7A;
+  color: var(--brand);
   line-height: 1.1;
 }
 
 /* 计数为 0 的卡片置灰，但仍可点击进入 */
 .quick-row .quick-item.disabled .quick-title {
-  color: #C7C9CE;
+  color: var(--line);
 }
 
 .quick-desc {
   margin-top: 8rpx;
   font-size: 26rpx;
-  color: #6B6B70;
+  color: var(--t2);
 }
 
 /* 后台入口列表：复用公共 .menu-* ，这里只补尾部箭头颜色 */
@@ -43,6 +43,6 @@
 }
 
 .menu-item .menu-arrow {
-  color: #C7C9CE;
+  color: var(--line);
   font-size: 26rpx;
 }

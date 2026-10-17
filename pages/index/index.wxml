@@ -10,7 +10,7 @@
       class="banner-swiper"
       indicator-dots="{{banners.length > 1}}"
       indicator-color="rgba(255,255,255,0.5)"
-      indicator-active-color="#FF5A7A"
+      indicator-active-color="#2E7CF6"
       autoplay="{{banners.length > 1}}"
       interval="5000"
       circular="{{banners.length > 1}}"

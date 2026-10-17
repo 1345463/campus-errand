@@ -31,6 +31,15 @@ def git(*args, check=True):
     return r.stdout.strip()
 
 
+def git_all(*args):
+    """git 命令的完整输出（stdout + stderr）—— git push 的进度走 stderr"""
+    r = subprocess.run(['git'] + list(args), cwd=REPO, capture_output=True,
+                       text=True, encoding='utf-8', errors='replace')
+    if r.returncode != 0:
+        raise RuntimeError('%s' % (r.stderr or r.stdout).strip())
+    return (r.stdout + r.stderr).strip()
+
+
 def ok(msg):
     print('  [OK]   %s' % msg)
 
@@ -130,13 +139,13 @@ def main():
     else:
         ok('工作区无改动（把上一轮未推送的提交补推）')
 
-    # 推送
+    # 推送（注意：git push 的进度信息走 stderr，只看 stdout 会误显示成 "already up to date"）
     print('\n[3/4] 推送到 origin/main')
     try:
-        out = git('push', 'origin', 'main')
-        print('  %s' % (out or 'already up to date'))
+        out = git_all('push', 'origin', 'main')
+        print('  %s' % (out or 'already up to date（远端已是最新）'))
     except RuntimeError as e:
-        bad('推送失败 —— 多半是 SSH 密钥没配上，检查 ~/.ssh/config\n%s' % e)
+        bad('推送失败 —— 检查 SSH：ssh -F C:/campus-ssh/config -T git@github.com\n%s' % e)
         return 1
 
     # tag

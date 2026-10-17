@@ -1,106 +1,277 @@
-/* 任务大厅 */
+/* 任务大厅 —— 吸顶筛选 + 卡片流 + 大厅内直接接单 */
 
-.hall-count {
-  padding: 16rpx 32rpx;
+.hall-pad {
+  padding: 0 20rpx;
+}
+
+/* ---------- 吸顶筛选栏 ---------- */
+.sticky-bar {
+  background: var(--card);
+  border-bottom: 1rpx solid var(--line);
+  padding: 16rpx 0 14rpx;
+}
+
+/* 服务类型：横滑，不换行，避免十个类型把筛选栏顶成三行 */
+.chip-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+.chip-scroll-inner {
+  display: flex;
+  padding: 0 20rpx;
+}
+.chip-scroll-inner .chip {
+  margin: 0 14rpx 0 0;
+  flex: none;
+}
+
+/* 第二行：排序分段控件 + 楼栋楼层 + 重置 */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  padding: 12rpx 20rpx 0;
+}
+
+.seg {
+  display: flex;
+  flex: none;
+  background: var(--fill);
+  border-radius: 999rpx;
+  padding: 4rpx;
+}
+.seg-item {
+  padding: 10rpx 22rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  color: var(--t3);
+}
+.seg-item.on {
+  background: var(--brand);
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: var(--sd-brand);
+}
+
+.filter-more {
+  flex: 1;
+  min-width: 0;
+  margin-left: 16rpx;
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  background: var(--fill);
+  font-size: 24rpx;
+  color: var(--t2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.filter-more.on {
+  background: var(--brand-100);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.filter-reset {
+  flex: none;
+  margin-left: 14rpx;
+  padding: 10rpx 18rpx;
   font-size: 24rpx;
   color: var(--t3);
 }
 
-.hall-card {
-  margin: 0 20rpx 20rpx;
+/* ---------- 数量 / 加载态 ---------- */
+.hall-count {
+  padding: 18rpx 32rpx 4rpx;
+  font-size: 24rpx;
+  color: var(--t3);
 }
 
-.hall-head {
+.hall-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28rpx 0 40rpx;
+  font-size: 24rpx;
+  color: var(--t3);
+}
+.hall-more .refresh-spin {
+  margin-right: 12rpx;
+}
+
+.empty {
+  padding: 80rpx 0;
+}
+.empty-emoji {
+  font-size: 72rpx;
+  margin-bottom: 16rpx;
+}
+
+/* ---------- 任务卡片 ---------- */
+.hall-card {
+  background: var(--card);
+  margin-bottom: 20rpx;
+  padding: 26rpx;
+  border-radius: var(--r-lg);
+  border: 1rpx solid var(--line);
+  box-shadow: var(--sd-1);
+}
+
+.hall-top {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+}
+
+.hall-badge {
+  width: 76rpx;
+  height: 76rpx;
+  margin-right: 20rpx;
+  border-radius: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  flex: none;
+}
+
+.hall-main {
+  flex: 1;
+  min-width: 0;
 }
 
 .hall-title {
-  flex: 1;
-  min-width: 0;
   font-size: 30rpx;
   font-weight: 600;
   color: var(--t1);
   word-break: break-all;
-}
-
-.hall-reward {
-  margin-left: 16rpx;
-  font-size: 32rpx;
-  font-weight: 700;
-  color: var(--brand);
+  line-height: 1.4;
 }
 
 .hall-meta {
-  margin-top: 10rpx;
-  font-size: 24rpx;
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  color: var(--t3);
+}
+
+/* 赏金：单独拎到右上角，扫列表时第一眼看到的就是它 */
+.hall-reward-box {
+  flex: none;
+  margin-left: 16rpx;
+  text-align: right;
+}
+.hall-reward {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: var(--brand);
+  line-height: 1.1;
+}
+.hall-reward-unit {
+  margin-top: 4rpx;
+  font-size: 20rpx;
   color: var(--t3);
 }
 
 .hall-where {
-  margin-top: 8rpx;
-  font-size: 26rpx;
-  color: var(--t1);
-  word-break: break-all;
-}
-
-.hall-discount {
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  color: var(--success);
-}
-
-/* 优先推送标记：这单用了优先展示券，排在前面是有原因的 */
-.hall-boost {
-  display: inline-block;
-  margin-top: 8rpx;
-  padding: 4rpx 14rpx;
-  border-radius: 999rpx;
-  background: var(--brand-100);
-  color: var(--brand-600);
-  font-size: 22rpx;
-}
-
-/* 楼栋 / 楼层选择器 */
-.pick-row {
   display: flex;
-  gap: 16rpx;
+  align-items: flex-start;
+  margin-top: 18rpx;
+  padding: 14rpx 18rpx;
+  border-radius: var(--r-sm);
+  background: var(--fill);
 }
-
-.pick-item {
+.hall-where-icon {
+  font-size: 24rpx;
+  margin-right: 10rpx;
+  flex: none;
+}
+.hall-where-text {
   flex: 1;
   min-width: 0;
-}
-
-.pick-text {
-  padding: 18rpx 20rpx;
-  border-radius: 12rpx;
-  background: var(--fill);
-  font-size: 26rpx;
+  font-size: 25rpx;
   color: var(--t1);
-  text-align: center;
+  word-break: break-all;
+  line-height: 1.5;
 }
 
-/* 锁定卡 */
+.hall-tags {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 14rpx;
+}
+.hall-tags .pill {
+  margin-right: 12rpx;
+}
+
+/* 卡片底部：左边提示，右边接单按钮 */
+.hall-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20rpx;
+  padding-top: 18rpx;
+  border-top: 1rpx solid var(--line);
+}
+.hall-actions-hint {
+  font-size: 22rpx;
+  color: var(--t3);
+}
+.hall-btn-primary {
+  padding: 14rpx 34rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #2E7CF6 0%, #4FA1FF 100%);
+  color: #FFFFFF;
+  font-size: 26rpx;
+  font-weight: 600;
+  box-shadow: var(--sd-brand);
+}
+
+/* ---------- 锁定卡 ---------- */
 .lock-card {
-  margin: 40rpx 20rpx;
+  margin: 40rpx 0;
   padding: 48rpx 32rpx;
   text-align: center;
 }
-
 .lock-icon {
   font-size: 64rpx;
   line-height: 1;
 }
-
 .lock-title {
   margin-top: 20rpx;
   font-size: 32rpx;
   font-weight: 600;
   color: var(--t1);
 }
-
 .lock-desc {
   text-align: left;
+}
+
+/* ---------- 半屏筛选面板 ---------- */
+.sheet-block-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--t1);
+  margin: 8rpx 0 16rpx;
+}
+.sheet-actions {
+  display: flex;
+  margin-top: 12rpx;
+}
+.sheet-btn-ghost {
+  flex: none;
+  padding: 22rpx 32rpx;
+  border-radius: 999rpx;
+  background: var(--fill);
+  color: var(--t2);
+  font-size: 28rpx;
+  margin-right: 16rpx;
+}
+.sheet-btn-primary {
+  flex: 1;
+  padding: 22rpx 0;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #2E7CF6 0%, #4FA1FF 100%);
+  color: #FFFFFF;
+  font-size: 28rpx;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: var(--sd-brand);
 }

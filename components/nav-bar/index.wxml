@@ -1,0 +1,22 @@
+<view class="nav-bar {{reduced ? 'reduced-motion' : ''}}" style="height:{{totalH}}px">
+  <view class="nav-bar-bg {{flow ? 'hero-flow' : ''}}" style="background:{{bg}}"></view>
+
+  <view
+    class="nav-bar-body"
+    style="height:{{navH}}px;padding-top:{{statusBarH}}px;padding-right:{{capsuleGap}}px"
+  >
+    <view
+      wx:if="{{showBack}}"
+      class="nav-back pressable"
+      hover-class="press"
+      hover-stay-time="90"
+      bindtap="onBack"
+    >
+      <view class="nav-back-arrow" style="border-color:{{color}}"></view>
+    </view>
+
+    <text class="nav-title anim anim-down" style="color:{{color}}">{{title}}</text>
+
+    <slot></slot>
+  </view>
+</view>

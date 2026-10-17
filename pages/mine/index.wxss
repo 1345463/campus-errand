@@ -16,3 +16,89 @@
   text-align: center;
   font-size: 24rpx;
 }
+
+/* ===== 渐变头部 ===== */
+.mine-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 0 32rpx 40rpx;
+}
+
+.hero-bg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -200rpx;
+  bottom: 0;
+  background: linear-gradient(135deg, #2E7CF6 0%, #4FA1FF 55%, #63B3FF 100%);
+}
+
+.hero-orb {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+}
+.hero-orb-a {
+  width: 260rpx;
+  height: 260rpx;
+  right: -70rpx;
+  top: -60rpx;
+}
+.hero-orb-b {
+  width: 150rpx;
+  height: 150rpx;
+  right: 130rpx;
+  top: 120rpx;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* 底部弧形过渡：一大段圆角矩形压在渐变底边，视觉上把硬直线变成柔和的弧 */
+.mine-hero-wave {
+  position: absolute;
+  left: -40rpx;
+  right: -40rpx;
+  bottom: -2rpx;
+  height: 72rpx;
+  background: var(--bg);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+
+.mine-hero-inner {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-top: 40rpx;
+}
+
+/* 登录页品牌标：一个圆角方块里放「跑」字，比纯文字标题更像一个 App */
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+.login-brand-mark {
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: 34rpx;
+  background: linear-gradient(135deg, #2E7CF6 0%, #4FA1FF 100%);
+  color: #FFFFFF;
+  font-size: 56rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12rpx 30rpx rgba(46, 124, 246, 0.32);
+  margin-bottom: 20rpx;
+}
+.login-desc {
+  margin-bottom: 40rpx;
+}
+
+/* 动效开关：switch 在小程序里尺寸是固定的，缩小一点才和菜单项齐平 */
+.menu-switch {
+  transform: scale(0.82);
+  transform-origin: right center;
+  margin-left: 8rpx;
+}

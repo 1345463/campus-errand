@@ -1,3 +1,9 @@
 {
-  "navigationBarTitleText": "我的"
+  "navigationStyle": "custom",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "light",
+  "backgroundColor": "#2E7CF6",
+  "usingComponents": {
+    "nav-bar": "/components/nav-bar/index"
+  }
 }

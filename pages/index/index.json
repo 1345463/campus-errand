@@ -1,4 +1,9 @@
 {
-  "navigationBarTitleText": "校园跑腿",
-  "enablePullDownRefresh": true
+  "navigationStyle": "custom",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "light",
+  "backgroundColor": "#2E7CF6",
+  "usingComponents": {
+    "nav-bar": "/components/nav-bar/index"
+  }
 }

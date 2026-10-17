@@ -1,12 +1,132 @@
-/* 首页轮播 */
+/* 首页 —— 自定义导航 + 渐变主视觉 + 上浮内容区 + 悬浮发单按钮 */
 
-.banner-box {
-  margin: 20rpx 20rpx 24rpx;
+/* ===== 渐变主视觉 ===== */
+.home-hero {
+  position: relative;
+  overflow: hidden;
+  padding-bottom: 96rpx;
 }
 
-/* 比例必须和后台上传的图严格一致，否则 aspectFill 会把图片上下裁掉（文字会被切）。
-   容器宽度 = 750 - 左右各 20 边距 = 710rpx，高度 = 710 / 2.5 = 284rpx。
-   → 上传尺寸按 1500×600（2 倍图，2.5:1）。改宽度就要同步改高度。 */
+.hero-bg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -200rpx; /* 向上溢出，保证 iOS 下拉回弹时不会露出白边 */
+  bottom: 0;
+  background: linear-gradient(135deg, #2E7CF6 0%, #4FA1FF 55%, #63B3FF 100%);
+}
+
+/* 两个装饰光斑：纯装饰，pointer-events 不用管（父级没有交互） */
+.hero-orb {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+}
+.hero-orb-a {
+  width: 300rpx;
+  height: 300rpx;
+  right: -80rpx;
+  top: 40rpx;
+}
+.hero-orb-b {
+  width: 180rpx;
+  height: 180rpx;
+  right: 120rpx;
+  top: 220rpx;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.hero-inner {
+  position: relative;
+  padding: 0 32rpx 0;
+}
+
+.hero-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.hero-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.hero-greet {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: 1rpx;
+}
+
+.hero-school {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* 服务时间胶囊：放在右上角，避开胶囊按钮那一列之外不会撞到 */
+.hero-hours {
+  display: flex;
+  align-items: center;
+  margin-top: 8rpx;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 22rpx;
+  color: #FFFFFF;
+  white-space: nowrap;
+}
+.hero-hours-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: #7CF7A8;
+  margin-right: 10rpx;
+}
+
+/* 搜索框（实为大厅入口） */
+.hero-search {
+  display: flex;
+  align-items: center;
+  margin-top: 28rpx;
+  padding: 18rpx 12rpx 18rpx 24rpx;
+  border-radius: 999rpx;
+  background: #FFFFFF;
+  box-shadow: 0 10rpx 28rpx rgba(19, 26, 42, 0.16);
+}
+.hero-search-icon {
+  font-size: 28rpx;
+  margin-right: 12rpx;
+}
+.hero-search-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 26rpx;
+  color: var(--t3);
+}
+.hero-search-btn {
+  padding: 12rpx 28rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #2E7CF6 0%, #4FA1FF 100%);
+  color: #FFFFFF;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+/* ===== 上浮内容区 ===== */
+.home-body {
+  position: relative;
+  z-index: 2;
+  margin-top: -56rpx;
+  padding: 0 0 40rpx;
+}
+
+/* 轮播：比例必须和后台上传的图严格一致，否则 aspectFill 会裁掉图片上下（文字会被切）。
+   容器宽 = 750 - 左右各 20 边距 = 710rpx，高 = 710 / 2.5 = 284rpx → 上传 1500×600。 */
+.banner-box {
+  margin: 0 20rpx 20rpx;
+}
 .banner-swiper {
   width: 100%;
   height: 284rpx;
@@ -14,76 +134,157 @@
   overflow: hidden;
   box-shadow: var(--sd-2);
 }
-
 .banner-img {
   width: 100%;
   height: 284rpx;
   display: block;
 }
-
-/* 大厅筛选区：两行 chip，行间留一点间距 */
-.filter-row {
-  margin-bottom: 16rpx;
+.banner-skeleton {
+  height: 284rpx;
+  border-radius: var(--r-lg);
 }
 
-.filter-row + .filter-row {
-  margin-top: -4rpx;
+/* 公告条 */
+.notice-strip {
+  display: flex;
+  align-items: center;
+  margin: 0 20rpx 20rpx;
+  padding: 20rpx 24rpx;
+  border-radius: var(--r);
+  background: var(--brand-50);
+  border: 1rpx solid var(--brand-100);
+}
+.notice-strip-icon {
+  font-size: 26rpx;
+  margin-right: 12rpx;
+  flex: none;
+}
+.notice-strip-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 24rpx;
+  color: var(--brand-600);
+  line-height: 1.5;
 }
 
-/* 大厅门槛卡片：未成为接单员时用它顶掉任务列表 */
-.lock-card {
-  padding: 48rpx 32rpx;
-  text-align: center;
+/* 服务宫格 */
+.grid-item {
+  width: 20%;
+}
+.grid-icon {
+  width: 92rpx;
+  height: 92rpx;
+  border-radius: 26rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42rpx;
+  box-shadow: var(--sd-1);
+}
+.grid-label {
+  font-size: 24rpx;
+  margin-top: 10rpx;
+  color: var(--t2);
 }
 
-.lock-icon {
-  font-size: 64rpx;
+/* 热门入口卡片 */
+.quick-row {
+  display: flex;
+  padding: 0 20rpx;
+  margin-bottom: 20rpx;
+}
+.quick-card {
+  flex: 1;
+  min-width: 0;
+  margin-right: 16rpx;
+  padding: 26rpx 24rpx;
+  border-radius: var(--r-lg);
+  background: var(--card);
+  border: 1rpx solid var(--line);
+  box-shadow: var(--sd-1);
+}
+.quick-row .quick-card:last-child {
+  margin-right: 0;
+}
+.quick-emoji {
+  font-size: 40rpx;
   line-height: 1;
 }
-
-.lock-title {
-  margin-top: 20rpx;
-  font-size: 32rpx;
+.quick-title {
+  margin-top: 12rpx;
+  font-size: 28rpx;
   font-weight: 600;
   color: var(--t1);
 }
-
-.lock-desc {
-  margin-top: 12rpx;
-  text-align: left;
+.quick-desc {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: var(--t3);
 }
 
-/* 任务大厅入口卡：列表已经搬到大厅页，首页只留这一个入口。
-   做成品牌渐变的「主入口」，让首页有一个明确的视觉落点。 */
+/* 大厅主入口 */
 .hall-entry {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  background: linear-gradient(135deg, var(--brand-50) 0%, #FFFFFF 100%);
+  margin: 0 20rpx 20rpx;
+  padding: 30rpx 28rpx;
+  border-radius: var(--r-lg);
+  background: linear-gradient(120deg, #EEF4FF 0%, #FFFFFF 100%);
   border: 1rpx solid var(--brand-100);
   box-shadow: var(--sd-1);
-  padding: 32rpx 28rpx;
 }
-
-.hall-entry-title {
-  font-size: 32rpx;
-  font-weight: 700;
-  color: var(--brand-600);
+.hall-entry-icon {
+  width: 88rpx;
+  height: 88rpx;
+  margin-right: 22rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #2E7CF6 0%, #4FA1FF 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+  box-shadow: var(--sd-brand);
+  flex: none;
 }
-
 .hall-entry-main {
   flex: 1;
   min-width: 0;
 }
-
 .hall-entry-title {
-  font-size: 30rpx;
-  font-weight: 600;
+  font-size: 32rpx;
+  font-weight: 700;
   color: var(--t1);
 }
-
 .hall-entry-desc {
   margin-top: 6rpx;
-  font-size: 24rpx;
+  font-size: 23rpx;
   color: var(--t3);
+  line-height: 1.5;
+}
+.hall-entry-arrow {
+  font-size: 40rpx;
+  color: var(--t3);
+  margin-left: 12rpx;
+}
+
+.home-foot {
+  text-align: center;
+  font-size: 22rpx;
+  color: var(--t3);
+  padding: 12rpx 0 0;
+}
+
+/* 悬浮发单按钮：加号在上、文字在下，比单纯一个加号更好懂 */
+.fab {
+  flex-direction: column;
+}
+.fab-plus {
+  font-size: 48rpx;
+  line-height: 44rpx;
+  font-weight: 300;
+}
+.fab-text {
+  font-size: 20rpx;
+  margin-top: 2rpx;
+  font-weight: 500;
 }

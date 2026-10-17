@@ -1,78 +1,172 @@
-<view class="page">
-  <view class="notice-bar">
-    <view class="notice-dot"></view>
-    <text class="notice-text">{{notice}}</text>
-  </view>
+<view class="page home {{motionClass}}">
+  <!-- 自定义导航栏：透明底，让下面的渐变主视觉直接顶到状态栏，做沉浸感 -->
+  <nav-bar bg="transparent" title="" />
 
-  <!-- 首页轮播：后台配置、灰度开关控制，没配图时整块不渲染 -->
-  <view wx:if="{{banners.length > 0}}" class="banner-box">
-    <swiper
-      class="banner-swiper"
-      indicator-dots="{{banners.length > 1}}"
-      indicator-color="rgba(255,255,255,0.5)"
-      indicator-active-color="#2E7CF6"
-      autoplay="{{banners.length > 1}}"
-      interval="5000"
-      circular="{{banners.length > 1}}"
-    >
-      <swiper-item wx:for="{{banners}}" wx:key="id">
-        <image
-          class="banner-img"
-          src="{{item.url}}"
-          mode="aspectFill"
-          data-index="{{index}}"
-          bindtap="tapBanner"
-        ></image>
-      </swiper-item>
-    </swiper>
-  </view>
+  <!-- ===== 渐变主视觉 ===== -->
+  <view class="home-hero">
+    <view class="hero-bg hero-flow"></view>
+    <view class="hero-orb hero-orb-a"></view>
+    <view class="hero-orb hero-orb-b"></view>
 
-  <view class="hero">
-    <view class="hero-title">不想出门？call 我马上办</view>
-    <view class="hero-sub">{{school}} · 校园跑腿 · 实名接单</view>
-  </view>
+    <!-- padding-top 顶掉导航栏高度，否则问候语会被胶囊压住 -->
+    <view class="hero-inner" style="padding-top:{{navTotal}}px">
+      <view class="hero-line">
+        <view class="hero-text">
+          <view class="hero-greet anim anim-up">{{greeting}}，同学</view>
+          <view class="hero-school anim anim-up" style="--d:60ms">{{school}}</view>
+        </view>
+        <view class="hero-hours anim anim-fade" style="--d:140ms">
+          <view class="hero-hours-dot"></view>
+          <text>{{serviceHours}}</text>
+        </view>
+      </view>
 
-  <view class="card">
-    <view class="section-head">
-      <text class="section-title">全部服务</text>
-    </view>
-    <view class="grid">
+      <!-- 搜索框是「去大厅」的快捷入口：大厅才是真正能接单的地方 -->
       <view
-        class="grid-item"
-        wx:for="{{services}}"
-        wx:key="type"
-        bindtap="goCreate"
-        data-type="{{item.type}}"
+        class="hero-search pressable anim anim-up"
+        style="--d:120ms"
+        hover-class="press"
+        bindtap="goHall"
       >
-        <view class="grid-icon" style="background:{{item.tint}}">{{item.icon}}</view>
-        <text class="grid-label">{{item.name}}</text>
+        <text class="hero-search-icon">🔍</text>
+        <text class="hero-search-text">找任务、看赏金、一键接单</text>
+        <view class="hero-search-btn">进大厅</view>
       </view>
     </view>
   </view>
 
-  <view class="card">
-    <view class="section-head">
-      <text class="section-title">热门入口</text>
+  <!-- ===== 内容区：白色圆角上浮，压在渐变头部上 ===== -->
+  <view class="home-body">
+    <!-- 轮播：后台配置 + 灰度 home_banner。骨架屏占位，避免图片回来时整块跳一下 -->
+    <view wx:if="{{bannersLoading}}" class="banner-box">
+      <view class="sk sk-block banner-skeleton"></view>
     </view>
-    <view class="quick-row">
-      <view class="quick-item" bindtap="goRental">
-        <view class="quick-title">📷 相机租赁</view>
+    <view wx:elif="{{banners.length > 0}}" class="banner-box anim anim-up" style="--d:160ms">
+      <swiper
+        class="banner-swiper"
+        indicator-dots="{{banners.length > 1}}"
+        indicator-color="rgba(255,255,255,0.5)"
+        indicator-active-color="#2E7CF6"
+        autoplay="{{banners.length > 1}}"
+        interval="5000"
+        circular="{{banners.length > 1}}"
+      >
+        <swiper-item wx:for="{{banners}}" wx:key="id">
+          <image
+            class="banner-img"
+            src="{{item.url}}"
+            mode="aspectFill"
+            data-index="{{index}}"
+            bindtap="tapBanner"
+          ></image>
+        </swiper-item>
+      </swiper>
+    </view>
+
+    <!-- 公告条：从原来的纯色横幅改成带图标的卡片，信息密度更高 -->
+    <view class="notice-strip anim anim-up" style="--d:180ms">
+      <text class="notice-strip-icon">📢</text>
+      <view class="notice-strip-text">{{notice}}</view>
+    </view>
+
+    <!-- 全部服务 -->
+    <view class="card anim anim-up" style="--d:200ms">
+      <view class="section-head">
+        <text class="section-title">全部服务</text>
+        <text class="section-more">点一下直接下单 ›</text>
+      </view>
+      <view class="grid stagger">
+        <view
+          class="grid-item pressable"
+          wx:for="{{services}}"
+          wx:for-item="svc"
+          wx:key="type"
+          hover-class="press"
+          hover-stay-time="120"
+          bindtap="goCreate"
+          data-type="{{svc.type}}"
+        >
+          <view class="grid-icon" style="background:{{svc.tint}}">{{svc.icon}}</view>
+          <text class="grid-label">{{svc.name}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 热门入口 -->
+    <view class="quick-row anim anim-up" style="--d:240ms">
+      <view
+        class="quick-card pressable"
+        hover-class="press-lift"
+        hover-stay-time="120"
+        bindtap="goRental"
+      >
+        <view class="quick-emoji">📷</view>
+        <view class="quick-title">相机租赁</view>
         <view class="quick-desc">日租起租 · 线下自提</view>
       </view>
-      <view class="quick-item last" bindtap="goAddress">
-        <view class="quick-title">📍 我的地址</view>
+      <view
+        class="quick-card pressable"
+        hover-class="press-lift"
+        hover-stay-time="120"
+        bindtap="goAddress"
+      >
+        <view class="quick-emoji">📍</view>
+        <view class="quick-title">我的地址</view>
         <view class="quick-desc">常用地址一键填入</view>
       </view>
     </view>
+
+    <!-- 任务大厅主入口：唯一的任务列表入口 -->
+    <view
+      class="hall-entry pressable anim anim-up btn-shine"
+      style="--d:280ms"
+      hover-class="press-lift"
+      hover-stay-time="120"
+      bindtap="goHall"
+    >
+      <view class="hall-entry-icon">📋</view>
+      <view class="hall-entry-main">
+        <view class="hall-entry-title">任务大厅</view>
+        <view class="hall-entry-desc">可按服务类型、楼栋楼层筛选，看到合适的直接接</view>
+      </view>
+      <text class="hall-entry-arrow">›</text>
+    </view>
+
+    <view class="home-foot anim anim-fade" style="--d:320ms">{{school}} · 同学互助跑腿平台</view>
   </view>
 
-  <!-- 任务列表已经整体搬到「任务大厅」页，这里只留入口，
-       同一个列表不在两处各维护一份（筛选、排序、楼栋楼层都在大厅页里） -->
-  <view class="card hall-entry" bindtap="goHall">
-    <view class="hall-entry-main">
-      <view class="hall-entry-title">📋 任务大厅</view>
-      <view class="hall-entry-desc">可接的任务都在这里，支持按服务类型、楼栋楼层筛选</view>
+  <!-- ===== 悬浮发单按钮 ===== -->
+  <view
+    class="fab {{sheetOpen ? '' : 'fab-breathe'}} pressable"
+    hover-class="press-strong"
+    hover-stay-time="120"
+    bindtap="openSheet"
+  >
+    <text class="fab-plus">＋</text>
+    <text class="fab-text">发单</text>
+  </view>
+
+  <!-- ===== 半屏发单面板 ===== -->
+  <view wx:if="{{sheetOpen}}" class="sheet-mask anim anim-fade" bindtap="closeSheet"></view>
+  <view class="sheet {{sheetOpen ? 'open' : ''}} safe-bottom">
+    <view class="sheet-grip"></view>
+    <view class="sheet-title">想发个什么单？</view>
+    <view class="sheet-sub">选一个常用服务，直接进入填写页</view>
+    <view class="sheet-grid stagger">
+      <view
+        class="sheet-cell pressable"
+        wx:for="{{quickItems}}"
+        wx:for-item="svc"
+        wx:key="type"
+        hover-class="press"
+        hover-stay-time="120"
+        data-type="{{svc.type}}"
+        bindtap="pickQuick"
+      >
+        <view class="sheet-cell-icon" style="background:{{svc.tint}}">{{svc.icon}}</view>
+        <text class="sheet-cell-label">{{svc.name}}</text>
+      </view>
     </view>
-    <text class="menu-arrow">></text>
+    <view class="btn-ghost" hover-class="press" bindtap="closeSheet">取消</view>
   </view>
 </view>

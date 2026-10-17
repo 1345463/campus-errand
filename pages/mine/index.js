@@ -6,6 +6,7 @@ const config = require('../../utils/config')
 const agreement = require('../../utils/agreement')
 const flags = require('../../utils/flags')
 const perms = require('../../utils/perms')
+const motion = require('../../utils/motion')
 
 Page({
   data: {
@@ -58,10 +59,81 @@ Page({
     // 我拥有的后台权限：WXML 里用 permsOn.xxx 决定后台入口要不要出现
     permsOn: {},
     unread: 0,
+
+    // 自定义导航（fixed）让位 + 动效开关
+    navTotal: 64,
+    motionClass: '',
+    reduceMotion: false,
+  },
+
+  onLoad: function () {
+    const sys = motion.systemInfo()
+    this.setData({
+      navTotal: sys.navTotalHeight,
+      motionClass: motion.rootClass(),
+      reduceMotion: motion.reduced(),
+    })
   },
 
   onUnload: function () {
     this.stopCountdown()
+    this.stopStatTimers()
+  },
+
+  onPullDownRefresh: function () {
+    const page = this
+    page
+      .refresh()
+      .then(function () {
+        if (typeof wx.stopPullDownRefresh === 'function') {
+          try {
+            wx.stopPullDownRefresh()
+          } catch (e) {
+            /* 忽略 */
+          }
+        }
+        motion.haptic('light')
+      })
+      .catch(function () {
+        if (typeof wx.stopPullDownRefresh === 'function') {
+          try {
+            wx.stopPullDownRefresh()
+          } catch (e) {
+            /* 忽略 */
+          }
+        }
+      })
+  },
+
+  // 统计数字滚动进场：积分 / 余额跳变太生硬，滚上去才有「活」的感觉
+  animateStats: function () {
+    const page = this
+    page.stopStatTimers()
+    page._stopPoints = motion.countUp(page, 'points', Number(page.data.points) || 0, 760, 0)
+    page._stopBalance = motion.countUp(page, 'balance', Number(page.data.balance) || 0, 760, 2)
+  },
+
+  stopStatTimers: function () {
+    if (this._stopPoints) {
+      this._stopPoints()
+      this._stopPoints = null
+    }
+    if (this._stopBalance) {
+      this._stopBalance()
+      this._stopBalance = null
+    }
+  },
+
+  // 减弱动效：关掉后全站循环动画停掉、入场动画只保留淡入
+  toggleMotion: function (event) {
+    // switch 的 checked=true 表示「开启动效」
+    const enabled = !!event.detail.value
+    motion.setReduced(!enabled)
+    this.setData({
+      reduceMotion: !enabled,
+      motionClass: motion.rootClass(),
+    })
+    motion.haptic('light')
   },
 
   onShow: function () {
@@ -154,6 +226,7 @@ Page({
       certShort: certStatus === 'none' ? '无' : certStatus === 'approved' ? '已开通' : '审核中',
       agreementVersionText: profile && profile.agreed_version ? '已签署 ' + profile.agreed_version : '未签署',
     })
+    this.animateStats()
     this.loadAvatar(avatarPath)
     this.maybeForceAgreement(profile)
     this.loadExtras()
@@ -308,7 +381,7 @@ Page({
   },
 
   goAgreement: function () {
-    wx.navigateTo({ url: '/pages/agreement/index' })
+    this.goPage('/pages/agreement/index')
   },
 
   // 登录后如果资料里没有当前版本的同意记录，强制到协议页勾选一次
@@ -603,12 +676,14 @@ Page({
 
   goOrders: function (event) {
     const status = event.currentTarget.dataset.status || 'all'
+    motion.haptic('select')
     this.setData({ orderFilter: status })
     ui.setStorage('orderFilterStatus', status)
     wx.switchTab({ url: '/pages/orders/list' })
   },
 
   goAccepted: function () {
+    motion.haptic('light')
     ui.setStorage('orderListMode', 'accept')
     wx.switchTab({ url: '/pages/orders/list' })
   },
@@ -617,29 +692,41 @@ Page({
     // 「成为接单员」现在是认证的唯一入口：页面里既有申请表单，
     // 也有「认证进度」二级入口，所以待审核/已通过都照常进去看状态，
     // 不再在这里弹 toast 挡住。
-    wx.navigateTo({ url: '/pages/mine/apply' })
+    this.goPage('/pages/mine/apply')
+  },
+
+  // 所有「跳二级页」的入口统一走这里：加触感反馈 + 统一的失败提示，
+  // 免得每个方法各写一份（原来失败时是静默的，点了没反应）
+  goPage: function (url) {
+    motion.haptic('light')
+    wx.navigateTo({
+      url: url,
+      fail: function (err) {
+        ui.toast({ title: '页面打开失败：' + (err.errMsg || '未知错误'), icon: 'none' })
+      },
+    })
   },
 
   goPoints: function () {
-    wx.navigateTo({ url: '/pages/mine/points' })
+    this.goPage('/pages/mine/points')
   },
 
   goWallet: function () {
-    wx.navigateTo({ url: '/pages/mine/wallet' })
+    this.goPage('/pages/mine/wallet')
   },
 
   // 后台各模块的入口统一收进「管理员工作台」，本页不再散着列。
   // 这里只留一个跳转，具体能进哪几个页面由工作台按权限决定。
   goDashboard: function () {
-    wx.navigateTo({ url: '/pages/admin/dashboard' })
+    this.goPage('/pages/admin/dashboard')
   },
 
   goAddress: function () {
-    wx.navigateTo({ url: '/pages/mine/address' })
+    this.goPage('/pages/mine/address')
   },
 
   goRental: function () {
-    wx.navigateTo({ url: '/pages/rental/index' })
+    this.goPage('/pages/rental/index')
   },
 
   // 点头像区 → 改头像和用户名（唯一入口，菜单里不重复列）
@@ -649,23 +736,23 @@ Page({
       ui.toast({ title: '该功能暂未开放', icon: 'none' })
       return
     }
-    wx.navigateTo({ url: '/pages/mine/profile' })
+    this.goPage('/pages/mine/profile')
   },
 
   // 我的订单里的「待评价」是评价页的唯一入口
   goMyReviews: function () {
-    wx.navigateTo({ url: '/pages/mine/reviews' })
+    this.goPage('/pages/mine/reviews')
   },
 
   goCredit: function () {
-    wx.navigateTo({ url: '/pages/mine/credit' })
+    this.goPage('/pages/mine/credit')
   },
 
   // ---- 灰度开关控制的入口 ----
   // 这些页面都由灰度开关控制，页面内部还会再判一次，这里只是决定入口出不出现
 
   goMessages: function () {
-    wx.navigateTo({ url: '/pages/mine/messages' })
+    this.goPage('/pages/mine/messages')
   },
 
   // 注意：认证进度（pages/mine/cert）不再从本页直接进，
@@ -673,11 +760,11 @@ Page({
   // 本页也不要有任何指向 cert 的入口。
 
   goMall: function () {
-    wx.navigateTo({ url: '/pages/mine/mall' })
+    this.goPage('/pages/mine/mall')
   },
 
   goFeedback: function () {
-    wx.navigateTo({ url: '/pages/mine/feedback' })
+    this.goPage('/pages/mine/feedback')
   },
 
   // 不用 wx.showModal：预览环境里它可能永不回调，导致点了没反应。

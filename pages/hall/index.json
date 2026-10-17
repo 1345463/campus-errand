@@ -1,5 +1,10 @@
 {
-  "navigationBarTitleText": "任务大厅",
+  "navigationStyle": "custom",
   "enablePullDownRefresh": true,
-  "onReachBottomDistance": 60
+  "backgroundTextStyle": "light",
+  "backgroundColor": "#2E7CF6",
+  "onReachBottomDistance": 60,
+  "usingComponents": {
+    "nav-bar": "/components/nav-bar/index"
+  }
 }

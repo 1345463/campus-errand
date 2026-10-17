@@ -3,6 +3,7 @@ const api = require('../../utils/api')
 const guard = require('../../utils/guard')
 const services = require('../../utils/services')
 const flags = require('../../utils/flags')
+const motion = require('../../utils/motion')
 
 // 分页每页条数。服务端 list_my_orders 上限 50，这里取 20 兼顾首屏速度
 const PAGE_SIZE = 20
@@ -59,12 +60,23 @@ Page({
     searchOn: false,
     keyword: '',
     searching: false,
+
+    // 自定义导航（fixed）让位 + 滚动联动 + 骨架屏行数
+    navTotal: 64,
+    motionClass: '',
+    stuck: false,
+    showTop: false,
+    skeletonRows: [1, 2, 3, 4],
   },
 
   onLoad: function (options) {
-    if (options && options.mode === 'accept') {
-      this.setData({ mode: 'accept' })
+    const sys = motion.systemInfo()
+    const patch = {
+      navTotal: sys.navTotalHeight,
+      motionClass: motion.rootClass(),
     }
+    if (options && options.mode === 'accept') patch.mode = 'accept'
+    this.setData(patch)
     const page = this
     flags.ensure().then(function () {
       page.setData({
@@ -74,10 +86,33 @@ Page({
     })
   },
 
+  onPageScroll: function (event) {
+    const top = event.scrollTop || 0
+    const stuck = top > 30
+    const showTop = top > 600
+    if (stuck !== this.data.stuck || showTop !== this.data.showTop) {
+      this.setData({ stuck: stuck, showTop: showTop })
+    }
+  },
+
+  goTop: function () {
+    motion.haptic('light')
+    if (typeof wx.pageScrollTo === 'function') {
+      wx.pageScrollTo({ scrollTop: 0, duration: 300 })
+    }
+  },
+
   onPullDownRefresh: function () {
     const page = this
     page.checkAndLoad().then(function () {
-      wx.stopPullDownRefresh()
+      if (typeof wx.stopPullDownRefresh === 'function') {
+        try {
+          wx.stopPullDownRefresh()
+        } catch (e) {
+          /* 忽略 */
+        }
+      }
+      motion.haptic('light')
     })
   },
 
@@ -173,7 +208,8 @@ Page({
     return page
       .fetchPage(0)
       .then(function (rows) {
-        const list = page.mapRows(rows)
+        // 阶梯入场：每一项带自己的 --d 延迟，列表是一条条「长」出来的
+        const list = motion.stagger(page.mapRows(rows))
         page.setData({
           list: list,
           loading: false,
@@ -195,7 +231,8 @@ Page({
     return page
       .fetchPage(page.data.list.length)
       .then(function (rows) {
-        const more = page.mapRows(rows)
+        // 追加的第二页从第 0ms 开始，不要接着第一页的延迟往下排
+        const more = motion.stagger(page.mapRows(rows))
         page.setData({
           list: page.data.list.concat(more),
           loadingMore: false,
@@ -233,7 +270,7 @@ Page({
       .searchMyOrders(keyword, 30)
       .then(function (rows) {
         page.setData({
-          list: page.mapRows(rows),
+          list: motion.stagger(page.mapRows(rows)),
           searching: true,
           loading: false,
           hasMore: false,
@@ -254,6 +291,7 @@ Page({
 
   switchMode: function (event) {
     const page = this
+    motion.haptic('select')
     // 切换模式会换数据源，搜索结果不再适用，一起清掉
     this.setData({ mode: event.currentTarget.dataset.key, keyword: '', searching: false }, function () {
       page.load()
@@ -262,12 +300,14 @@ Page({
 
   switchStatus: function (event) {
     const page = this
+    motion.haptic('select')
     this.setData({ status: event.currentTarget.dataset.key }, function () {
       page.load()
     })
   },
 
   openDetail: function (event) {
+    motion.haptic('light')
     wx.navigateTo({
       url: '/pages/order/detail?id=' + event.currentTarget.dataset.id,
     })

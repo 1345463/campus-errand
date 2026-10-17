@@ -1,34 +1,135 @@
-/* 订单列表：搜索框 */
+/* 订单列表 */
 
+.orders-pad {
+  padding: 0 20rpx;
+}
+
+/* ===== 吸顶筛选 ===== */
+.sticky-bar {
+  background: var(--card);
+  border-bottom: 1rpx solid var(--line);
+  padding: 16rpx 0 14rpx;
+}
+
+.mode-row {
+  padding: 0 20rpx 12rpx;
+}
+
+.seg {
+  display: flex;
+  flex: none;
+  background: var(--fill);
+  border-radius: 999rpx;
+  padding: 4rpx;
+}
+.seg-item {
+  flex: 1;
+  text-align: center;
+  padding: 12rpx 20rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: var(--t3);
+}
+.seg-item.on {
+  background: var(--brand);
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: var(--sd-brand);
+}
+
+/* 状态：横滑，六个状态一行放不下就左右滑 */
+.chip-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+.chip-scroll-inner {
+  display: flex;
+  padding: 0 20rpx;
+}
+.chip-scroll-inner .chip {
+  margin: 0 14rpx 0 0;
+  flex: none;
+}
+
+/* ===== 搜索框 ===== */
 .search-row {
   display: flex;
   align-items: center;
-  margin-bottom: 20rpx;
+  padding: 20rpx 20rpx 0;
 }
-
 .search-input {
   flex: 1;
   height: 72rpx;
   padding: 0 20rpx;
   border-radius: 36rpx;
-  background: var(--fill);
+  background: var(--card);
+  border: 1rpx solid var(--line);
   font-size: 28rpx;
   color: var(--t1);
 }
-
 .search-btn {
   margin-left: 16rpx;
   padding: 0 28rpx;
   height: 72rpx;
   line-height: 72rpx;
   border-radius: 36rpx;
-  background: var(--brand);
+  background: linear-gradient(135deg, #2E7CF6 0%, #4FA1FF 100%);
   color: #FFFFFF;
   font-size: 28rpx;
+  box-shadow: var(--sd-brand);
 }
-
 .search-clear {
   margin-left: 16rpx;
   font-size: 26rpx;
   color: var(--t3);
+}
+
+/* ===== 空态 ===== */
+.empty {
+  padding: 80rpx 0;
+}
+.empty-emoji {
+  font-size: 72rpx;
+  margin-bottom: 16rpx;
+}
+
+/* ===== 状态胶囊：比原来的纯文字更好扫 ===== */
+.status-pill {
+  padding: 6rpx 18rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  background: var(--fill);
+  color: var(--t2);
+}
+.status-pill.status-pending {
+  background: var(--warn-100);
+  color: var(--warn);
+}
+.status-pill.status-accepted {
+  background: var(--brand-100);
+  color: var(--brand);
+}
+.status-pill.status-waiting_confirm {
+  background: var(--accent-100);
+  color: var(--accent);
+}
+.status-pill.status-done {
+  background: var(--success-100);
+  color: var(--success);
+}
+.status-pill.status-canceled {
+  background: var(--fill);
+  color: var(--t3);
+}
+
+.hall-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28rpx 0 40rpx;
+  font-size: 24rpx;
+  color: var(--t3);
+}
+.hall-more .refresh-spin {
+  margin-right: 12rpx;
 }

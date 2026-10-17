@@ -1,0 +1,57 @@
+/* 自定义导航栏 —— 样式与 app.wxss 的 .nav-* 保持一致，
+   这里再写一份是为了让组件自带样式，不依赖引用方有没有 app.wxss。 */
+
+.nav-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.nav-bar-bg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+}
+
+.nav-bar-body {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-left: 20rpx;
+  box-sizing: border-box;
+}
+
+.nav-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  max-width: 340rpx;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 返回箭头用两条边框旋转 45° 画出来。
+   不用字符 ‹ / < —— 不同机型字体下基线不一致，看着忽上忽下。 */
+.nav-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60rpx;
+  height: 60rpx;
+  margin-right: 6rpx;
+  border-radius: 50%;
+}
+
+.nav-back-arrow {
+  width: 18rpx;
+  height: 18rpx;
+  margin-left: 6rpx;
+  border-left: 4rpx solid currentColor;
+  border-bottom: 4rpx solid currentColor;
+  transform: rotate(45deg);
+}

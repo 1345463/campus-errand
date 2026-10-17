@@ -1,99 +1,208 @@
-<view class="page">
-  <!-- 接单员门槛：没通过认证就整页只显示这张卡，任务列表一个字都不拉 -->
-  <view wx:if="{{locked}}" class="card lock-card">
-    <view class="lock-icon">🔒</view>
-    <view class="lock-title">{{lockTitle}}</view>
-    <view class="hint lock-desc">{{lockDesc}}</view>
-    <view class="btn-primary top-gap" bindtap="tapLock">{{lockBtn}}</view>
+<view class="page hall {{motionClass}}">
+  <nav-bar title="任务大厅" showBack="{{true}}" flow="{{true}}" />
+
+  <!-- 自定义导航是 fixed 的，内容必须自己让位，否则第一屏被导航栏盖住 -->
+  <view style="height:{{navTotal}}px"></view>
+
+  <!-- ===== 接单员门槛：没通过认证就整页只显示这张卡，任务列表一个字都不拉 ===== -->
+  <view wx:if="{{locked}}" class="hall-pad">
+    <view class="card lock-card anim anim-pop">
+      <view class="lock-icon">🔒</view>
+      <view class="lock-title">{{lockTitle}}</view>
+      <view class="hint lock-desc">{{lockDesc}}</view>
+      <view
+        class="btn-primary btn-shine top-gap pressable"
+        hover-class="press"
+        hover-stay-time="120"
+        bindtap="tapLock"
+      >{{lockBtn}}</view>
+    </view>
   </view>
 
   <block wx:else>
-    <!-- 筛选与排序：沿用灰度 hall_filter，没开的时候整块不出现 -->
-    <view wx:if="{{filterOn}}" class="card">
-      <view class="section-head">
-        <text class="section-title">服务类型</text>
-      </view>
-      <view class="filter-row">
-        <view
-          class="chip {{filterType === item.type ? 'active' : ''}}"
-          wx:for="{{filters}}"
-          wx:key="type"
-          data-type="{{item.type}}"
-          bindtap="pickFilter"
-        >{{item.name}}</view>
-      </view>
+    <!-- ===== 吸顶筛选栏 =====
+         服务类型横滑 + 排序分段控件，滚动时始终吸在导航栏下方。
+         楼栋 / 楼层收进半屏面板，避免筛选栏太高压掉列表。 -->
+    <view class="sticky-bar {{stuck ? 'stuck' : ''}}" style="top:{{navTotal}}px">
+      <scroll-view scroll-x class="chip-scroll" show-scrollbar="{{false}}">
+        <view class="chip-scroll-inner">
+          <view
+            class="chip pressable {{filterType === f.type ? 'active' : ''}}"
+            wx:for="{{filters}}"
+            wx:for-item="f"
+            wx:key="type"
+            hover-class="press"
+            hover-stay-time="100"
+            data-type="{{f.type}}"
+            bindtap="pickFilter"
+          >{{f.name}}</view>
+        </view>
+      </scroll-view>
 
-      <view class="section-head">
-        <text class="section-title">排序</text>
-      </view>
-      <view class="filter-row">
+      <view class="filter-bar">
+        <view class="seg">
+          <view
+            class="seg-item pressable {{sortKey === s.key ? 'on' : ''}}"
+            wx:for="{{sorts}}"
+            wx:for-item="s"
+            wx:key="key"
+            hover-class="press"
+            hover-stay-time="100"
+            data-key="{{s.key}}"
+            bindtap="pickSort"
+          >{{s.name}}</view>
+        </view>
         <view
-          class="chip {{sortKey === item.key ? 'active' : ''}}"
-          wx:for="{{sorts}}"
-          wx:key="key"
-          data-key="{{item.key}}"
-          bindtap="pickSort"
-        >{{item.name}}</view>
+          wx:if="{{buildingOn}}"
+          class="filter-more pressable {{building || floor ? 'on' : ''}}"
+          hover-class="press"
+          hover-stay-time="100"
+          bindtap="openFilter"
+        >🏢 {{placeText}} ▾</view>
+        <view
+          class="filter-reset pressable"
+          hover-class="press"
+          hover-stay-time="100"
+          bindtap="resetFilter"
+        >重置</view>
       </view>
-    </view>
-
-    <!-- 楼栋 / 楼层：单独一个灰度开关，超管可以只关这一块 -->
-    <view wx:if="{{buildingOn}}" class="card">
-      <view class="section-head">
-        <text class="section-title">按送达位置筛选</text>
-        <text class="section-more" bindtap="resetFilter">重置</text>
-      </view>
-      <view class="pick-row">
-        <picker
-          class="pick-item"
-          mode="selector"
-          range="{{buildingNames}}"
-          value="{{buildingIndex}}"
-          bindchange="pickBuilding"
-        >
-          <view class="pick-text">🏢 {{building || '全部楼栋'}}</view>
-        </picker>
-        <picker
-          class="pick-item"
-          mode="selector"
-          range="{{floorNames}}"
-          value="{{floorIndex}}"
-          bindchange="pickFloor"
-        >
-          <view class="pick-text">🛗 {{floor || '全部楼层'}}</view>
-        </picker>
-      </view>
-      <view class="hint">楼栋取的是任务的送达地址，取件点（比如南门快递柜）不在筛选范围内</view>
     </view>
 
     <view wx:if="{{totalText}}" class="hall-count">{{totalText}}</view>
 
-    <view wx:if="{{loading}}" class="empty">加载中…</view>
-    <view wx:elif="{{hallError}}" class="empty" bindtap="retry">加载失败，点这里重试</view>
+    <!-- ===== 骨架屏：第一次进来先出灰条，避免白屏后整块突然跳出来 ===== -->
+    <view wx:if="{{loading}}" class="hall-pad">
+      <view class="sk-card" wx:for="{{skeletonRows}}" wx:for-item="row" wx:key="*this">
+        <view class="sk sk-title"></view>
+        <view class="sk sk-line mid"></view>
+        <view class="sk sk-line short"></view>
+      </view>
+    </view>
+
+    <view
+      wx:elif="{{hallError}}"
+      class="empty pressable"
+      hover-class="press"
+      bindtap="retry"
+    >加载失败，点这里重试</view>
+
     <view wx:elif="{{hall.length === 0}}" class="empty">
+      <view class="empty-emoji">🔍</view>
       <view>这个条件下暂时没有任务</view>
       <view class="hint top-gap">换个筛选，或者晚点再来看看</view>
     </view>
 
-    <view
-      class="card hall-card"
-      wx:for="{{hall}}"
-      wx:for-item="task"
-      wx:key="id"
-      data-id="{{task.id}}"
-      bindtap="openDetail"
-    >
-      <view class="hall-head">
-        <text class="hall-title">{{task.title}}</text>
-        <text class="hall-reward">¥{{task.reward}}</text>
+    <!-- ===== 任务卡片流 ===== -->
+    <view wx:else class="hall-pad">
+      <view
+        class="hall-card anim anim-up pressable"
+        wx:for="{{hall}}"
+        wx:for-item="task"
+        wx:key="id"
+        style="--d:{{task.delay}}ms"
+        hover-class="press-lift"
+        hover-stay-time="120"
+        data-id="{{task.id}}"
+        bindtap="openDetail"
+      >
+        <view class="hall-top">
+          <view class="hall-badge" style="background:{{task.tint}}">{{task.icon}}</view>
+          <view class="hall-main">
+            <view class="hall-title">{{task.title}}</view>
+            <view class="hall-meta">{{task.serviceName}} · {{task.createdText}}</view>
+          </view>
+          <view class="hall-reward-box">
+            <view class="hall-reward">¥{{task.reward}}</view>
+            <view class="hall-reward-unit">赏金</view>
+          </view>
+        </view>
+
+        <view class="hall-where">
+          <text class="hall-where-icon">📍</text>
+          <text class="hall-where-text">{{task.whereText}}</text>
+        </view>
+
+        <view wx:if="{{task.boosted || task.discountText}}" class="hall-tags">
+          <view wx:if="{{task.boosted}}" class="pill pill-brand">🚀 优先推送</view>
+          <view wx:if="{{task.discountText}}" class="pill pill-success">{{task.discountText}}</view>
+        </view>
+
+        <!-- 不用进详情就能接单：服务端 accept_order 里同样的门槛校验一个不少 -->
+        <view class="hall-actions">
+          <text class="hall-actions-hint">点卡片看完整详情</text>
+          <view
+            class="hall-btn-primary pressable"
+            hover-class="press-strong"
+            hover-stay-time="100"
+            data-id="{{task.id}}"
+            catchtap="quickAccept"
+          >立即接单</view>
+        </view>
       </view>
-      <view wx:if="{{task.boosted}}" class="hall-boost">🚀 优先推送</view>
-      <view class="hall-meta">{{task.serviceName}} · {{task.createdText}}</view>
-      <view class="hall-where">{{task.whereText}}</view>
-      <view wx:if="{{task.discountText}}" class="hall-discount">{{task.discountText}}</view>
     </view>
 
-    <view wx:if="{{loadingMore}}" class="empty">加载更多…</view>
-    <view wx:elif="{{hasMore && hall.length > 0}}" class="empty" bindtap="loadMore">上拉或点这里加载更多</view>
+    <view wx:if="{{loadingMore}}" class="hall-more">
+      <view class="refresh-spin"></view>
+      <text>加载更多…</text>
+    </view>
+    <view
+      wx:elif="{{hasMore && hall.length > 0}}"
+      class="hall-more pressable"
+      hover-class="press"
+      bindtap="loadMore"
+    >上拉或点这里加载更多</view>
   </block>
+
+  <!-- ===== 回到顶部 ===== -->
+  <view
+    wx:if="{{showTop}}"
+    class="fab-mini to-top anim anim-pop pressable"
+    hover-class="press"
+    bindtap="goTop"
+  >↑</view>
+
+  <!-- ===== 楼栋 / 楼层筛选面板 ===== -->
+  <view wx:if="{{filterSheet}}" class="sheet-mask anim anim-fade" bindtap="closeFilter"></view>
+  <view class="sheet {{filterSheet ? 'open' : ''}} safe-bottom">
+    <view class="sheet-grip"></view>
+    <view class="sheet-title">按送达位置筛选</view>
+    <view class="sheet-sub">楼栋取的是任务的送达地址，取件点（比如南门快递柜）不在筛选范围内</view>
+
+    <view class="sheet-block-title">楼栋</view>
+    <view class="chip-row">
+      <view
+        class="chip pressable {{building === b.value ? 'active' : ''}}"
+        wx:for="{{buildings}}"
+        wx:for-item="b"
+        wx:key="value"
+        hover-class="press"
+        hover-stay-time="100"
+        data-kind="building"
+        data-value="{{b.value}}"
+        bindtap="pickPlace"
+      >{{b.name}}</view>
+    </view>
+
+    <view class="sheet-block-title">楼层</view>
+    <view class="chip-row">
+      <view
+        class="chip pressable {{floor === f.value ? 'active' : ''}}"
+        wx:for="{{floors}}"
+        wx:for-item="f"
+        wx:key="value"
+        hover-class="press"
+        hover-stay-time="100"
+        data-kind="floor"
+        data-value="{{f.value}}"
+        bindtap="pickPlace"
+      >{{f.name}}</view>
+    </view>
+
+    <view class="sheet-actions">
+      <view class="sheet-btn-ghost pressable" hover-class="press" bindtap="clearPlace">清空</view>
+      <view class="sheet-btn-primary btn-shine pressable" hover-class="press" bindtap="applyPlace">
+        查看结果
+      </view>
+    </view>
+  </view>
 </view>

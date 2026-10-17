@@ -1,27 +1,48 @@
-<view class="page">
-  <view class="filter-row">
-    <view
-      class="chip {{mode === item.key ? 'active' : ''}}"
-      wx:for="{{modes}}"
-      wx:key="key"
-      data-key="{{item.key}}"
-      bindtap="switchMode"
-    >{{item.label}}</view>
-    <view
-      class="chip {{mode === 'admin' ? 'active' : ''}}"
-      wx:if="{{isAdmin}}"
-      data-key="admin"
-      bindtap="switchMode"
-    >全部订单（管理）</view>
-  </view>
-  <view class="filter-row">
-    <view
-      class="chip {{status === item.key ? 'active' : ''}}"
-      wx:for="{{statuses}}"
-      wx:key="key"
-      data-key="{{item.key}}"
-      bindtap="switchStatus"
-    >{{item.label}}</view>
+<view class="page orders {{motionClass}}">
+  <nav-bar title="我的订单" flow="{{true}}" />
+
+  <!-- 自定义导航是 fixed 的，内容必须自己让位 -->
+  <view style="height:{{navTotal}}px"></view>
+
+  <!-- ===== 吸顶筛选：模式 + 状态 ===== -->
+  <view class="sticky-bar {{stuck ? 'stuck' : ''}}" style="top:{{navTotal}}px">
+    <view class="mode-row">
+      <view class="seg">
+        <view
+          class="seg-item pressable {{mode === m.key ? 'on' : ''}}"
+          wx:for="{{modes}}"
+          wx:for-item="m"
+          wx:key="key"
+          hover-class="press"
+          hover-stay-time="100"
+          data-key="{{m.key}}"
+          bindtap="switchMode"
+        >{{m.label}}</view>
+        <view
+          wx:if="{{isAdmin}}"
+          class="seg-item pressable {{mode === 'admin' ? 'on' : ''}}"
+          hover-class="press"
+          hover-stay-time="100"
+          data-key="admin"
+          bindtap="switchMode"
+        >全部订单</view>
+      </view>
+    </view>
+
+    <scroll-view scroll-x class="chip-scroll" show-scrollbar="{{false}}">
+      <view class="chip-scroll-inner">
+        <view
+          class="chip pressable {{status === s.key ? 'active' : ''}}"
+          wx:for="{{statuses}}"
+          wx:for-item="s"
+          wx:key="key"
+          hover-class="press"
+          hover-stay-time="100"
+          data-key="{{s.key}}"
+          bindtap="switchStatus"
+        >{{s.label}}</view>
+      </view>
+    </scroll-view>
   </view>
 
   <!-- 订单搜索：灰度 order_search 打开后才出现 -->
@@ -35,24 +56,47 @@
       bindinput="onKeywordInput"
       bindconfirm="doSearch"
     ></input>
-    <view class="search-btn" bindtap="doSearch">搜索</view>
-    <view wx:if="{{searching}}" class="search-clear" bindtap="clearSearch">清空</view>
+    <view class="search-btn pressable" hover-class="press" bindtap="doSearch">搜索</view>
+    <view wx:if="{{searching}}" class="search-clear pressable" hover-class="press" bindtap="clearSearch">
+      清空
+    </view>
   </view>
 
-  <view wx:if="{{errorText}}" class="mod-bar">
+  <view wx:if="{{errorText}}" class="mod-bar anim anim-fade">
     <view class="mod-text">{{errorText}}</view>
   </view>
 
-  <view wx:if="{{needLogin}}" class="empty">登录后才能查看订单</view>
-  <view wx:elif="{{loading}}" class="empty">加载中…</view>
-  <view wx:elif="{{list.length === 0 && searching}}" class="empty">没有匹配的订单</view>
-  <view wx:elif="{{list.length === 0}}" class="empty">暂无任务！</view>
+  <view wx:if="{{needLogin}}" class="empty">
+    <view class="empty-emoji">🔑</view>
+    <view>登录后才能查看订单</view>
+  </view>
+
+  <!-- 骨架屏 -->
+  <view wx:elif="{{loading}}" class="orders-pad">
+    <view class="sk-card" wx:for="{{skeletonRows}}" wx:for-item="row" wx:key="*this">
+      <view class="sk sk-title"></view>
+      <view class="sk sk-line mid"></view>
+      <view class="sk sk-line short"></view>
+    </view>
+  </view>
+
+  <view wx:elif="{{list.length === 0 && searching}}" class="empty">
+    <view class="empty-emoji">🔍</view>
+    <view>没有匹配的订单</view>
+  </view>
+  <view wx:elif="{{list.length === 0}}" class="empty">
+    <view class="empty-emoji">📭</view>
+    <view>暂无订单</view>
+    <view class="hint top-gap">去首页发一单，或者到任务大厅接单</view>
+  </view>
 
   <!-- 已删除订单的入口必须放在列表判空之外：
        否则把所有单都删掉后列表为空，就再也找不到「显示已删除订单」去恢复了 -->
   <block wx:if="{{!needLogin && !loading}}">
     <view class="hidden-foot">
-      <text class="link-ghost" bindtap="toggleHidden">{{showHidden ? '隐藏已删除订单' : '显示已删除订单'}}</text>
+      <text class="link-ghost pressable" hover-class="press" bindtap="toggleHidden">
+        {{showHidden ? '隐藏已删除订单' : '显示已删除订单'}}
+      </text>
     </view>
     <block wx:if="{{showHidden}}">
       <view wx:if="{{hiddenLoading}}" class="hint">加载中…</view>
@@ -66,48 +110,73 @@
           <view class="task-meta">{{item.serviceName}} · {{item.createdText}}</view>
           <view class="task-foot">
             <text class="status-{{item.status}}">{{item.statusText}}</text>
-            <text class="link-primary" data-id="{{item.id}}" bindtap="restoreOrder">恢复显示</text>
+            <text class="link-primary pressable" hover-class="press" data-id="{{item.id}}" catchtap="restoreOrder">
+              恢复显示
+            </text>
           </view>
         </view>
       </view>
     </block>
   </block>
 
-  <view wx:if="{{list.length > 0}}">
+  <view wx:if="{{list.length > 0}}" class="orders-pad">
     <view
-      class="order-card"
+      class="order-card anim anim-up pressable"
       wx:for="{{list}}"
+      wx:for-item="order"
       wx:key="id"
+      style="--d:{{order.delay}}ms"
+      hover-class="press-lift"
+      hover-stay-time="120"
       bindtap="openDetail"
-      data-id="{{item.id}}"
+      data-id="{{order.id}}"
     >
       <view class="task-row">
-        <text class="task-title">{{item.title}}</text>
-        <text class="reward">¥{{item.reward}}</text>
+        <text class="task-title">{{order.title}}</text>
+        <text class="reward">¥{{order.reward}}</text>
       </view>
-      <view class="task-meta">{{item.serviceName}} · {{item.createdText}}</view>
-      <view class="task-meta">{{item.routeText}}</view>
+      <view class="task-meta">{{order.serviceName}} · {{order.createdText}}</view>
+      <view class="task-meta">{{order.routeText}}</view>
       <view wx:if="{{mode === 'admin'}}" class="task-meta">
-        发布 {{item.ownerName}}<text wx:if="{{item.runnerName}}"> · 接单 {{item.runnerName}}</text>
+        发布 {{order.ownerName}}<text wx:if="{{order.runnerName}}"> · 接单 {{order.runnerName}}</text>
       </view>
       <view class="task-foot">
-        <text class="status-{{item.status}}">{{item.statusText}}</text>
+        <text class="status-pill status-{{order.status}}">{{order.statusText}}</text>
         <text class="menu-arrow">详情 ></text>
       </view>
 
-      <view wx:if="{{item.canDelete}}" class="card-actions">
-        <text wx:if="{{hideArmId !== item.id}}" class="link-danger" data-id="{{item.id}}" catchtap="askHide">删除订单</text>
+      <view wx:if="{{order.canDelete}}" class="card-actions">
+        <text
+          wx:if="{{hideArmId !== order.id}}"
+          class="link-danger pressable"
+          hover-class="press"
+          data-id="{{order.id}}"
+          catchtap="askHide"
+        >删除订单</text>
         <block wx:else>
-          <text class="link-danger strong" data-id="{{item.id}}" catchtap="askHide">再点一次确认删除</text>
-          <text class="link-ghost" catchtap="cancelHide">取消</text>
+          <text class="link-danger strong pressable" hover-class="press" data-id="{{order.id}}" catchtap="askHide">
+            再点一次确认删除
+          </text>
+          <text class="link-ghost pressable" hover-class="press" catchtap="cancelHide">取消</text>
         </block>
       </view>
-      <view wx:if="{{item.takedown}}" class="task-meta">该订单因违规被管理员下架</view>
+      <view wx:if="{{order.takedown}}" class="task-meta">该订单因违规被管理员下架</view>
     </view>
 
     <!-- 分页：只有灰度 order_paging 打开、且不在搜索态时才显示 -->
-    <view wx:if="{{loadingMore}}" class="empty">加载中…</view>
-    <view wx:elif="{{pagingOn && hasMore}}" class="empty">上拉加载更多</view>
-    <view wx:elif="{{pagingOn && !searching}}" class="empty">已经到底了</view>
+    <view wx:if="{{loadingMore}}" class="hall-more">
+      <view class="refresh-spin"></view>
+      <text>加载更多…</text>
+    </view>
+    <view wx:elif="{{pagingOn && hasMore}}" class="hall-more">上拉加载更多</view>
+    <view wx:elif="{{pagingOn && !searching}}" class="hall-more">已经到底了</view>
   </view>
+
+  <!-- 回到顶部 -->
+  <view
+    wx:if="{{showTop}}"
+    class="fab-mini to-top anim anim-pop pressable"
+    hover-class="press"
+    bindtap="goTop"
+  >↑</view>
 </view>

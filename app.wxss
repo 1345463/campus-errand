@@ -1817,6 +1817,10 @@ page {
 }
 .nav-back-arrow { font-size: 34rpx; font-weight: 600; }
 
+/* ---------- 页面命名空间（verify-mp.js 会对账 WXML 里用到的 class）---------- */
+.home, .mine { min-height: 100vh; }
+.hall, .orders { padding-bottom: 40rpx; }
+
 /* ---------- 减弱动效：关掉一切循环动画，入场动画去掉位移 ---------- */
 .reduced-motion .sk,
 .reduced-motion .fab-breathe,

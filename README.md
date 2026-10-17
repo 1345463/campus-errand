@@ -121,12 +121,15 @@ node --experimental-vm-modules tools/check-mp.js .
 对应小节 + `docs/ITERATIONS.md`；想看某一轮"引入了哪些文件"，`git show --stat <commit>`。
 从这个提交往后的所有改动都是真实 diff，不再有这个限制。
 
-推送：
+推送（已配 SSH 免密，密钥 `C:/campus-ssh/id_ed25519_campus`）：
 
 ```bash
-git remote add origin https://github.com/1345463/campus-errand.git
+git remote add origin git@github.com:1345463/campus-errand.git
 git push -u origin main && git push --tags
 ```
+
+日常不要手动敲这些 —— 用 `python scripts/sync_github.py "改动摘要"`（工作区根目录），
+它会先跑校验三件套，通过后才提交推送；每天 23:30 还有一个兜底的自动同步任务。
 
 ## 七、部署
 

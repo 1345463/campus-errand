@@ -237,7 +237,7 @@ page {
    原来只有一层 var(--fill) 底色：放在 var(--bg) 页面上几乎看不见，
    放进 #FFFFFF 卡片里也只是隐约一片，用户根本分不清哪里能输入、有几项。
 
-   ⚠ 这里**不要**给 input 加 `box-sizing: border-box`，也**不要**加 `width: 100%`：
+   ⚠ 注意：不要给 input 加 box-sizing: border-box，也不要加 width: 100%：
    小程序的 input 自带一个固定默认高度（约 1.4em）。一旦改成 border-box，
    padding 会从这个高度里扣，content 高度被压成 0 —— 实测描边+padding 刚好占满整个盒子，
    文字上下被裁掉一半（登录页就是这么坏掉的）。

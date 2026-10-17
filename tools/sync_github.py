@@ -3,7 +3,7 @@
 把 campus-errand 的当前改动同步到 GitHub。
 
 设计原则（重要）：
-1. **校验不过就不提交** —— 先跑小程序三件套校验，任一失败就原样退出并报告，
+1. **校验不过就不提交** —— 先跑小程序四件套校验（语法 / 页面 / 预检 / 样式），任一失败就原样退出并报告，
    绝不把编译不过的代码推上去。
 2. **提交信息必须说明这一轮改了什么**，用 -m 写清楚，不要 "update"。
 3. 只在有真实改动时提交；没有改动就直接推（把上一轮忘记推的提交补上）。
@@ -49,7 +49,7 @@ def bad(msg):
 
 
 def verify():
-    """小程序三件套校验，返回 (是否通过, 失败项列表)"""
+    """小程序四件套校验，返回 (是否通过, 失败项列表)"""
     fails = []
 
     # 1) 全量语法检查
@@ -86,6 +86,17 @@ def verify():
         bad('check-mp.js\n%s' % (r.stdout or r.stderr)[:800])
         fails.append('check-mp.js')
 
+    # 4) style-lint.js（wxss/wxml 语法 + CSS 变量定义）
+    #    为什么加这一步：app.wxss 注释里混进一个反引号，三件套全绿，
+    #    直到点「发布」才被微信编译器打回 app.wxss:1663:12 error at token。
+    r = subprocess.run([NODE, os.path.join(REPO, 'tools', 'style-lint.js'), REPO],
+                       cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    if r.returncode == 0:
+        ok('style-lint.js（%s）' % (r.stdout or '').strip().split('\n')[0].replace('样式预检：', ''))
+    else:
+        bad('style-lint.js\n%s' % (r.stdout or r.stderr)[:800])
+        fails.append('style-lint.js')
+
     return len(fails) == 0, fails
 
 
@@ -113,7 +124,7 @@ def main():
     ok('当前分支 main')
 
     # 校验
-    print('\n[1/4] 校验三件套')
+    print('\n[1/4] 校验四件套')
     passed, fails = verify()
     if not passed:
         print('\n❌ 校验未通过，拒绝提交。失败项：')

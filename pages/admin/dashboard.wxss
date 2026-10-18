@@ -1,21 +1,27 @@
 /* 管理员工作台：待办数字卡片 + 后台入口列表 */
 
-/* 一行两列的数字卡片，数量超过 2 时自动换行 */
+/* 卡片由 buildCards() 每 3 个分一组，每组渲染成一个独立的 .quick-row。
+   所以这里必须给死 1/3 宽，不能用 flex: 1 —— 否则最后一行只剩 1 张
+   卡片时会被拉满整行（「累计订单」就是这么撑开的，看着像串行了）。
+   宽度扣掉同组两个 16rpx 间隙：(100% - 32rpx) / 3 ≈ 33.3333% - 11rpx */
 .quick-row {
   display: flex;
   flex-wrap: wrap;
 }
 
 .quick-row .quick-item {
-  width: 50%;
+  flex: 0 0 calc(33.3333% - 11rpx);
+  width: calc(33.3333% - 11rpx);
   box-sizing: border-box;
-  padding: 24rpx 0;
-  border-bottom: 1rpx solid #F0F1F3;
+  margin: 0 16rpx 16rpx 0;
+  padding: 24rpx 20rpx;
+  border-radius: var(--r);
+  background: var(--fill);
 }
 
-/* 每行最后一个去掉右侧分隔，避免和卡片内边距打架 */
+/* 每组最后一个去掉右外边距，右侧才和卡片边缘齐平 */
 .quick-row .quick-item.last {
-  border-right: none;
+  margin-right: 0;
 }
 
 .quick-title {
@@ -25,15 +31,21 @@
   line-height: 1.1;
 }
 
-/* 计数为 0 的卡片置灰，但仍可点击进入 */
-.quick-row .quick-item.disabled .quick-title {
-  color: var(--line);
-}
-
 .quick-desc {
   margin-top: 8rpx;
   font-size: 26rpx;
   color: var(--t2);
+}
+
+/* 计数为 0 的卡片弱化，但仍可点进去看空列表。
+   别用 var(--line)：那是 #E6EAF2，比卡片底色 var(--fill) 还浅，
+   数字会彻底看不见。用 --t3 才既弱化又读得出。 */
+.quick-row .quick-item.disabled .quick-title {
+  color: var(--t3);
+}
+
+.quick-row .quick-item.disabled .quick-desc {
+  color: var(--t3);
 }
 
 /* 后台入口列表：复用公共 .menu-* ，这里只补尾部箭头颜色 */

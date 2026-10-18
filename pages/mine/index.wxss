@@ -21,7 +21,10 @@
 .mine-hero {
   position: relative;
   overflow: hidden;
-  padding: 0 32rpx 40rpx;
+  /* 底部内边距必须大于弧形高度（mine-hero-wave 的 72rpx），否则白弧会盖住
+     头像、昵称和身份切换 —— 它们都靠 align-items: flex-end 贴底。
+     现在留 96rpx：弧顶 70rpx + 26rpx 呼吸位。 */
+  padding: 0 32rpx 96rpx;
 }
 
 .hero-bg {

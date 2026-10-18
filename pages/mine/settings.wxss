@@ -1,0 +1,85 @@
+/* 设置页：把「我的」页里那些低频入口收进来，分组成 常用 / 体验 / 账号与权限 / 关于 */
+
+.settings {
+  padding: 0 20rpx 40rpx;
+}
+
+/* 卡片之间留呼吸位：这里每张卡是一个分组 */
+.settings .card {
+  margin-top: 20rpx;
+}
+
+/* 菜单项主体：主标题 + 副说明两行。
+   副说明不能挤掉主标题的位置，所以给外层一个可收缩的列 */
+.menu-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-sub {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: var(--t3);
+  line-height: 1.5;
+}
+
+/* 「复制」这类行内提示，比 menu-value 更弱，且不该抢走箭头的视觉重量 */
+.menu-hint {
+  font-size: 24rpx;
+  color: var(--brand);
+  margin-left: 12rpx;
+}
+
+/* 管理员口令面板：从「我的」页搬过来，样式保持一致 */
+.admin-panel {
+  margin-top: 20rpx;
+  padding: 24rpx;
+  border-radius: var(--r);
+  background: var(--fill);
+}
+
+/* ===== 关于 ===== */
+
+.about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40rpx 20rpx 12rpx;
+  text-align: center;
+}
+
+.about-mark {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 26rpx;
+  background: linear-gradient(135deg, #2E7CF6 0%, #4FA1FF 100%);
+  color: #FFFFFF;
+  font-size: 46rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--sd-brand);
+}
+
+.about-name {
+  margin-top: 20rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--t1);
+}
+
+.about-meta {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: var(--t3);
+}
+
+.about-notice {
+  margin-top: 24rpx;
+  font-size: 22rpx;
+  line-height: 1.7;
+  color: var(--t3);
+}

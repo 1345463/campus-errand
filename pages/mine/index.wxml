@@ -265,11 +265,6 @@
         <text class="menu-value">{{certText}}</text>
         <text class="menu-arrow">></text>
       </view>
-      <view class="menu-item pressable" hover-class="press" hover-stay-time="100" bindtap="goAddress">
-        <text class="menu-icon">📍</text>
-        <text class="menu-label">我的地址</text>
-        <text class="menu-arrow">></text>
-      </view>
       <view class="menu-item pressable" hover-class="press" hover-stay-time="100" bindtap="goAccepted">
         <text class="menu-icon">🧾</text>
         <text class="menu-label">我接的单</text>
@@ -323,42 +318,6 @@
         <text class="menu-arrow">></text>
       </view>
 
-      <!-- 动效开关：系统没有暴露「减弱动态效果」，这里自己做，
-           关掉后全站循环动画停掉、入场动画去掉位移 -->
-      <view class="menu-item">
-        <text class="menu-icon">✨</text>
-        <text class="menu-label">动效与触感</text>
-        <text class="menu-value">{{reduceMotion ? '已减弱' : '完整'}}</text>
-        <switch
-          class="menu-switch"
-          checked="{{!reduceMotion}}"
-          color="#2E7CF6"
-          bindchange="toggleMotion"
-        />
-      </view>
-
-      <!-- 后台：所有模块的入口都收在「管理员工作台」里，本页不再逐个列出 -->
-      <view class="menu-item pressable" hover-class="press" hover-stay-time="100" bindtap="onAdminTap">
-        <text class="menu-icon">🛡️</text>
-        <text class="menu-label">管理员权限</text>
-        <text class="menu-value">{{isAdmin ? '已开通' : '未开通'}}</text>
-        <text class="menu-arrow">></text>
-      </view>
-      <view wx:if="{{adminPanelOpen && !isAdmin}}" class="card admin-panel">
-        <input
-          class="field-input"
-          placeholder="管理员口令"
-          value="{{adminCode}}"
-          data-key="adminCode"
-          bindinput="onAccountInput"
-        />
-        <view
-          class="btn-primary top-gap pressable {{adminSaving ? 'btn-disabled' : ''}}"
-          hover-class="press"
-          bindtap="submitAdminCode"
-        >{{adminSaving ? '处理中…' : '确认开通'}}</view>
-        <view class="hint">开通后可查看全部订单，并直接获得接单资格（仅调试期使用）</view>
-      </view>
       <!-- 管理员工作台：灰度开且有任意后台权限时出现，是全部后台页的唯一入口 -->
       <view
         wx:if="{{flagsOn.admin_dashboard && isAnyAdmin}}"
@@ -373,12 +332,14 @@
         <text class="menu-arrow">></text>
       </view>
 
-      <view class="menu-item pressable" hover-class="press" hover-stay-time="100" bindtap="goAgreement">
-        <text class="menu-icon">📄</text>
-        <text class="menu-label">用户协议</text>
-        <text class="menu-value">{{agreementVersionText}}</text>
+      <!-- 低频设置收进二级页：我的地址、动效与触感、管理员权限、用户协议、关于 -->
+      <view class="menu-item pressable" hover-class="press" hover-stay-time="100" bindtap="goSettings">
+        <text class="menu-icon">⚙️</text>
+        <text class="menu-label">设置</text>
+        <text class="menu-value">地址 · 动效 · 权限 · 协议</text>
         <text class="menu-arrow">></text>
       </view>
+
       <view class="menu-item last pressable" hover-class="press" hover-stay-time="100" bindtap="onLogout">
         <text class="menu-icon">🚪</text>
         <text class="menu-label">{{logoutArmed ? '再点一次确认退出' : '退出登录'}}</text>

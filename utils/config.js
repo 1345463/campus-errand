@@ -4,7 +4,12 @@ module.exports = {
   endpoint: 'https://mp-api.app.workbuddy.host',
   publishableKey: 'wbpk_yPJnSvicojPmz998PjKfpM_hs4SteZBB4P4ukL80RiCj3xjoM56hZ3b',
   appTitle: '校园跑腿',
+  // 设置页「关于」里显示，每次发版记得 +1
+  appVersion: '1.0.0',
   school: '广东邮电职业技术学院',
+  // 客服联系方式：三个都留空时，「联系客服」自动改成跳意见反馈工单。
+  // 填了的项会在设置页显示成可复制的一行。
+  support: { wechat: '', qq: '', email: '' },
   notice: '服务时间：每日 8:00 - 22:00，其余时间下单将在次日服务时间处理',
   pickupPoint: '线下自提点：进取楼一楼大堂',
   // 常用取件点：发布任务时「取件地址」下面会渲染成快捷标签，点一下即回填。

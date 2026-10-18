@@ -33,6 +33,7 @@
     "pages/mine/profile",
     "pages/mine/credit",
     "pages/mine/reviews",
+    "pages/mine/settings",
     "pages/order/review"
   ],
   "window": {

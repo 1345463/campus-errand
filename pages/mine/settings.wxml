@@ -1,0 +1,123 @@
+<view class="page settings {{motionClass}}">
+  <nav-bar title="设置" showBack="{{true}}" />
+
+  <!-- 自定义导航是 fixed 的，内容必须自己让位，否则第一屏被导航栏盖住 -->
+  <view style="height:{{navTotal}}px"></view>
+
+  <!-- ===== 常用 ===== -->
+  <view class="card anim anim-up">
+    <view class="section-head">
+      <text class="section-title">常用</text>
+    </view>
+    <view class="menu-list">
+      <view class="menu-item last pressable" hover-class="press" hover-stay-time="100" bindtap="goAddress">
+        <text class="menu-icon">📍</text>
+        <text class="menu-label">我的地址</text>
+        <text class="menu-arrow">></text>
+      </view>
+    </view>
+  </view>
+
+  <!-- ===== 体验 ===== -->
+  <view class="card anim anim-up" style="--d:60ms">
+    <view class="section-head">
+      <text class="section-title">体验</text>
+    </view>
+    <view class="menu-list">
+      <view class="menu-item last">
+        <text class="menu-icon">✨</text>
+        <view class="menu-main">
+          <text class="menu-label">动效与触感</text>
+          <text class="menu-sub">关掉后全站循环动画停掉，入场只保留淡入</text>
+        </view>
+        <text class="menu-value">{{reduceMotion ? '已减弱' : '完整'}}</text>
+        <switch
+          class="menu-switch"
+          checked="{{!reduceMotion}}"
+          color="#2E7CF6"
+          bindchange="toggleMotion"
+        />
+      </view>
+    </view>
+  </view>
+
+  <!-- ===== 账号与权限 ===== -->
+  <view class="card anim anim-up" style="--d:100ms">
+    <view class="section-head">
+      <text class="section-title">账号与权限</text>
+    </view>
+    <view class="menu-list">
+      <view class="menu-item last pressable" hover-class="press" hover-stay-time="100" bindtap="onAdminTap">
+        <text class="menu-icon">🛡️</text>
+        <text class="menu-label">管理员权限</text>
+        <text class="menu-value">{{isAdmin ? '已开通' : '未开通'}}</text>
+        <text class="menu-arrow">></text>
+      </view>
+    </view>
+    <view wx:if="{{adminPanelOpen && !isAdmin}}" class="admin-panel">
+      <input
+        class="field-input"
+        placeholder="管理员口令"
+        password="{{true}}"
+        value="{{adminCode}}"
+        bindinput="onAdminCodeInput"
+      />
+      <view
+        class="btn-primary top-gap pressable {{adminSaving ? 'btn-disabled' : ''}}"
+        hover-class="press"
+        bindtap="submitAdminCode"
+      >{{adminSaving ? '处理中…' : '确认开通'}}</view>
+      <view class="hint">开通后可查看全部订单，并直接获得接单资格（仅调试期使用）</view>
+    </view>
+  </view>
+
+  <!-- ===== 关于 ===== -->
+  <view class="card anim anim-up" style="--d:140ms">
+    <view class="section-head">
+      <text class="section-title">关于</text>
+    </view>
+    <view class="menu-list">
+      <view class="menu-item pressable" hover-class="press" hover-stay-time="100" bindtap="goAgreement">
+        <text class="menu-icon">📄</text>
+        <text class="menu-label">用户协议</text>
+        <text class="menu-value">{{agreementVersionText}}</text>
+        <text class="menu-arrow">></text>
+      </view>
+      <!-- config.support 里填了哪些渠道，就渲染几行可复制的联系方式 -->
+      <block wx:if="{{supportRows.length > 0}}">
+        <view
+          class="menu-item pressable {{index === supportRows.length - 1 ? 'last' : ''}}"
+          wx:for="{{supportRows}}"
+          wx:for-item="row"
+          wx:key="key"
+          hover-class="press"
+          hover-stay-time="100"
+          data-value="{{row.value}}"
+          bindtap="copySupport"
+        >
+          <text class="menu-icon">{{row.icon}}</text>
+          <text class="menu-label">{{row.label}}</text>
+          <text class="menu-value">{{row.value}}</text>
+          <text class="menu-hint">复制</text>
+        </view>
+      </block>
+      <!-- 没配联系方式时只放一句提示，不再跳意见反馈 ——
+           「我的」页已经有意见反馈入口，同一个目标页不该有两个入口 -->
+      <view wx:else class="menu-item last">
+        <text class="menu-icon">💬</text>
+        <view class="menu-main">
+          <text class="menu-label">联系客服</text>
+          <text class="menu-sub">联系方式未配置，有问题请到「我的」→ 意见反馈提交</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="about">
+      <view class="about-mark">跑</view>
+      <view class="about-name">{{appTitle}}</view>
+      <view class="about-meta">{{school}}</view>
+      <view class="about-meta">版本 {{appVersion}}</view>
+      <view class="about-notice">{{notice}}</view>
+    </view>
+  </view>
+</view>

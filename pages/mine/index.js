@@ -37,9 +37,6 @@ Page({
     isAdmin: false,
     // 有没有任意一项后台权限 —— 决定「管理员工作台」入口出不出现
     isAnyAdmin: false,
-    adminPanelOpen: false,
-    adminCode: '',
-    adminSaving: false,
     switching: false,
     logoutArmed: false,
     certText: '未认证',
@@ -60,10 +57,9 @@ Page({
     permsOn: {},
     unread: 0,
 
-    // 自定义导航（fixed）让位 + 动效开关
+    // 自定义导航（fixed）让位
     navTotal: 64,
     motionClass: '',
-    reduceMotion: false,
   },
 
   onLoad: function () {
@@ -71,7 +67,6 @@ Page({
     this.setData({
       navTotal: sys.navTotalHeight,
       motionClass: motion.rootClass(),
-      reduceMotion: motion.reduced(),
     })
   },
 
@@ -122,18 +117,6 @@ Page({
       this._stopBalance()
       this._stopBalance = null
     }
-  },
-
-  // 减弱动效：关掉后全站循环动画停掉、入场动画只保留淡入
-  toggleMotion: function (event) {
-    // switch 的 checked=true 表示「开启动效」
-    const enabled = !!event.detail.value
-    motion.setReduced(!enabled)
-    this.setData({
-      reduceMotion: !enabled,
-      motionClass: motion.rootClass(),
-    })
-    motion.haptic('light')
   },
 
   onShow: function () {
@@ -641,39 +624,6 @@ Page({
 
   // 管理员：口令在页面内输入（editable 弹窗在预览里不可靠），开通后可查看
   // 全部订单并直接拥有接单资格，便于一个人把发布端和接单端都跑一遍
-  onAdminTap: function () {
-    if (this.data.isAdmin) {
-      ui.toast({ title: '管理员权限已开通', icon: 'none' })
-      return
-    }
-    this.setData({ adminPanelOpen: !this.data.adminPanelOpen })
-  },
-
-  submitAdminCode: function () {
-    const page = this
-    const code = String(page.data.adminCode || '').trim()
-    if (!code) {
-      ui.toast({ title: '请输入管理员口令', icon: 'none' })
-      return
-    }
-    if (page.data.adminSaving) return
-    page.setData({ adminSaving: true })
-    ui.loading({ title: '处理中', mask: true })
-    api
-      .activateAdmin(code)
-      .then(function (profile) {
-        ui.hideLoading()
-        page.setData({ adminSaving: false, adminPanelOpen: false, adminCode: '' })
-        page.applyProfile(null, profile)
-        ui.toast({ title: '已开通管理员', icon: 'success' })
-      })
-      .catch(function (error) {
-        ui.hideLoading()
-        page.setData({ adminSaving: false })
-        guard.toastError(error)
-      })
-  },
-
   goOrders: function (event) {
     const status = event.currentTarget.dataset.status || 'all'
     motion.haptic('select')
@@ -721,12 +671,14 @@ Page({
     this.goPage('/pages/admin/dashboard')
   },
 
-  goAddress: function () {
-    this.goPage('/pages/mine/address')
-  },
-
   goRental: function () {
     this.goPage('/pages/rental/index')
+  },
+
+  // 设置：我的地址 / 动效与触感 / 管理员权限 / 用户协议 / 关于 都收在这个二级页里，
+  // 「我的」页只留一个入口，避免低频功能把菜单拉得老长
+  goSettings: function () {
+    this.goPage('/pages/mine/settings')
   },
 
   // 点头像区 → 改头像和用户名（唯一入口，菜单里不重复列）
@@ -827,8 +779,6 @@ Page({
       mode: 'login',
       isAdmin: false,
       isAnyAdmin: false,
-      adminPanelOpen: false,
-      adminCode: '',
       switching: false,
       nicknameText: '同学',
       uidText: '',

@@ -8,7 +8,7 @@
 **历史可回溯**：`main` 上有 31 次提交，按 R1 → R29 的迭代顺序排列，
 里程碑打了 `v0.1.0` ~ `v0.5.0` 五个 tag。`git log --reverse` 即可顺着时间线回到任意一轮。
 
-> 📘 **29 轮迭代的完整过程、踩坑知识库、数据库演进与函数清单见 [`docs/ITERATIONS.md`](docs/ITERATIONS.md)**
+> 📘 **35 轮迭代的完整过程、踩坑知识库、数据库演进与函数清单见 [`docs/ITERATIONS.md`](docs/ITERATIONS.md)**
 > 📄 逐轮变更见 [`CHANGELOG.md`](CHANGELOG.md)（正序）
 
 ---
@@ -69,12 +69,8 @@ campus-errand/
 
 ## 四、数据库
 
-- **21 张表，全量 RLS**（`profiles` / `orders` / `addresses` / `runner_applications` /
-  `rental_requests` / `rental_items` / `order_hides` / `admin_grants` / `feature_flags` /
-  `banners` / `messages` / `order_reviews` / `point_records` / `wallet_records` /
-  `user_feedbacks` / `feedback_replies` / `point_goods` / `point_redemptions` /
-  `moderation_words` / `media_assets` / `notifications`）
-- **99 个数据库函数**，命名约定 `p_` 前缀参数。
+- **23 张表，全量 RLS**（上面 21 张 + `faq_items` / `faq_settings`）
+- **110 个数据库函数**，命名约定 `p_` 前缀参数。
 - 迁移脚本按 `sql/` 下的顺序执行即可重建；每个脚本都写成幂等。
 
 ### 订单状态机
@@ -93,10 +89,13 @@ pending ──accept──> accepted ──complete──> waiting_confirm ─�
 for f in $(find . -name "*.js" -not -path "./node_modules/*" -not -path "./miniprogram_npm/*"); do node --check "$f"; done
 
 # 2. 页面注册 / 四件套 / 事件绑定校验（放工作区根目录，别放进包内）
-node tools/verify-mp.js
+node verify-mp.js
 
 # 3. 微信上传预检 + 真实包体积（必须 ESM 解析，才能抓出重复声明）
-node --experimental-vm-modules tools/check-mp.js .
+node --experimental-vm-modules check-mp.js campus-errand
+
+# 4. WXSS / WXML 样式预检（通配符 / 兄弟选择器 / {{ }} 配对 / CSS 变量是否已定义）
+node campus-errand/tools/style-lint.js campus-errand
 ```
 
 `check-mp.js` 的七项检查：ESM 严格解析 / JSON 可解析 / WXML 标签配对 + id 唯一 /
@@ -129,7 +128,7 @@ git push -u origin main && git push --tags
 ```
 
 日常不要手动敲这些 —— 用 `python scripts/sync_github.py "改动摘要"`（工作区根目录），
-它会先跑校验三件套，通过后才提交推送；每天 23:30 还有一个兜底的自动同步任务。
+它会先跑校验四件套（含 style-lint.js），通过后才提交推送；每天 23:30 还有一个兜底的自动同步任务。
 
 ## 七、部署
 

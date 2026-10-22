@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 WorkBuddy Cloud
-> 统计截止：2026-10-16 23:30 ｜ 累计 **22 轮迭代**、**34 个页面**、**21 张表**、**99 个数据库函数**
+> 统计截止：2026-10-22 22:50 ｜ 累计 **35 轮迭代**、**37 个页面**、**23 张表**、**110 个数据库函数**
 
 ---
 
@@ -9,7 +9,7 @@
 
 - [0. 项目概况](#0-项目概况)
 - [1. 技术基线（不可动摇的约定）](#1-技术基线不可动摇的约定)
-- [2. 迭代时间线（22 轮）](#2-迭代时间线22-轮)
+- [2. 迭代时间线（35 轮）](#2-迭代时间线35-轮)
 - [3. 数据库演进总览](#3-数据库演进总览)
 - [4. 前端页面与模块总览](#4-前端页面与模块总览)
 - [5. 踩坑知识库](#5-踩坑知识库)
@@ -24,9 +24,9 @@
 |---|---|
 | 项目 | 仿「韶乐园跑跑」（韶关学院校园跑腿平台）做同类双边校园跑腿小程序 |
 | 学校 | 广东邮电职业技术学院 |
-| 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 34 个页面 |
+| 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 37 个页面 |
 | 云端 | WorkBuddy Cloud，应用 id `wbapp_yPJnSvicojPmz998PjKfpM` |
-| 数据库 | PostgreSQL 21 张表，全量 RLS，99 个 `SECURITY DEFINER` 函数 |
+| 数据库 | PostgreSQL 23 张表，全量 RLS，110 个 `SECURITY DEFINER` 函数 |
 | 代码位置 | 工作区 `campus-errand/` |
 | 发布状态 | 试用版已发布成功，有效期至 2026/10/29 |
 
@@ -65,7 +65,7 @@
 
 ---
 
-## 2. 迭代时间线（29 轮）
+## 2. 迭代时间线（35 轮）
 
 ### Day 1 — 2026-10-14：从录屏原型到可用链路
 
@@ -346,11 +346,116 @@
 
 **遗留**：`dispatch` 权限需超管在「人员与授权」手动给现有发单员开通。
 
+### Day 5 — 2026-10-17（补录）：UI v3 重构与设计系统
+
+#### R30 · UI v3 重构：自定义导航栏 / 动效层 / 吸顶筛选 / 悬浮发单 / 骨架屏 / 触感
+
+> 补录说明：Day 5 / Day 6 这几批当时只写了提交信息，没同步进本文档，
+> 编号在这里按 git 提交的实际时间线补齐（提交信息里标的 R31 记为 R30）。
+
+- 全站换**自定义导航栏**：`navigationStyle: custom` + `<nav-bar>` 组件；三个约定：
+  ① `navTotal` 一律从 `motion.systemInfo()` 取，别写死（iOS/安卓状态栏不一样）；
+  ② 导航栏是 fixed 的，首屏必须自己让位，否则内容被盖住；
+  ③ 子页面 `showBack`，返回失败兜底 `switchTab` 首页（没原生返回键会卡死）。
+- 动效与触感统一收进 **`utils/motion.js`**：页面里不直接调 `wx.vibrateShort`
+  （安卓/开发者工具可能没有这个 API，散着写迟早漏一处 try/catch 把点击打断）。
+#### R31 · 页面命名空间 class 定义
+给每个页面加一层命名空间 class，避免通用类名（`.card` / `.hint`）互相污染。
+
+#### R32 · v2 设计系统统一全站 UI / 轮播广告图 / 排版引擎重写 / 样式预检闸门
+
+- 主题色：**校园蓝 #2E7CF6**（主）+ **活力橙 #FF8A3D**（强调）；语义色
+  success #16A34A / warn #F59E0B / danger #EF4444；底 #F4F6FB、卡 #FFFFFF、
+  描边 #E6EAF2、文字 #131A2A / #5A6478 / #98A2B3。
+- 令牌写在 `app.wxss` 的 `page{}` 里，**换肤只改这一块**；v2 覆盖层放在 app.wxss
+  **文件末尾**（上半部的 v1 旧定义不动，靠后者覆盖）。
+- **轮播广告比例 2.5:1**：容器 710×284rpx，上传图 1500×600。改容器宽度必须同步改高度，
+  否则 `aspectFill` 会裁掉图片上下。
+
+**广告图文字重叠 + 发布失败的真正原因（重要）**
+
+- 广告图改用 `scripts/make_banners.py`（Pillow 排版）生成，**不要用 AI 生图 —— 中文会错字**。
+  排版从「硬编码 y 坐标」改成「**先测量 → 再堆叠 → 最后居中**」：用 `font.getmetrics()` 取真实
+  行高（ascent+descent），用 `getbbox()` 取墨迹盒，程序自动检查无交叉（最小间距 8px）。
+- **发布被微信打回的两次事故**：
+  1. 第一次误判为注释里的反引号 → 只删了注释，**没用**；
+  2. 真凶是 `.stagger > *:nth-child(1)` —— **WXSS 不支持通配符 `*`**（报错列 12 就是星号位置），
+     同时也不支持 `+` / `~` 兄弟选择器。已全量清理：`pages/mine/messages`、
+     `pages/mine/mall`、新版 `pages/admin/dashboard` 都改写成等价写法。
+- 由此补上第 4 道闸门 **`tools/style-lint.js`**：查反引号、中文全角标点、注释配对、花括号配对、
+  `var(--x)` 未定义、**选择器里的通配符（硬失败）**、兄弟选择器（警告）、WXML 里
+  `{{ }}` 配对。**三件套正式升级为四件套** —— 因为那次发布事故四件套之外三件套全绿照样放行。
+- WXSS 注释同样会被 tokenizer 扫到，**注释里也别写反引号或 Markdown 粗体**。
+
+### Day 6 — 2026-10-18（补录）：头部重叠 / 待办卡片 / 设置二级页
+
+#### R33 · 头部白弧盖住头像 / 待办卡片拉满整行 / 数字 0 隐形
+
+**头部白弧盖住头像与身份切换**
+`.mine-hero-wave` 是 `height:72rpx; bottom:-2rpx` 的圆弧，而 hero 内容区是
+`align-items:flex-end`。→ hero 底部内边距 `40rpx → 96rpx`，让内容整体抬起越过弧顶。
+
+**工作台待办卡片两个问题**
+
+- 最后一张卡片被拉满整行：卡片原本靠 `flex:1` 平分。→ 改成按每行 3 个分组渲染，
+  每张 `flex: 0 0 calc(33.3333% - 11rpx); width: calc(33.3333% - 11rpx)`。
+- 数字 0 看不见：`.disabled .quick-title` 用的 `var(--line)`（#E6EAF2，比卡片底色还浅）。
+  → 换成 `var(--t3)`。
+
+**新增「设置」二级页，收纳低频入口**
+
+`pages/mine/settings` 把「我的地址 / 动效与触感 / 管理员权限 / 用户协议」四低频项收进去，
+外加「关于」区块。「我的」页菜单由 12 项减到 9 项，只留一个带副标题的「⚙️ 设置」入口。
+
+### Day 7 — 2026-10-22：AI 智能客服
+
+#### R34 · FAQ 固定回答 + AI 流式兜底 + 转人工工单
+
+**形态选型**：Knocket **否决** —— 它的 App 形态只给 WebView，小程序包 `web-view` 必须挂
+**自己主体已备案的域名**（不能挂 knocket.ai），且**个人主体小程序直接用不了**。改走自建。
+
+- 数据表：`faq_items`（分类/问题/回答/关键词/排序/启用）+ `faq_settings`（单行 id=1）。
+- 函数 7 个：`list_faq_items` / `get_faq_settings` / `admin_list_faq_items` /
+  `admin_upsert_faq_item` / `admin_delete_faq_item` / `admin_get_faq_settings` /
+  `admin_update_faq_settings`；灰度开关 `ai_support`（sort 240，默认 false）。
+- 页面 2 个：`pages/mine/support`（用户端：热门问题 chips + 会话气泡 + 固定输入区 +
+  转人工）+ `pages/admin/faq`（后台：FAQ 增删改/上下架 + AI 设置）。
+- 回答链路：违规词 → FAQ 关键词打分（阈值 8 = 命中词 6 + 词长）→ 大模型流式渲染 →
+  都答不上才提示转人工。转人工会把最近 6 条对话打包成工单正文。
+- **端上不能用 `for await ... of`**：小程序「ES6 转 ES5」的 babel 不保证注入
+  `Symbol.asyncIterator`，真机会抛 TypeError 且极难定位 → 手动 `iterator.next()` 循环。
+- **`get_faq_settings()` 必须返回 `ai_prompt`**：端上直连大模型，system 消息得在客户端拼。
+  提示词不是密钥（凭证在云服务 SDK 里），藏起来 AI 就用不了。
+
+#### R35 · 会话滚动与上下文修复、入口收敛、模型参数后台化
+
+**「回答接不上上一条」两个成因一起修**（两个都会被用户描述成这句话）：
+- **滚动**：原来用 `scroll-into-view`，在 setData 同一帧指向刚渲染的节点，经常滚空，
+  新回答被丢在屏幕外。→ 改成 **`scroll-top` 递增**（超出内容高度时组件自动夹到底），
+  配 **throttle 120ms**（不是 debounce：连续流式输出时 debounce 永不触发，尾巴看不到），
+  再用 `bindscroll` 算贴底，用户翻历史时不抢滚动条。
+- **会话区高度**：别靠 `flex:1` 量 scroll-view（各基础库不一致）→ 容器绝对定位
+  `top:{{navTotal}}px; bottom:0`。消息行的入场动画也去掉了（有"延迟出现"错觉，
+  且 transform 干扰滚动测量）。
+- **上下文（真正的答非所问）**：之前每次只发 `[system, 当前提问]`，第二轮完全没前文，
+  问「那赏金呢」必然接不上。→ 新增 `buildHistory()`，把最近 `history_turns` 轮（默认 3）
+  拼进 messages；pending 占位气泡与欢迎语不参与。
+- 顺手加**超时**：`timeout_ms` 到点 `controller.abort()` 并提示换问法。
+
+**入口收敛**：删除设置页「联系客服」行（含 `config.support` 的可复制渠道行），
+清理 `supportRows` / `buildSupport` / `copySupport`，`config.support` 字段一并删除。
+客服统一走「我的 → 智能客服」。
+
+**模型 API 配置进后台**：`faq_settings` 加 5 列
+（`temperature` / `max_tokens` / `context_faq_limit` / `history_turns` / `timeout_ms`），
+`admin/faq` 新增「模型 API 配置」卡片 + **测试连接**按钮（用页面上此刻填的值调一次模型，
+返回耗时；先保存再测等于把错值先写进库）。改完即时生效、不用发版。
+
 ---
 
 ## 3. 数据库演进总览
 
-### 数据表（21 张，全量 RLS）
+### 数据表（23 张，全量 RLS）
 
 | 表 | 用途 | 引入轮次 |
 |---|---|---|
@@ -375,6 +480,8 @@
 | `point_redemptions` | 兑换码（含 used_by / order_id） | R23 / R28 |
 | `user_feedbacks` | 客服工单（含双方已读水位） | R22 / R27 |
 | `feedback_replies` | 工单对话 | R27 |
+| `faq_items` | 智能客服 FAQ：分类 / 问题 / 固定回答 / 关键词 / 排序 / 上下架 | R34 |
+| `faq_settings` | 客服设置单行表：AI 开关 / 模型 / 提示词 / 欢迎语 / 上限 + 5 个模型参数 | R34 / R35 |
 
 ### 关键：orders 表的列演进
 ```
@@ -399,7 +506,7 @@ pending ──accept_order──> accepted ──complete_order(+佐证照片)�
 waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（管理员判定结算）
 ```
 
-### 数据库函数（99 个）
+### 数据库函数（110 个）
 按职能分：
 - **订单**：`create_order`(17参) / `accept_order` / `complete_order` / `cancel_order` / `confirm_order_done` / `get_order_detail` / `order_relation` / `list_my_orders` / `search_my_orders` / `hide_my_order` / `order_hidden` …
 - **图片**：`save_media_asset` / `get_media_asset` / `get_public_asset` / **`get_order_asset`**
@@ -410,8 +517,11 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 - **客服**：`submit_user_feedback` / `feedback_detail` / `feedback_thread` / `feedback_reply` / `feedback_mark_read` / `admin_reopen_feedback`
 - **权限**：`admin_has_perm` / `admin_can_grant` / `admin_my_perms` / `admin_search_staff` / `admin_set_perm` / `admin_is_any` / `admin_set_feature_flag`
 - **内容安全**：`normalize_mod_text` / `scan_moderation_words` / `list_active_moderation_words`
+- **智能客服**：`list_faq_items` / `get_faq_settings` / `admin_list_faq_items` /
+  `admin_upsert_faq_item` / `admin_delete_faq_item` / `admin_get_faq_settings` /
+  `admin_update_faq_settings`(10 参数)
 
-### SQL 脚本清单（`campus-errand/sql/`，共 20 个）
+### SQL 脚本清单（`campus-errand/sql/`，共 22 个）
 
 | 文件 | 内容 |
 |---|---|
@@ -431,12 +541,15 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 | `add-round5.sql` | 积分归下单人、信誉分互看、读策略收紧 |
 | `add-feedback-thread.sql` | 客服工单双向对话 |
 | **`add-round6.sql`** | 大厅筛选字段、开价下限、送达佐证、券抵扣、按订单取图 |
+| **`add-round7.sql`** | 优先券次卡化 / 信誉分双轨 / 举报下架扣分 / 批量发单 / 地址回填 |
+| **`add-feedback-thread.sql`** | 工单双向对话（feedback_replies + 已读水位） |
+| **`add-ai-support.sql`** | 智能客服：`faq_items` / `faq_settings` 两张表 + 7 个函数 + 开关 `ai_support` |
 
 ---
 
 ## 4. 前端页面与模块总览
 
-### 页面（34 个，含 3 个 tabBar）
+### 页面（37 个，含 3 个 tabBar）
 
 | 分组 | 页面 | 说明 |
 |---|---|---|
@@ -455,6 +568,8 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 | | `mine/credit`、`mine/reviews` | 信誉分、待评价/收到的评价 |
 | | `mine/address` | 我的地址（三级选择 + 常用标记） |
 | | `mine/messages`、`mine/cert`、`mine/feedback` | 站内消息、认证进度（查看已提交的证件）、历史反馈 |
+| | `mine/settings` | **设置**：常用 / 体验 / 账号与权限 / 关于（R33 补） |
+| | `mine/support` | **智能客服**（R34）：热门问题 + 会话 + AI 兜底 + 转人工 |
 | | `feedback/thread` | **工单会话页（用户端与客服端共用）** |
 | | `agreement/index` | 用户协议（强制勾选） |
 | **管理后台** | `admin/dashboard` | 工作台（所有后台入口的唯一汇总处） |
@@ -464,15 +579,21 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 | | `admin/rental`、`admin/items` | 租赁报价、机型挂牌价 |
 | | `admin/banners` | 轮播管理 |
 | | `admin/points` | **积分商城管理**：商品 CRUD / 积分调整 / 兑换核销（三 Tab） |
+| | `admin/faq` | **智能客服配置**（R34）：FAQ 维护 + AI 设置；R35 加「模型 API 配置」与测试连接 |
 
-### 工具模块（`utils/`，14 个）
-`api.js`（唯一允许 async 的地方）、`ui.js`（wx API 安全封装）、`upload.js`（二进制上传 + 三条读图通道）、`cloud.js`、`guard.js`（登录/命名统一入口）、`flags.js`、`perms.js`、`moderation.js`、`moderation-words.js`、`services.js`、`campus.js`、`config.js`、`agreement.js`、`workbuddy-cloud-diagnostics.js`
+### 工具模块（`utils/`，15 个）
+`api.js`（唯一允许 async 的地方）、`ui.js`（wx API 安全封装）、`upload.js`（二进制上传 + 三条读图通道）、`cloud.js`、`guard.js`（登录/命名统一入口）、`flags.js`、`perms.js`、`moderation.js`、`moderation-words.js`、`services.js`、`campus.js`、`config.js`、`agreement.js`、`motion.js`（R31 新增：动效与触感统一入口）、`workbuddy-cloud-diagnostics.js`
 
-### 组件（1 个）
-`components/room-picker`（三个 scroll-view 列 + 自定义输入，非原生 picker-view）
+### 组件（2 个）
+- `components/nav-bar`（自定义导航栏，fixed；高度由 `motion.systemInfo()` 计算）
+- `components/room-picker`（三个 scroll-view 列 + 自定义输入，非原生 picker-view）
 
-### 灰度开关（17 个）
-`profile_edit` / `credit_score` / `my_reviews` / `staff_search` / `point_mall` / `hall_filter` / `hall_building_filter` / `coupon_deduct` / `deliver_photo` / `order_timeline` / `order_review` / `banners` / `messages` / `search_orders` / `feedback` / `cert` / `rental`
+### 灰度开关（23 个）
+`home_banner` / `admin_roles` / `staff_search` / `message_center` / `order_paging` / `order_search` /
+`hall_filter` / `order_timeline` / `admin_dashboard` / `cert_status` / `order_review` /
+`point_records` / `point_mall` / `user_feedback` / `profile_edit` / `credit_score` /
+`my_reviews` / `hall_building_filter` / `coupon_deduct` / `deliver_photo` / `admin_batch_order` /
+`order_boost` / **`ai_support`**（R34 新增）
 **默认全 false**（新功能一律关着上线），其中 `hall_building_filter`、`coupon_deduct`、`deliver_photo` 当前为 true。
 
 ---
@@ -491,6 +612,13 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 - **`SELECT ... FOR UPDATE` 在 RLS 环境会报 permission denied** —— 不要加行锁。
 - 无 UPDATE 策略时，`UPDATE` **不报错但影响行数 0**，判定要用 `GET DIAGNOSTICS ROW_COUNT`。
 - RLS 把不匹配的行**静默过滤**（返回 `data: []` 而非 error）—— 查不到数据先怀疑 owner_id 匹配。
+- **DROP 完函数重新 CREATE 之后，GRANT 要再执行一遍** —— 权限是绑在函数 oid 上的，重建后不补授权，端上调就 42501。
+- **MCP 一次只能执行一条 SQL**：多条一起发会报 `42601 cannot insert multiple commands into a prepared statement`，拆成多次调用。
+- **DO 块里不要写 `--` 注释**：工具会把语句截坏，报 `42601 syntax error at end of input`。需要说明就写在 DO 块外面。
+- **超过 10 个参数的 RPC，调用一律用命名参数 `p_xxx =>`**：位置参数数错一位，值会落到隔壁字段且不报错；命名参数则必须给全所有没有默认值的形参，漏一个报 42883。
+- **更新类 RPC 的 `COALESCE` 语义**：写 `COALESCE(p_x, false)` 意思是「不传 = 关掉」，
+  只想改别的字段时会连带把开关清掉（R35 调试时就这么把 AI 开关和模型一起清空过）。
+  统一写 `COALESCE(p_x, 原列名)` —— NULL = 不改，传空串照样能清空。
 
 ### RLS 自检的正确姿势
 ```sql
@@ -506,6 +634,11 @@ END $t$;
 ### owner_id 的精度陷阱
 `owner_id` 形如 `2110332344891084800`，**超过 JS 安全整数范围（2^53）**。客户端 `===` 或 `.eq()` 会因精度丢失而匹配不上。**所有涉及本人数据的读写一律走服务端 `auth.uid()`。**
 
+**配套的类型约定**：`auth.uid()` 在这套库里返回的是 **text，不是 uuid**（`admin_grants.user_id` 也是 text，
+因为微信登录给的是 `wx:openid` 这种字符串）。所以**任何「谁改的 / 谁的」列一律用 text** ——
+写成 `uuid` 时建表不报错，**真正写入才 22P02 invalid input syntax for type uuid**，真机才炸。`updated_by`、
+`DECLARE v_uid ... := auth.uid()` 都要跟着用 text。（R34 踩过）
+
 ### 前端样式
 - ⚠ **小程序 `input` 不要同时设 `padding` 和 `box-sizing: border-box`**：input 自带约 1.4em 固定默认高度，border-box 下 padding 从它里面扣，content 高度被钳成 0，文字上下各切一刀。稳妥写法：**几何放外层 `view`，input 只留字号/颜色**。
 - **`#F7F8FA` 这种浅灰不能当页面上的输入框/卡片底色**（页面底色 `#F5F6F8`，差 2/255 = 隐形）。统一**白底 + `2rpx solid #E3E6EB` 描边**。
@@ -514,6 +647,22 @@ END $t$;
 - **像素级测量比肉眼估计可靠**：`pngjs` 解图 → 色值直方图 → 逐行扫描 → 用已知尺寸元素标定 `px/rpx`。
 - WXML 循环**必须显式写 `wx:for-item`**，否则默认变量叫 `item`，静默渲染成空白。
 - 从 URL 参数取来要展示的字符串，**先 `decodeURIComponent` 再渲染**。
+- ⚠ **WXSS 选择器禁用清单**（编译器会拒收整个包，R33 因此被微信打回两次）：
+  `*` 通配符（必拦）、`+` / `~` 兄弟选择器、`:nth-child` / `:not` 等伪类（不稳，能用 class 就别用）。
+  `>` 子选择器官方文档没列，本项目一律不用。`:first-child` / `:last-child` / `:active` 历史在用、未出问题。
+- **WXSS 的注释也会被 tokenizer 扫到** —— 注释里同样别写反引号、`**` 粗体、中文全角标点。
+- **scroll-view 别靠 `flex:1` 量高度**：各基础库给出的高度不一致，量错就是内容排不满或新元素被排到可视区外。
+  → 容器绝对定位（`top:{{navTotal}}px; bottom:0`）。定位的包含块是祖先的 padding box，
+  所以 `top:0` 不受根节点 `padding-top` 影响，不用再减一次高度。
+- **滚聊天不要用 `scroll-into-view`**：它在 setData 的同一帧指向刚渲染的节点，很容易滚空。
+  → 用 `scroll-top` 递增（超出内容高度时组件自动夹到底）+ **throttle**（用 debounce 的话，
+  连续流式输出期间它永远不触发，最后一段就丢了）。
+
+### 前端 JS（ES5 页面层的坑）
+- **`setTimeout(this.method, 120)` 会把 `this` 丢掉**，ES5 页面里一调就崩。
+  → `const page = this; setTimeout(function () { page.method() }, 120)`。
+- **不要写 `for await ... of`**：小程序「ES6 转 ES5」的 babel 不保证注入 `Symbol.asyncIterator`，
+  真机会抛 TypeError 且极难定位。→ 手写 `iterator.next()` 循环（见 `utils/api.js` 的 `llmChat`）。
 
 ### 文件与图片
 - **WorkBuddy 对象存储在小程序端是单向的（能写不能读）**，是本项目的平台级结论。元数据就在业务库里，直接查 `storage.objects` 看 `version` 是否为空即可判断。
@@ -534,10 +683,10 @@ END $t$;
 
 ## 6. 校验体系
 
-每轮改完必跑三件套：
+每轮改完必跑**四件套**（R33 起因通配符打回而补的第 4 项）：
 
 ```bash
-# 1. 全量语法检查（约 49 个 JS）
+# 1. 全量语法检查（58 个 JS）
 cd campus-errand
 for f in $(find pages utils components -name '*.js'); do node --check "$f" || echo "FAIL $f"; done
 
@@ -546,14 +695,20 @@ node verify-mp.js
 
 # 3. 微信上传预检 + 真实包体积（必须 ESM 解析）
 node --experimental-vm-modules check-mp.js campus-errand
+
+# 4. WXSS / WXML 语法预检（通配符、兄弟选择器、{{ }} 配对、CSS 变量是否定义）
+node campus-errand/tools/style-lint.js campus-errand
 ```
+
+`scripts/sync_github.py` 已把第 4 项并入门禁，**校验没过的代码推不上去**。
 
 | 工具 | 位置 | 检查内容 |
 |---|---|---|
 | `verify-mp.js` | **工作区根目录**（放包内会被当成缺 npm 依赖） | 页面四件套齐全、WXML 事件方法在 JS 里有定义、class 有样式定义 |
 | `check-mp.js` | **工作区根目录** | ① ESM 严格解析（抓重复声明）② JSON 可解析 ③ WXML 标签配对 + id 唯一 ④ app.json 页面文件齐全 ⑤ usingComponents 指向存在 ⑥ 按 packOptions.ignore 算真实上传体积 ⑦ 裸包名能在 miniprogram_npm 解析 |
+| `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
-**当前状态**：49 个 JS `node --check` 全过，`verify-mp.js` 通过，`check-mp.js` **1.10MB / 2.00MB** 通过。
+**当前状态**：58 个 JS `node --check` 全过，`verify-mp.js` 通过，`check-mp.js` **1.31MB / 2.00MB** 通过，`style-lint.js`（31 wxss / 39 wxml）通过。
 
 **数据库侧**：每轮用上面的 `DO` 块冒充真实用户做角色化自检，最后主动抛错回滚，收尾一定跑脏数据复核（自测数量应为 0）。
 
@@ -564,7 +719,7 @@ node --experimental-vm-modules check-mp.js campus-errand
 ### 🔴 待用户操作
 1. **`DROP POLICY orders_write_own` 已执行，但仍在观察窗口内**。按原计划应等「新版正式发布 + 48 小时」。触发条件是旧版客户端还能直接 UPDATE 自己的订单（可绕过 accept/complete 改状态）—— 这是**已知残留风险**。一旦有用户反馈立刻回滚策略（回滚语句在 `sql/drop-orders-write-own.sql` 末尾注释里），`add-order-write-guard.sql` 的 INSERT 守卫可独立留着继续兜底。
 
-### 🟡 已知但未处理
+### 🟡 已知但未处理（2026-10-22 更新）
 2. **旧对象存储的证件照永久不可读**：`runner_applications` 里 id=12/13 存的是旧路径，需让相应用户重新提交。管理员点开时会收到明确提示。
 3. **`utils/config.js` 的 `rememberPassword / autoLogin / presetAccount` 仍为调试态**（注释自己写了「上线前必须改」）—— 用户还在双号联调，擅自关会打断测试，**未动**。
 4. **管理员口令硬编码**（`GDYZPT2026`）：拿到口令的人都能自己开管理员（可见全部订单 + 直接获得接单资格）。正式运营需要换掉这套机制。
@@ -578,3 +733,9 @@ node --experimental-vm-modules check-mp.js campus-errand
 - **`hall_page` 开关被主动删除** —— 大厅是任务列表唯一入口，关掉等于直接下掉功能、没有回滚路径。
 - **租赁下架 ≠ 删除**（历史租赁申请仍引用 item_id）；**改价要点保存才生效**（金额敏感，不做失焦即改）。
 - **前台积分14个新开关默认全 false**，只有 super 能切。
+- **智能客服暂时只能走 WorkBuddy Cloud 的免密钥 LLM 通道**：不支持在后台填自己的第三方
+  API Key / Base URL。要接第三方模型得另做一条通道，且小程序端不能明文放 Key、还要配 request 合法域名。
+- **AI 每日配额记在本地 `storage`**（`ai_support_quota_v1`）：清缓存或换设备就会归零，
+  所以它是「防止一台机器刷干配额」的软限制，不是严格的账号级限流。
+- **客服会话的上下文靠端上拼 history 携带**：目前最多带 `history_turns` 轮（默认 3），
+  更早的内容模型看不到；也没有做会话长度裁剪，超长对话理论上会顶到模型上限。

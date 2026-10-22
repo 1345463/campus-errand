@@ -443,3 +443,43 @@ _提交时间：2026-10-17 00:54:00_
 - 遗留事项：admin_grants 的 dispatch 权限需超管在「人员与授权」手动给现有发单员开通。
 
 _提交时间：2026-10-17 01:10:00_
+
+## R30 · UI v3 重构（10-17 12:19，提交信息标为 R31）
+
+- 自定义导航栏三约定：`navigationStyle: custom` + `<nav-bar>`；`navTotal` 从 `motion.systemInfo()`
+  取不写死；首屏自己让位；子页面 `showBack` + 返回失败兜底 `switchTab` 首页。
+- 动效与触感统一走 `utils/motion.js`，页面不再直接调 `wx.vibrateShort`。
+- 吸顶筛选 / 悬浮发单 / 骨架屏 / 触感反馈一并落地。
+
+## R31 · 页面命名空间 class 定义（10-17 12:21）
+
+- 每个页面加一层命名空间 class，隔离通用类名污染。
+
+## R32 · v2 设计系统统一全站 + 广告图排版重写 + 样式预检闸门（10-17）
+
+- 校园蓝 #2E7CF6 + 活力橙 #FF8A3D 令牌化，写在 `app.wxss` 的 `page{}`，覆盖层放文件末尾。
+- 轮播广告 2.5:1（容器 710×284rpx / 上传 1500×600）。
+- `scripts/make_banners.py` 排版引擎重写：测量 → 堆叠 → 居中，自动查墨迹盒交叉。
+- 新增第 4 道闸门 `tools/style-lint.js`，**三件套升级为四件套**。
+
+## R33 · 头部白弧 / 待办卡片 / 设置二级页（10-18）
+
+- `.mine-hero` 底部内边距 40rpx → 96rpx，越过白弧。
+- 待办卡片改为每行 3 个分组渲染 + 固定宽度；`.disabled .quick-title` 改用 `var(--t3)`。
+- 新增 `pages/mine/settings`，「我的」菜单 12 → 9 项。
+
+## R34 · AI 智能客服：FAQ 固定回答 + AI 流式兜底 + 转人工工单（10-22 20:48）
+
+- Knocket 否决（web-view 需自有备案域名 + 个人主体不可用）→ 自建。
+- 表 `faq_items` / `faq_settings`；7 个 SECURITY DEFINER 函数；开关 `ai_support`。
+- 新页面 `pages/mine/support` / `pages/admin/faq`；灌 7 条种子 FAQ。
+- 端上禁用 `for await ... of`，改手写 `iterator.next()`。
+
+## R35 · 会话滚动与上下文修复 / 入口收敛 / 模型 API 参数后台化（10-22 21:44）
+
+- 滚动改 `scroll-top` 递增 + throttle + 贴底判定；会话区绝对定位。
+- 新增 `buildHistory()` 携带最近 N 轮上下文；加 `timeout_ms` 超时中断。
+- 删除设置页「联系客服」行与 `config.support`。
+- `faq_settings` 加 5 个模型参数列，管理端新增「模型 API 配置」卡片 + 测试连接。
+
+_提交时间：2026-10-22 22:50:00_

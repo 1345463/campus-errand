@@ -1,0 +1,209 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>请先登录</view>
+    <view class="hint top-gap">登录后才能配置智能客服</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去「我的」登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}" class="empty">
+    <view>没有客服权限</view>
+    <view class="hint top-gap">请让超级管理员在「人员与授权」里给你开通客服权限</view>
+    <view class="btn-primary top-gap" bindtap="goBack">返回</view>
+  </view>
+
+  <view wx:else>
+    <view class="tip-bar">
+      <view class="tip-text">固定回答优先于 AI：用户提问先匹配下面的关键词，命中就直接用你的原文回答；只有都没命中才轮到大模型，大模型也只能依据这里的 FAQ 作答。</view>
+    </view>
+
+    <view wx:if="{{errorText}}" class="err-bar">
+      <text class="err-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="load">重试</text>
+    </view>
+
+    <view class="tool-row">
+      <view class="doc-btn" bindtap="load">刷新</view>
+    </view>
+
+    <view wx:if="{{loading}}" class="empty">加载中…</view>
+
+    <block wx:else>
+      <!-- ===== AI 兜底设置 ===== -->
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">AI 兜底</text>
+          <text class="section-more">{{aiEnabled ? '已开启' : '已关闭'}}</text>
+        </view>
+
+        <view class="switch-line">
+          <text>启用 AI 回答</text>
+          <switch checked="{{aiEnabled}}" color="#2E7CF6" bindchange="onAiToggle" />
+        </view>
+        <view class="hint">关掉后，匹配不到的提问会直接提示用户转人工，不调用大模型。</view>
+
+        <view class="field top-gap">
+          <text class="field-label">回答模型</text>
+          <picker mode="selector" range="{{modelNames}}" value="{{modelIndex}}" bindchange="onModelChange">
+            <view class="field-input">
+              {{modelNames[modelIndex] || '暂无可用模型'}}
+            </view>
+          </picker>
+        </view>
+        <view wx:if="{{modelHint}}" class="hint">{{modelHint}}</view>
+
+        <view class="field top-gap">
+          <text class="field-label">每日提问上限</text>
+          <input
+            class="field-input"
+            type="number"
+            placeholder="每人每天可问 AI 的次数，1 - 200"
+            value="{{dailyLimit}}"
+            bindinput="onLimitInput"
+          />
+        </view>
+        <view class="hint">按设备本地计数，跨天自动归零。防止一台机器把配额刷干。</view>
+
+        <view class="field top-gap">
+          <text class="field-label">欢迎语</text>
+          <input
+            class="field-input"
+            placeholder="用户打开客服页看到的第一句话"
+            value="{{welcome}}"
+            bindinput="onWelcomeInput"
+          />
+        </view>
+
+        <view class="field top-gap">
+          <text class="field-label">系统提示词</text>
+          <textarea
+            class="field-textarea"
+            placeholder-class="field-ph"
+            placeholder="约束 AI 的身份、回答范围与口径"
+            value="{{aiPrompt}}"
+            bindinput="onPromptInput"
+            maxlength="2000"
+            auto-height="{{true}}"
+          />
+        </view>
+        <view class="hint">这段会作为 system 消息发给模型；FAQ 内容会自动追加在后面作为「平台资料」，不用在这里重复写。</view>
+
+        <view
+          class="btn-primary top-gap {{settingsSaving ? 'disabled' : ''}}"
+          hover-class="press"
+          bindtap="saveSettings"
+        >{{settingsSaving ? '保存中…' : '保存 AI 设置'}}</view>
+      </view>
+
+      <!-- ===== FAQ 列表 ===== -->
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">常见问题（{{list.length}}）</text>
+          <text class="section-more" bindtap="newFaq">+ 新增</text>
+        </view>
+
+        <view wx:if="{{list.length === 0}}" class="empty">
+          <view>还没有配置常见问题</view>
+          <view class="hint top-gap">先加几条高频问题，AI 的回答质量也会跟着变好</view>
+        </view>
+
+        <view
+          wx:for="{{list}}"
+          wx:for-item="item"
+          wx:key="id"
+          class="faq-item {{item.enabled ? '' : 'muted'}}"
+        >
+          <view class="apply-head">
+            <text class="apply-name">{{item.question}}</text>
+            <text class="status-text {{item.enabled ? 'status-approved' : 'status-canceled'}}">{{item.enabled ? '已上架' : '已下架'}}</text>
+          </view>
+          <view class="settle-rule">{{item.answer}}</view>
+          <view class="task-meta">{{item.category}} · 排序 {{item.sortOrder}} · {{item.updatedText}}</view>
+          <view wx:if="{{item.keywords}}" class="task-meta">关键词：{{item.keywords}}</view>
+
+          <view class="card-actions">
+            <text class="link-primary" data-id="{{item.id}}" bindtap="editFaq">编辑</text>
+            <text class="link-ghost" data-id="{{item.id}}" bindtap="toggleFaq">{{item.enabled ? '下架' : '上架'}}</text>
+            <text class="link-danger" data-id="{{item.id}}" bindtap="deleteFaq">删除</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- ===== 新增 / 编辑表单 ===== -->
+      <view wx:if="{{editing}}" class="card">
+        <view class="section-head">
+          <text class="section-title">{{formTitle}}</text>
+          <text class="section-more" bindtap="cancelEdit">取消</text>
+        </view>
+
+        <view class="field">
+          <text class="field-label">分类</text>
+          <input
+            class="field-input"
+            placeholder="如：下单 / 赏金 / 认证"
+            value="{{form.category}}"
+            data-field="category"
+            bindinput="bindField"
+          />
+        </view>
+
+        <view class="field top-gap">
+          <text class="field-label">问题</text>
+          <input
+            class="field-input"
+            placeholder="用户会怎么问，就怎么写"
+            value="{{form.question}}"
+            data-field="question"
+            bindinput="bindField"
+          />
+        </view>
+
+        <view class="field top-gap">
+          <text class="field-label">固定回答</text>
+          <textarea
+            class="field-textarea"
+            placeholder-class="field-ph"
+            placeholder="命中后原样返回给用户"
+            value="{{form.answer}}"
+            data-field="answer"
+            bindinput="bindField"
+            maxlength="500"
+            auto-height="{{true}}"
+          />
+        </view>
+
+        <view class="field top-gap">
+          <text class="field-label">匹配关键词</text>
+          <input
+            class="field-input"
+            placeholder="空格或逗号分隔，如：赏金 价格 多少钱"
+            value="{{form.keywords}}"
+            data-field="keywords"
+            bindinput="bindField"
+          />
+        </view>
+        <view class="hint">用户提问里出现任意一个关键词就可能命中这条；越长越具体的词命中越准。</view>
+
+        <view class="field top-gap">
+          <text class="field-label">排序</text>
+          <input
+            class="field-input"
+            type="number"
+            placeholder="数字越小越靠前"
+            value="{{form.sort_order}}"
+            data-field="sort_order"
+            bindinput="bindField"
+          />
+        </view>
+
+        <view class="switch-line top-gap">
+          <text>上架（用户可见）</text>
+          <switch checked="{{form.enabled}}" color="#2E7CF6" bindchange="onFormToggle" />
+        </view>
+
+        <view class="btn-primary top-gap {{saving ? 'disabled' : ''}}" hover-class="press" bindtap="saveFaq">
+          {{saving ? '保存中…' : '保存'}}
+        </view>
+      </view>
+    </block>
+  </view>
+</view>

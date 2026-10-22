@@ -1,0 +1,268 @@
+/* 智能客服页：自定义导航 + 上会话下输入，整页不滚动，只有会话区滚动 */
+
+.support-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  /* .page 默认给了 60rpx 底部留白，这里整页撑满，留白交给会话区自己 */
+  padding-bottom: 0;
+  background: var(--bg);
+}
+
+.sup-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* ---------- 热门问题 ---------- */
+.sup-hot {
+  flex: none;
+  padding: 16rpx 24rpx 18rpx;
+  background: #FFFFFF;
+  border-bottom: 1rpx solid var(--fill);
+}
+
+.sup-hot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sup-hot-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--t1);
+}
+
+.sup-hot-toggle {
+  font-size: 24rpx;
+  color: var(--brand);
+}
+
+.sup-hot-scroll {
+  margin-top: 14rpx;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.sup-hot-row {
+  display: inline-flex;
+  align-items: center;
+}
+
+.sup-hot-chip {
+  flex: none;
+  margin-right: 14rpx;
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+  background: var(--brand-50);
+  border: 1rpx solid var(--brand-100);
+  font-size: 24rpx;
+  color: var(--brand-600);
+}
+
+/* ---------- 会话区 ---------- */
+.sup-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 20rpx 24rpx;
+  box-sizing: border-box;
+}
+
+.msg-row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 28rpx;
+}
+
+.msg-row.mine {
+  align-items: flex-end;
+}
+
+.msg-row.peer {
+  align-items: flex-start;
+}
+
+.msg-meta {
+  font-size: 22rpx;
+  color: var(--t3);
+  margin-bottom: 8rpx;
+}
+
+.msg-bubble {
+  max-width: 78%;
+  padding: 18rpx 24rpx;
+  border-radius: 20rpx;
+  font-size: 28rpx;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.msg-row.peer .msg-bubble {
+  background: #FFFFFF;
+  color: var(--t1);
+  border-top-left-radius: 6rpx;
+}
+
+.msg-row.mine .msg-bubble {
+  background: var(--brand);
+  color: #FFFFFF;
+  border-top-right-radius: 6rpx;
+}
+
+/* 流式回答过程中气泡是同一个，加一点呼吸感，别看着像卡死 */
+.msg-bubble.pending {
+  opacity: 0.75;
+}
+
+.msg-tag {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: var(--t3);
+}
+
+.msg-tag.warn {
+  color: var(--warn);
+}
+
+.chat-pad {
+  height: 24rpx;
+}
+
+/* ---------- 输入区 ---------- */
+.sup-input {
+  flex: none;
+  padding: 14rpx 24rpx 24rpx;
+  background: #FFFFFF;
+  border-top: 1rpx solid var(--fill);
+}
+
+.sup-quota {
+  font-size: 22rpx;
+  color: var(--t3);
+  margin-bottom: 10rpx;
+}
+
+.sup-quota.dim {
+  color: var(--t3);
+}
+
+.sup-input-row {
+  display: flex;
+}
+
+.sup-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 88rpx;
+  max-height: 220rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 16rpx;
+  background: var(--fill);
+  font-size: 28rpx;
+  color: var(--t1);
+}
+
+.sup-send-row {
+  margin-top: 14rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sup-human {
+  padding: 12rpx 28rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid var(--line);
+  font-size: 26rpx;
+  color: var(--t2);
+}
+
+.sup-count {
+  font-size: 22rpx;
+  color: var(--t3);
+}
+
+.sup-send {
+  padding: 14rpx 48rpx;
+  border-radius: 999rpx;
+  background: var(--brand);
+  color: #FFFFFF;
+  font-size: 28rpx;
+}
+
+.sup-send.disabled {
+  background: var(--line);
+  color: var(--t3);
+}
+
+/* ---------- 转人工面板 ---------- */
+.sup-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(19, 26, 42, 0.45);
+  display: flex;
+  align-items: flex-end;
+  z-index: 20;
+}
+
+.sup-panel {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 32rpx 28rpx 40rpx;
+  border-radius: 28rpx 28rpx 0 0;
+  background: #FFFFFF;
+}
+
+.sup-panel-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--t1);
+}
+
+.sup-panel-desc {
+  margin: 12rpx 0 20rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: var(--t2);
+}
+
+.sup-panel-row {
+  margin-top: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sup-panel-cancel {
+  width: 240rpx;
+  padding: 20rpx 0;
+  border-radius: 999rpx;
+  border: 1rpx solid var(--line);
+  text-align: center;
+  font-size: 28rpx;
+  color: var(--t2);
+}
+
+.sup-panel-ok {
+  width: 380rpx;
+  padding: 20rpx 0;
+  border-radius: 999rpx;
+  background: var(--brand);
+  text-align: center;
+  font-size: 28rpx;
+  color: #FFFFFF;
+}
+
+.sup-panel-ok.disabled {
+  background: var(--line);
+  color: var(--t3);
+}

@@ -1,0 +1,112 @@
+<view class="page support-page {{motionClass}}" style="padding-top:{{navTotal}}px">
+  <nav-bar title="智能客服" showBack="{{true}}" />
+
+  <!-- 灰度未开：功能还没上线完，先不让它出现 -->
+  <view wx:if="{{grayOff}}" class="empty">
+    <view>智能客服正在灰度中</view>
+    <view class="hint top-gap">功能还在内测，开放后会出现在「我的」页</view>
+    <view class="btn-ghost top-gap" bindtap="goBack">返回</view>
+  </view>
+
+  <view wx:elif="{{loading}}" class="empty">加载中…</view>
+
+  <view wx:elif="{{errorText}}" class="empty">
+    <view>{{errorText}}</view>
+    <view class="btn-ghost top-gap" bindtap="reload">重试</view>
+    <view class="btn-primary top-gap" bindtap="goBack">返回</view>
+  </view>
+
+  <view wx:else class="sup-body">
+    <!-- 热门问题：第一次进来最容易发生的就是"不知道该问什么" -->
+    <view wx:if="{{hot.length > 0}}" class="sup-hot">
+      <view class="sup-hot-head" bindtap="toggleHot">
+        <text class="sup-hot-title">大家都在问</text>
+        <text class="sup-hot-toggle">{{hotOpen ? '收起' : '展开'}}</text>
+      </view>
+      <scroll-view wx:if="{{hotOpen}}" class="sup-hot-scroll" scroll-x="{{true}}">
+        <view class="sup-hot-row">
+          <view
+            class="sup-hot-chip"
+            wx:for="{{hot}}"
+            wx:for-item="item"
+            wx:key="id"
+            data-q="{{item.question}}"
+            hover-class="press"
+            hover-stay-time="90"
+            bindtap="onHotTap"
+          >{{item.question}}</view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <scroll-view
+      class="sup-scroll"
+      scroll-y="{{true}}"
+      scroll-into-view="{{toView}}"
+      scroll-with-animation="{{true}}"
+    >
+      <view
+        wx:for="{{messages}}"
+        wx:for-item="msg"
+        wx:key="id"
+        id="{{msg.id}}"
+        class="msg-row {{msg.role === 'me' ? 'mine' : 'peer'}} anim anim-up"
+      >
+        <view class="msg-meta">
+          <text wx:if="{{msg.role === 'me'}}">我 · {{msg.timeText}}</text>
+          <text wx:elif="{{msg.kind === 'faq'}}">常见问题 · {{msg.timeText}}</text>
+          <text wx:elif="{{msg.kind === 'tip'}}">助手 · {{msg.timeText}}</text>
+          <text wx:else>AI 助手 · {{msg.timeText}}</text>
+        </view>
+        <view class="msg-bubble {{msg.pending ? 'pending' : ''}}">{{msg.text}}</view>
+        <view wx:if="{{msg.kind === 'faq'}}" class="msg-tag">来自后台配置的固定回答</view>
+        <view wx:elif="{{msg.failed}}" class="msg-tag warn">这次失败了，可以换个问法或转人工</view>
+      </view>
+      <view class="chat-pad"></view>
+    </scroll-view>
+
+    <!-- 输入区：AI 可用时把今天剩几次写在旁边，用完了用户能自己看懂为什么没反应 -->
+    <view class="sup-input">
+      <view wx:if="{{aiReady}}" class="sup-quota">今日 AI 提问剩余 {{aiLeftText}} / {{aiLimit}} 次</view>
+      <view wx:else class="sup-quota dim">AI 未开启，只回答后台配置的常见问题</view>
+      <view class="sup-input-row">
+        <textarea
+          class="sup-textarea"
+          placeholder-class="field-ph"
+          placeholder="描述你的问题，尽量具体一点"
+          value="{{input}}"
+          bindinput="onInput"
+          maxlength="{{200}}"
+          fixed="{{true}}"
+          show-confirm-bar="{{false}}"
+          auto-height="{{true}}"
+        />
+      </view>
+      <view class="sup-send-row">
+        <view class="sup-human" hover-class="press" hover-stay-time="90" bindtap="openHuman">转人工</view>
+        <text class="sup-count">{{countText}}</text>
+        <view class="sup-send {{sending ? 'disabled' : ''}}" bindtap="send">{{sending ? '回答中…' : '发送'}}</view>
+      </view>
+    </view>
+
+    <!-- 转人工面板：盖在输入区上方，填个联系方式就能提交工单 -->
+    <view wx:if="{{humanOpen}}" class="sup-mask" bindtap="closeHuman">
+      <view class="sup-panel" catchtap="noop">
+        <view class="sup-panel-title">转人工客服</view>
+        <view class="sup-panel-desc">会把最近的对话一起提交给客服，方便对方直接看懂你的问题。</view>
+        <input
+          class="field-input"
+          placeholder="联系方式（手机号/微信，选填）"
+          value="{{humanContact}}"
+          bindinput="onContactInput"
+        />
+        <view class="sup-panel-row">
+          <view class="sup-panel-cancel" bindtap="closeHuman">取消</view>
+          <view class="sup-panel-ok {{humanSending ? 'disabled' : ''}}" bindtap="submitHuman">
+            {{humanSending ? '提交中…' : '提交工单'}}
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

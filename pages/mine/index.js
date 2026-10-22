@@ -681,6 +681,11 @@ Page({
     this.goPage('/pages/mine/settings')
   },
 
+  // 智能客服：FAQ 固定回答优先，匹配不到再让大模型兜底，还不行可以转人工工单
+  goSupport: function () {
+    this.goPage('/pages/mine/support')
+  },
+
   // 点头像区 → 改头像和用户名（唯一入口，菜单里不重复列）
   // 入口本身是页面头部，没法隐藏，所以灰度关掉时用提示兜住，避免点进去是空页面
   goProfile: function () {

@@ -48,6 +48,8 @@ const DEFAULTS = {
   // 第七轮新增：批量发单、下单页勾选优先展示券
   admin_batch_order: false,
   order_boost: false,
+  // 智能客服：FAQ 固定回答 + AI 兜底 + 转人工工单
+  ai_support: false,
 }
 
 let state = Object.assign({}, DEFAULTS)

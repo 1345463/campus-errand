@@ -31,6 +31,8 @@ const ENTRY_DEFS = [
   { key: 'dispatch', label: '批量发单', icon: '📦', url: '/pages/admin/dispatch', check: 'dispatch', flag: 'admin_batch_order', desc: '同栋同层一次发多单' },
   { key: 'staff', label: '人员与授权', icon: '👥', url: '/pages/admin/staff', check: ['hr', 'super'], flag: 'staff_search', desc: '查找并开通权限' },
   { key: 'feedback', label: '意见反馈', icon: '💬', url: '/pages/admin/feedback', check: 'support', flag: 'user_feedback', desc: '受理 / 驳回反馈' },
+  // 客服配置页不挂 ai_support 开关：它是配置页，被自己的开关挡住就再也进不去打开了
+  { key: 'faq', label: '智能客服配置', icon: '🤖', url: '/pages/admin/faq', check: 'support', desc: 'FAQ 固定回答与 AI 兜底' },
   // flags / banners 是配置和总闸页，不能再被自己的开关挡住（否则关了就进不去打开）
   { key: 'flags', label: '灰度开关', icon: '🎚️', url: '/pages/admin/flags', check: 'super', desc: '新功能总闸' },
   { key: 'banners', label: '轮播管理', icon: '🖼️', url: '/pages/admin/banners', check: 'super', desc: '首页广告位配置' },

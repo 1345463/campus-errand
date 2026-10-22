@@ -34,7 +34,9 @@
     "pages/mine/credit",
     "pages/mine/reviews",
     "pages/mine/settings",
-    "pages/order/review"
+    "pages/order/review",
+    "pages/mine/support",
+    "pages/admin/faq"
   ],
   "window": {
     "navigationBarBackgroundColor": "#2E7CF6",

@@ -1,0 +1,41 @@
+/* 智能客服后台：FAQ 与 AI 设置 */
+
+/* 工具行里的按钮沿用 banners 页的 .doc-btn 口径，这里只补一个容器 */
+.tool-row {
+  margin-bottom: 20rpx;
+}
+
+.doc-btn {
+  display: inline-block;
+  padding: 12rpx 32rpx;
+  border-radius: 999rpx;
+  background: #FFFFFF;
+  border: 1rpx solid var(--line);
+  font-size: 26rpx;
+  color: var(--t2);
+}
+
+/* 每条 FAQ：下架的整条淡掉，但仍保留可操作 */
+.faq-item {
+  padding: 20rpx 0;
+  border-top: 1rpx solid var(--fill);
+}
+
+.faq-item.muted {
+  opacity: 0.55;
+}
+
+.faq-item .settle-rule {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: var(--t2);
+}
+
+.faq-item .task-meta {
+  margin-top: 6rpx;
+}
+
+.faq-item .card-actions {
+  margin-top: 14rpx;
+}

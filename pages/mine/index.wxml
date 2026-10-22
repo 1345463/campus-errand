@@ -332,6 +332,20 @@
         <text class="menu-arrow">></text>
       </view>
 
+      <!-- 智能客服：FAQ 固定回答 + AI 兜底，灰度开才出现 -->
+      <view
+        wx:if="{{flagsOn.ai_support}}"
+        class="menu-item pressable"
+        hover-class="press"
+        hover-stay-time="100"
+        bindtap="goSupport"
+      >
+        <text class="menu-icon">🤖</text>
+        <text class="menu-label">智能客服</text>
+        <text class="menu-value">常见问题 · 在线答疑</text>
+        <text class="menu-arrow">></text>
+      </view>
+
       <!-- 低频设置收进二级页：我的地址、动效与触感、管理员权限、用户协议、关于 -->
       <view class="menu-item pressable" hover-class="press" hover-stay-time="100" bindtap="goSettings">
         <text class="menu-icon">⚙️</text>

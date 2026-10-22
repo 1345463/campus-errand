@@ -1330,9 +1330,149 @@ async function getPublicImageUrls(paths) {
   )
 }
 
+// ============================================================
+// AI 智能客服：FAQ 固定回答 + 大模型兜底
+// FAQ 由客服在后台维护（faq_items 表），端上只读启用的条目；
+// 大模型走云服务免密钥 LLM，只有流式一种调用方式，端上把片段拼成完整回答。
+// ============================================================
+
+// 游客也能看的常见问题（服务端只返回 enabled 的）
+async function listFaqItems() {
+  const result = await cloud.database.rpc('list_faq_items', {})
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  return Array.isArray(result.data) ? result.data : []
+}
+
+// 客服设置：AI 开关 / 模型 / 系统提示词 / 欢迎语 / 每人每日提问上限。
+// ai_prompt 一并返回：端上直连大模型，system 消息得在客户端拼。
+// 它不是密钥，后台改完 5 分钟内随开关缓存一起生效。
+async function getFaqSettings() {
+  const result = await cloud.database.rpc('get_faq_settings', {})
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  const rows = Array.isArray(result.data) ? result.data : []
+  return rows.length
+    ? rows[0]
+    : { ai_enabled: false, ai_model: '', ai_prompt: '', welcome: '', daily_limit: 20 }
+}
+
+async function adminListFaqItems() {
+  const result = await cloud.database.rpc('admin_list_faq_items', {})
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  return Array.isArray(result.data) ? result.data : []
+}
+
+async function adminUpsertFaqItem(item) {
+  const result = await cloud.database.rpc('admin_upsert_faq_item', {
+    p_id: item.id || null,
+    p_category: item.category || '',
+    p_question: item.question || '',
+    p_answer: item.answer || '',
+    p_keywords: item.keywords || '',
+    p_sort_order: item.sort_order === undefined ? null : item.sort_order,
+    p_enabled: item.enabled === undefined ? null : item.enabled,
+  })
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  return result.data
+}
+
+async function adminDeleteFaqItem(id) {
+  const result = await cloud.database.rpc('admin_delete_faq_item', { p_id: id })
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  return result.data === true
+}
+
+async function adminGetFaqSettings() {
+  const result = await cloud.database.rpc('admin_get_faq_settings', {})
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  const rows = Array.isArray(result.data) ? result.data : []
+  return rows.length ? rows[0] : null
+}
+
+async function adminUpdateFaqSettings(patch) {
+  const result = await cloud.database.rpc('admin_update_faq_settings', {
+    p_ai_enabled: patch.ai_enabled === undefined ? null : patch.ai_enabled,
+    p_ai_model: patch.ai_model === undefined ? null : patch.ai_model,
+    p_ai_prompt: patch.ai_prompt === undefined ? null : patch.ai_prompt,
+    p_welcome: patch.welcome === undefined ? null : patch.welcome,
+    p_daily_limit: patch.daily_limit === undefined ? null : patch.daily_limit,
+  })
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  return result.data === true
+}
+
+// ---- 大模型 ----
+// stream 只能传 true（传 false 会被 SDK 直接拒绝），所以这里统一把片段拼成完整
+// 文本再返回；onDelta 拿到的是「截至目前的完整文本」，用来做逐字渲染。
+//
+// 模型列表的返回形态在 SDK 各版本间不统一（数组 / { data } / { models }），
+// 这里一次性归一化成数组，页面层不用猜。
+async function llmModels() {
+  const result = await cloud.llm.models.list()
+  if (Array.isArray(result)) return result
+  const list =
+    (result && Array.isArray(result.data) && result.data) ||
+    (result && Array.isArray(result.models) && result.models) ||
+    []
+  return list
+}
+
+// options: { conversationId } —— 同一个会话窗口复用一个 ID，服务端用来做路由与计量，
+// 它不等于「服务端记住了上文」，上下文仍然要靠 messages 自己带上。
+async function llmChat(modelId, messages, onDelta, options) {
+  const opts = options || {}
+  const payload = {
+    model: modelId,
+    messages: messages,
+    stream: true,
+    temperature: 0.3,
+  }
+  if (opts.conversationId) payload.conversationId = opts.conversationId
+  if (opts.signal) payload.signal = opts.signal
+
+  let answer = ''
+  const stream = await cloud.llm.chat.completions.create(payload)
+
+  // 刻意不用 for await ... of：小程序「ES6 转 ES5」的 babel 不保证注入
+  // Symbol.asyncIterator，真机上会直接抛 TypeError 且很难定位。
+  // 手动 next() 语义完全一样，只依赖 Promise。
+  let iterator = stream
+  if (
+    iterator &&
+    typeof iterator.next !== 'function' &&
+    typeof Symbol === 'function' &&
+    Symbol.asyncIterator &&
+    typeof iterator[Symbol.asyncIterator] === 'function'
+  ) {
+    iterator = iterator[Symbol.asyncIterator]()
+  }
+  if (!iterator || typeof iterator.next !== 'function') return answer
+
+  let step = await iterator.next()
+  while (step && !step.done) {
+    const chunk = step.value
+    const choice = chunk && chunk.choices ? chunk.choices[0] : null
+    const delta = choice && choice.delta ? choice.delta.content : ''
+    if (delta) {
+      answer += delta
+      if (onDelta) onDelta(answer)
+    }
+    step = await iterator.next()
+  }
+  return answer
+}
+
 module.exports = {
   getErrorMessage: getErrorMessage,
   formatTime: formatTime,
+  listFaqItems: listFaqItems,
+  getFaqSettings: getFaqSettings,
+  adminListFaqItems: adminListFaqItems,
+  adminUpsertFaqItem: adminUpsertFaqItem,
+  adminDeleteFaqItem: adminDeleteFaqItem,
+  adminGetFaqSettings: adminGetFaqSettings,
+  adminUpdateFaqSettings: adminUpdateFaqSettings,
+  llmModels: llmModels,
+  llmChat: llmChat,
   getSession: getSession,
   requireSession: requireSession,
   login: login,

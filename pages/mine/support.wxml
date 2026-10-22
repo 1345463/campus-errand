@@ -18,6 +18,8 @@
 
   <!-- 会话区自己在导航条下方起算：top 用行内样式给，机型不同状态栏高度不同 -->
   <view wx:else class="sup-body" style="top:{{navTotal}}px">
+    <!-- 临时调试条：定位完「消息之间空白」后删除 -->
+    <view wx:if="{{debug && debugInfo}}" class="sup-debug">{{debugInfo}}</view>
     <!-- 热门问题：第一次进来最容易发生的就是"不知道该问什么" -->
     <view wx:if="{{hot.length > 0}}" class="sup-hot">
       <view class="sup-hot-head" bindtap="toggleHot">

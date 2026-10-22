@@ -81,10 +81,26 @@
 }
 
 /* 会话内容层：所有消息的真实包裹盒，滚动到底时以它的高度为准。
-   注意别给它设 height / flex，否则高度不等于内容高度。 */
+   注意别给它设 height / flex，否则高度不等于内容高度。
+   justify-content: flex-end 是为了让消息在「不足一屏」时贴着底部，
+   这是聊天页该有的观感 —— 消息从上往下排会显得中间空一大块。 */
 .sup-chat {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 100%;
   padding: 20rpx 24rpx 32rpx;
   box-sizing: border-box;
+}
+
+/* 临时调试条，定位完删除 */
+.sup-debug {
+  flex: none;
+  padding: 8rpx 24rpx;
+  background: #FFF4E5;
+  color: #B45309;
+  font-size: 22rpx;
+  text-align: center;
 }
 
 .msg-row {

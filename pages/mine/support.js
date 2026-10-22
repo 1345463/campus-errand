@@ -222,6 +222,9 @@ Page({
       motionClass: motion.rootClass(),
       // 一个会话窗口一个 ID，整页生命周期内复用（服务端用它做路由与计量）
       conversationId: 'cs_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
+      // 临时：打开布局调试条，确认空白成因后连同 WXML 里那一行一起删掉
+      debug: true,
+      debugInfo: '测量中…',
     })
     page.boot()
   },
@@ -435,11 +438,28 @@ Page({
   onScroll: function (event) {
     const page = this
     const viewport = page._viewport || 0
-    if (!viewport) return
     const detail = event.detail || {}
-    const distance =
-      Number(detail.scrollHeight || 0) - Number(detail.scrollTop || 0) - viewport
-    page._atBottom = distance < 60
+    const height = Number(detail.scrollHeight || 0)
+    const top = Number(detail.scrollTop || 0)
+    if (viewport > 0) {
+      const distance = height - top - viewport
+      page._atBottom = distance < 60
+      // 临时调试条：把「可视高度 / 内容高度 / 当前位置」写在会话区上方，
+      // 用来确认空白到底是滚动错位还是气泡本身被撑高。定位后记得删掉。
+      if (page.data.debug) {
+        page.setData({
+          debugInfo:
+            '视口 ' +
+            Math.round(viewport) +
+            ' · 内容 ' +
+            Math.round(height) +
+            ' · 位置 ' +
+            Math.round(top) +
+            ' · 距底 ' +
+            Math.round(distance),
+        })
+      }
+    }
   },
 
   // ---------- 输入 ----------

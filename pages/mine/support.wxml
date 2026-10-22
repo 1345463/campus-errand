@@ -16,7 +16,8 @@
     <view class="btn-primary top-gap" bindtap="goBack">返回</view>
   </view>
 
-  <view wx:else class="sup-body">
+  <!-- 会话区自己在导航条下方起算：top 用行内样式给，机型不同状态栏高度不同 -->
+  <view wx:else class="sup-body" style="top:{{navTotal}}px">
     <!-- 热门问题：第一次进来最容易发生的就是"不知道该问什么" -->
     <view wx:if="{{hot.length > 0}}" class="sup-hot">
       <view class="sup-hot-head" bindtap="toggleHot">
@@ -39,18 +40,22 @@
       </scroll-view>
     </view>
 
+    <!-- 滚到底靠页面层改 scrollTop（见 support.js 的 scrollToBottom）。
+         刻意不用 scroll-into-view：它在 setData 同一帧里指向一个刚渲染的节点，
+         很容易滚个空，回答就被丢在屏幕外面。
+         消息行也没加入场动画：每条蹦一下会让人觉得"晚出现"，而且 transform 会
+         干扰滚动位置的测量。 -->
     <scroll-view
       class="sup-scroll"
       scroll-y="{{true}}"
-      scroll-into-view="{{toView}}"
-      scroll-with-animation="{{true}}"
+      scroll-top="{{scrollTop}}"
+      bindscroll="onScroll"
     >
       <view
         wx:for="{{messages}}"
         wx:for-item="msg"
         wx:key="id"
-        id="{{msg.id}}"
-        class="msg-row {{msg.role === 'me' ? 'mine' : 'peer'}} anim anim-up"
+        class="msg-row {{msg.role === 'me' ? 'mine' : 'peer'}}"
       >
         <view class="msg-meta">
           <text wx:if="{{msg.role === 'me'}}">我 · {{msg.timeText}}</text>

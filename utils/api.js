@@ -1343,16 +1343,27 @@ async function listFaqItems() {
   return Array.isArray(result.data) ? result.data : []
 }
 
-// 客服设置：AI 开关 / 模型 / 系统提示词 / 欢迎语 / 每人每日提问上限。
+// 客服设置：AI 开关 / 模型 / 系统提示词 / 欢迎语 / 上限，还有一整套模型调用参数。
 // ai_prompt 一并返回：端上直连大模型，system 消息得在客户端拼。
-// 它不是密钥，后台改完 5 分钟内随开关缓存一起生效。
+// 它不是密钥 —— 真正的凭证在云服务 SDK 里，端上拿不到；藏起来只会让 AI 用不了。
 async function getFaqSettings() {
   const result = await cloud.database.rpc('get_faq_settings', {})
   if (result.error) throw new Error(getErrorMessage(result.error))
   const rows = Array.isArray(result.data) ? result.data : []
   return rows.length
     ? rows[0]
-    : { ai_enabled: false, ai_model: '', ai_prompt: '', welcome: '', daily_limit: 20 }
+    : {
+        ai_enabled: false,
+        ai_model: '',
+        ai_prompt: '',
+        welcome: '',
+        daily_limit: 20,
+        temperature: 0.3,
+        max_tokens: 400,
+        context_faq_limit: 40,
+        history_turns: 3,
+        timeout_ms: 30000,
+      }
 }
 
 async function adminListFaqItems() {
@@ -1388,13 +1399,21 @@ async function adminGetFaqSettings() {
   return rows.length ? rows[0] : null
 }
 
+// 超过 10 个参数的 RPC，参数名一个都不能拼错：PostgreSQL 是按名字匹配的，
+// 漏一个直接 42883 function does not exist。
 async function adminUpdateFaqSettings(patch) {
+  const p = patch || {}
   const result = await cloud.database.rpc('admin_update_faq_settings', {
-    p_ai_enabled: patch.ai_enabled === undefined ? null : patch.ai_enabled,
-    p_ai_model: patch.ai_model === undefined ? null : patch.ai_model,
-    p_ai_prompt: patch.ai_prompt === undefined ? null : patch.ai_prompt,
-    p_welcome: patch.welcome === undefined ? null : patch.welcome,
-    p_daily_limit: patch.daily_limit === undefined ? null : patch.daily_limit,
+    p_ai_enabled: p.ai_enabled === undefined ? null : p.ai_enabled,
+    p_ai_model: p.ai_model === undefined ? null : p.ai_model,
+    p_ai_prompt: p.ai_prompt === undefined ? null : p.ai_prompt,
+    p_welcome: p.welcome === undefined ? null : p.welcome,
+    p_daily_limit: p.daily_limit === undefined ? null : p.daily_limit,
+    p_temperature: p.temperature === undefined ? null : p.temperature,
+    p_max_tokens: p.max_tokens === undefined ? null : p.max_tokens,
+    p_context_faq_limit: p.context_faq_limit === undefined ? null : p.context_faq_limit,
+    p_history_turns: p.history_turns === undefined ? null : p.history_turns,
+    p_timeout_ms: p.timeout_ms === undefined ? null : p.timeout_ms,
   })
   if (result.error) throw new Error(getErrorMessage(result.error))
   return result.data === true
@@ -1416,15 +1435,20 @@ async function llmModels() {
   return list
 }
 
-// options: { conversationId } —— 同一个会话窗口复用一个 ID，服务端用来做路由与计量，
-// 它不等于「服务端记住了上文」，上下文仍然要靠 messages 自己带上。
+// options: { conversationId, signal, temperature, maxTokens }
+// conversationId 只做服务端路由与计量 —— 它不等于「服务端记住了上文」，
+// 上下文仍然要靠 messages 自己带上（support 页会把最近几轮对话拼进来）。
+// 温度与最大字数由后台 faq_settings 下发，默认给客服场景的保守值。
 async function llmChat(modelId, messages, onDelta, options) {
   const opts = options || {}
   const payload = {
     model: modelId,
     messages: messages,
     stream: true,
-    temperature: 0.3,
+    temperature: typeof opts.temperature === 'number' ? opts.temperature : 0.3,
+  }
+  if (typeof opts.maxTokens === 'number' && opts.maxTokens > 0) {
+    payload.max_tokens = opts.maxTokens
   }
   if (opts.conversationId) payload.conversationId = opts.conversationId
   if (opts.signal) payload.signal = opts.signal

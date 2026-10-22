@@ -50,6 +50,7 @@
           </picker>
         </view>
         <view wx:if="{{modelHint}}" class="hint">{{modelHint}}</view>
+        <view wx:else class="hint">模型走云服务免密钥通道，不用自己填 API Key；调用参数在下面的「模型 API 配置」里改。</view>
 
         <view class="field top-gap">
           <text class="field-label">每日提问上限</text>
@@ -87,11 +88,88 @@
         </view>
         <view class="hint">这段会作为 system 消息发给模型；FAQ 内容会自动追加在后面作为「平台资料」，不用在这里重复写。</view>
 
-        <view
-          class="btn-primary top-gap {{settingsSaving ? 'disabled' : ''}}"
-          hover-class="press"
-          bindtap="saveSettings"
-        >{{settingsSaving ? '保存中…' : '保存 AI 设置'}}</view>
+        <view class="btn-primary top-gap {{settingsSaving ? 'disabled' : ''}}" hover-class="press" bindtap="saveSettings">
+          {{settingsSaving ? '保存中…' : '保存 AI 设置'}}
+        </view>
+      </view>
+
+      <!-- ===== 模型 API 配置 ===== -->
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">模型 API 配置</text>
+          <text class="section-more">{{modelNames[modelIndex] || '未选模型'}}</text>
+        </view>
+
+        <view class="field">
+          <text class="field-label">温度</text>
+          <input
+            class="field-input"
+            type="digit"
+            placeholder="0 - 1，客服建议 0.2 - 0.4"
+            value="{{temperature}}"
+            bindinput="onTemperatureInput"
+          />
+        </view>
+        <view class="hint">越低越严谨、复读感强；越高越发散，容易编出平台没有的规则。客服场景别超过 0.5。</view>
+
+        <view class="field top-gap">
+          <text class="field-label">单次回答最大字数</text>
+          <input
+            class="field-input"
+            type="number"
+            placeholder="50 - 2000"
+            value="{{maxTokens}}"
+            bindinput="onMaxTokensInput"
+          />
+        </view>
+        <view class="hint">够答完就行：设太大会又慢又贵，设太小回答会被拦腰截断。</view>
+
+        <view class="field top-gap">
+          <text class="field-label">超时时间（秒）</text>
+          <input
+            class="field-input"
+            type="number"
+            placeholder="5 - 120"
+            value="{{timeoutSec}}"
+            bindinput="onTimeoutInput"
+          />
+        </view>
+        <view class="hint">到点没答完就中断，并提示用户换个问法或转人工 —— 总比对着「正在思考」干等强。</view>
+
+        <view class="field top-gap">
+          <text class="field-label">携带历史轮数</text>
+          <input
+            class="field-input"
+            type="number"
+            placeholder="0 - 8，建议 3"
+            value="{{historyTurns}}"
+            bindinput="onHistoryInput"
+          />
+        </view>
+        <view class="hint">带上最近几轮对话，模型才接得住「那赏金呢」「多久到账」这种追问。填 0 表示每次提问都当全新问题。</view>
+
+        <view class="field top-gap">
+          <text class="field-label">注入的 FAQ 条数</text>
+          <input
+            class="field-input"
+            type="number"
+            placeholder="0 - 100，建议 40"
+            value="{{contextFaqLimit}}"
+            bindinput="onContextInput"
+          />
+        </view>
+        <view class="hint">按排序取前 N 条塞进系统消息，模型只能依据它们作答。条数越多越贵，填 0 表示不注入。</view>
+
+        <view class="tool-row top-gap">
+          <view class="doc-btn {{testing ? 'doc-btn-disabled' : ''}}" bindtap="testModel">
+            {{testing ? '调用中…' : '测试连接'}}
+          </view>
+        </view>
+        <view wx:if="{{testText}}" class="hint">{{testText}}</view>
+
+        <view class="btn-primary top-gap {{settingsSaving ? 'disabled' : ''}} {{testing ? 'disabled' : ''}}" hover-class="press" bindtap="saveSettings">
+          {{settingsSaving ? '保存中…' : '保存模型配置'}}
+        </view>
       </view>
 
       <!-- ===== FAQ 列表 ===== -->

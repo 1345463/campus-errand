@@ -22,8 +22,10 @@ const moderation = require('../../utils/moderation')
 const MAX_LEN = 200
 const QUOTA_KEY = 'ai_support_quota_v1'
 const HOT_LIMIT = 8
-// 塞进 system 的 FAQ 条数上限：全量塞进去 token 太贵，且条目多了模型反而挑不准
+// 后端没给值时用的兜底：三个上限集中放在这里，别散进各个函数
 const CONTEXT_FAQ_LIMIT = 40
+const HISTORY_TURNS = 3
+const DEFAULT_TIMEOUT_MS = 30000
 
 const DEFAULT_PROMPT =
   '你是「校园跑腿」小程序的智能客服助手。只回答与本平台相关的问题。' +
@@ -106,7 +108,10 @@ function sanitize(text) {
 
 function buildSystemPrompt(settings, faqList) {
   const base = String((settings && settings.ai_prompt) || '').trim() || DEFAULT_PROMPT
-  const rows = (faqList || []).slice(0, CONTEXT_FAQ_LIMIT)
+  // 后台可以关掉资料注入（填 0），只想让模型纯按提示词答时用得上
+  const limit = num((settings || {}).context_faq_limit, CONTEXT_FAQ_LIMIT)
+  if (limit <= 0) return base
+  const rows = (faqList || []).slice(0, limit)
   if (!rows.length) return base
   const body = rows
     .map(function (item) {
@@ -114,6 +119,38 @@ function buildSystemPrompt(settings, faqList) {
     })
     .join('\n')
   return base + '\n\n平台资料：\n' + body
+}
+
+// 数字兜底：后台字段是空值 / 脏值时不能用 NaN 去拼 prompt 或算历史轮数
+function num(value, fallback) {
+  const parsed = Number(value)
+  return isNaN(parsed) ? fallback : parsed
+}
+
+// ============================================================================
+// 上下文：把最近几轮对话一起发给模型
+// ----------------------------------------------------------------------------
+// 为什么必须要：不带历史的话每一轮都是一次全新提问。用户顺着往下问
+// 「那赏金呢」「多久能到」这种省略句时模型完全不知道在问什么，回答就会
+// 接不上上一句 —— 看起来像"答非所问"，其实是上下文丢了。
+// 只尾巴中的内容进历史：欢迎语（tip）是开场白，占位气泡（pending）还没内容。
+// ============================================================================
+function buildHistory(list, turns, excludeId) {
+  const maxTurns = Math.max(Math.min(num(turns, HISTORY_TURNS), 8), 0)
+  if (maxTurns <= 0) return []
+  const history = []
+  ;(list || []).forEach(function (item) {
+    if (excludeId && item.id === excludeId) return
+    if (item.pending) return
+    if (item.role === 'me') {
+      history.push({ role: 'user', content: sanitize(item.text) })
+    } else if (item.kind === 'ai' || item.kind === 'faq') {
+      history.push({ role: 'assistant', content: String(item.text || '').slice(0, 500) })
+    }
+  })
+  // 一轮 = 一问一答两条，所以留 2×maxTurns 条
+  const keep = maxTurns * 2
+  return history.slice(Math.max(history.length - keep, 0))
 }
 
 let seq = 0
@@ -141,10 +178,11 @@ Page({
 
     // 会话
     messages: [],
-    toView: '',
     input: '',
     countText: '0 / ' + MAX_LEN,
     sending: false,
+    // scroll-view 的滚动位置：这个值每次都必须变大，组件才会真的动一次
+    scrollTop: 0,
 
     // 热门问题（点一下直接问）
     hot: [],
@@ -174,7 +212,37 @@ Page({
     page.boot()
   },
 
+  // 量一下会话区可视高度，用来判断「用户此刻是否贴在底部」。
+  // 拿不到就退回一个经验值，最多是自动滚动的判定不够准，不影响显示。
+  measureViewport: function () {
+    const page = this
+    if (typeof wx.createSelectorQuery !== 'function') return
+    try {
+      const query = wx.createSelectorQuery()
+      query
+        .in(page)
+        .select('.sup-scroll')
+        .boundingClientRect(function (rect) {
+          if (rect && rect.height) page._viewport = rect.height
+        })
+        .exec()
+    } catch (e) {
+      /* 查询失败不用管 */
+    }
+  },
+
+  onReady: function () {
+    // 布局第一帧之后才量得到真实高度，放 onLoad 里会量到 0。
+    // 这里必须包一层：直接 setTimeout(this.measureViewport, 120) 会把 this 丢掉。
+    const page = this
+    setTimeout(function () {
+      page.measureViewport()
+    }, 120)
+  },
+
   onUnload: function () {
+    if (this._scrollTimer) clearTimeout(this._scrollTimer)
+    if (this._timeout) clearTimeout(this._timeout)
     if (this._abort && typeof this._abort.abort === 'function') {
       try {
         this._abort.abort()
@@ -182,6 +250,8 @@ Page({
         /* 忽略 */
       }
     }
+    this._scrollTimer = null
+    this._timeout = null
     this._abort = null
   },
 
@@ -240,7 +310,8 @@ Page({
     const list = (page.data.messages || []).slice()
     list.push(msg)
     page.setData({ messages: list })
-    page.scrollToBottom()
+    // 用户正贴着底部时，新气泡要自己滚进视野，否则要手动拉到底才看得到
+    page.scheduleScroll()
     return msg.id
   },
 
@@ -275,17 +346,45 @@ Page({
       return next
     })
     page.setData({ messages: list })
+    // 流式渲染期间也要跟着滚：字越堆越多，不跟着走用户只能看到开头几行
+    page.scheduleScroll()
   },
 
+  // --------------------------------------------------------------------------
+  // 滚动到底
+  // 之前用 scroll-into-view：它要求目标节点此刻已经渲染出来，而我们总是在
+  // setData 的同一帧里就去指定，运气不好就滚了个寂寞，新回答被丢在屏幕外。
+  // scroll-top 更稳：给一个比内容高度大得多的值，组件自己会夹到底部。
+  // 另一个细节 —— 它只在「值变了」时才触发，所以每次都 +1 换出一个新值。
+  // --------------------------------------------------------------------------
   scrollToBottom: function () {
     const page = this
-    const list = page.data.messages || []
-    if (!list.length) return
-    const last = list[list.length - 1]
-    // setData 之后 DOM 未必就位，晚一帧再滚，否则最后一条会被输入框盖住
-    setTimeout(function () {
-      page.setData({ toView: last.id })
-    }, 80)
+    page._scrollSeq = (page._scrollSeq || 0) + 1
+    page.setData({ scrollTop: 1000000 + page._scrollSeq })
+  },
+
+  // 节流版：流式输出每个字都会回调一次，逐字滚会把 setData 刷爆。
+  // 用 throttle 而不是 debounce —— debounce 在连续输出时永远不触发，
+  // 那样最后一次滚动就丢了，回答的尾巴还是看不到。
+  scheduleScroll: function () {
+    const page = this
+    if (page._atBottom === false) return // 用户自己往上翻历史了，别抢他的滚动条
+    if (page._scrollTimer) return
+    page._scrollTimer = setTimeout(function () {
+      page._scrollTimer = null
+      page.scrollToBottom()
+    }, 120)
+  },
+
+  // 用户滑动时记一下是否还在底部：不在的话自动滚动暂停，看完再往下翻一点才恢复
+  onScroll: function (event) {
+    const page = this
+    const viewport = page._viewport || 0
+    if (!viewport) return
+    const detail = event.detail || {}
+    const distance =
+      Number(detail.scrollHeight || 0) - Number(detail.scrollTop || 0) - viewport
+    page._atBottom = distance < 60
   },
 
   // ---------- 输入 ----------
@@ -363,6 +462,10 @@ Page({
       return
     }
 
+    // 历史要在占位气泡之前拼：此刻 messages 里刚好是「上文 + 用户刚才那句」，
+    // 占位气泡 push 进去以后会被 pending 过滤掉，所以放前放后都安全，放前面更好读。
+    const history = buildHistory(page.data.messages, settings.history_turns, '')
+
     const msgId = page.pushBot('正在思考…', 'ai')
     page.updateMsg(msgId, '正在思考…', { pending: true })
 
@@ -372,12 +475,18 @@ Page({
       aiLeftText: String(Math.max(page.data.aiLimit - used, 0)),
     })
 
-    const messages = [
-      { role: 'system', content: buildSystemPrompt(settings, page.data.faqList) },
-      { role: 'user', content: '用户提问：' + sanitize(question) },
-    ]
+    const messages = [{ role: 'system', content: buildSystemPrompt(settings, page.data.faqList) }]
+    if (history.length) {
+      history.forEach(function (item) {
+        messages.push(item)
+      })
+    } else {
+      // 后台把历史轮数调成 0 时也要保证模型知道用户问了什么
+      messages.push({ role: 'user', content: '用户提问：' + sanitize(question) })
+    }
 
-    // AbortController 在部分基础库里不存在，不存在就不支持中断，不影响主流程
+    // 超时一道保险：弱网下流可能半天不动，别让用户对着「正在思考」干等
+    const timeoutMs = Math.max(num(settings.timeout_ms, DEFAULT_TIMEOUT_MS), 5000)
     let controller = null
     if (typeof AbortController === 'function') {
       try {
@@ -387,6 +496,16 @@ Page({
         controller = null
       }
     }
+    if (controller) {
+      page._timeout = setTimeout(function () {
+        page._timeout = null
+        try {
+          controller.abort()
+        } catch (e) {
+          /* 忽略 */
+        }
+      }, timeoutMs)
+    }
 
     api
       .llmChat(
@@ -395,9 +514,18 @@ Page({
         function (partial) {
           page.updateMsg(msgId, partial, { pending: true })
         },
-        { conversationId: page.data.conversationId || '', signal: controller ? controller.signal : undefined }
+        {
+          conversationId: page.data.conversationId || '',
+          signal: controller ? controller.signal : undefined,
+          temperature: num(settings.temperature, 0.3),
+          maxTokens: num(settings.max_tokens, 400),
+        }
       )
       .then(function (answer) {
+        if (page._timeout) {
+          clearTimeout(page._timeout)
+          page._timeout = null
+        }
         page._abort = null
         const text = String(answer || '').trim()
         page.updateMsg(msgId, text || '这个我答不准，请点「转人工」让人工客服帮你。', { pending: false })
@@ -405,15 +533,24 @@ Page({
         page.scrollToBottom()
       })
       .catch(function (error) {
+        if (page._timeout) {
+          clearTimeout(page._timeout)
+          page._timeout = null
+        }
         page._abort = null
         const message = api.getErrorMessage(error)
         if (typeof console !== 'undefined' && console.error) {
           console.error('[mine/support] llm failed:', message, error)
         }
-        page.updateMsg(msgId, 'AI 暂时答不上来（' + message + '）。可以换个问法，或点「转人工」。', {
-          pending: false,
-          failed: true,
-        })
+        // 自己 abort 出去的（多半是超时），换个用户看得懂的说法
+        const aborted = message.indexOf('abort') >= 0 || message.indexOf('Abort') >= 0
+        page.updateMsg(
+          msgId,
+          aborted
+            ? '这次想太久了（超过 ' + Math.round(timeoutMs / 1000) + ' 秒没答完）。可以换个简单点的问法，或点「转人工」。'
+            : 'AI 暂时答不上来（' + message + '）。可以换个问法，或点「转人工」。',
+          { pending: false, failed: true }
+        )
         page.setData({ sending: false })
       })
   },

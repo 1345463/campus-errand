@@ -29,6 +29,14 @@ CREATE TABLE IF NOT EXISTS public.faq_settings (
   welcome     text        NOT NULL DEFAULT '你好，我是校园跑腿的智能助手，常见问题可以直接问我。',
   -- 每人每天 AI 提问上限：端上直连大模型，不限流会被刷爆配额
   daily_limit integer     NOT NULL DEFAULT 20,
+  -- 下面五个是模型调用参数，端上 llmChat 直接照搬，改后台即生效、不用发版。
+  -- 范围的上下限在 admin_update_faq_settings 里也卡一遍：
+  -- 服务端是最后一道关，只靠前端输入框校验的话，脏值会把整个 AI 弄挂。
+  temperature       numeric(3,2) NOT NULL DEFAULT 0.30,
+  max_tokens        integer      NOT NULL DEFAULT 400,
+  context_faq_limit integer      NOT NULL DEFAULT 40,
+  history_turns     integer      NOT NULL DEFAULT 3,
+  timeout_ms        integer      NOT NULL DEFAULT 30000,
   updated_at  timestamptz NOT NULL DEFAULT now()
 );
 
@@ -44,6 +52,15 @@ VALUES (
   '4. 涉及投诉、退款、账号异常、订单纠纷，直接引导用户转人工。'
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- 老库升级：上面那句 CREATE TABLE IF NOT EXISTS 对已存在的表不会补列，
+-- 所以新增列要单独 ALTER 一遍，重复执行也不会报错。
+ALTER TABLE public.faq_settings
+  ADD COLUMN IF NOT EXISTS temperature       numeric(3,2) NOT NULL DEFAULT 0.30,
+  ADD COLUMN IF NOT EXISTS max_tokens        integer      NOT NULL DEFAULT 400,
+  ADD COLUMN IF NOT EXISTS context_faq_limit integer      NOT NULL DEFAULT 40,
+  ADD COLUMN IF NOT EXISTS history_turns     integer      NOT NULL DEFAULT 3,
+  ADD COLUMN IF NOT EXISTS timeout_ms        integer      NOT NULL DEFAULT 30000;
 
 -- ---------- 3. RLS ----------
 ALTER TABLE public.faq_items    ENABLE ROW LEVEL SECURITY;
@@ -95,13 +112,17 @@ GRANT EXECUTE ON FUNCTION public.list_faq_items() TO authenticated, anon;
 -- 所以 prompt 不是秘密（不含密钥），只要求它别写进日志。
 DROP FUNCTION IF EXISTS public.get_faq_settings();
 CREATE FUNCTION public.get_faq_settings()
-RETURNS TABLE (ai_enabled boolean, ai_model text, ai_prompt text, welcome text, daily_limit integer)
+RETURNS TABLE (
+  ai_enabled boolean, ai_model text, ai_prompt text, welcome text, daily_limit integer,
+  temperature numeric, max_tokens integer, context_faq_limit integer, history_turns integer, timeout_ms integer
+)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $fn$
-  SELECT ai_enabled, ai_model, ai_prompt, welcome, daily_limit
+  SELECT ai_enabled, ai_model, ai_prompt, welcome, daily_limit,
+         temperature, max_tokens, context_faq_limit, history_turns, timeout_ms
   FROM public.faq_settings
   WHERE id = 1;
 $fn$;
@@ -222,11 +243,8 @@ GRANT EXECUTE ON FUNCTION public.admin_delete_faq_item(bigint) TO authenticated;
 DROP FUNCTION IF EXISTS public.admin_get_faq_settings();
 CREATE FUNCTION public.admin_get_faq_settings()
 RETURNS TABLE (
-  ai_enabled  boolean,
-  ai_model    text,
-  ai_prompt   text,
-  welcome     text,
-  daily_limit integer
+  ai_enabled boolean, ai_model text, ai_prompt text, welcome text, daily_limit integer,
+  temperature numeric, max_tokens integer, context_faq_limit integer, history_turns integer, timeout_ms integer
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -237,20 +255,28 @@ BEGIN
     RAISE EXCEPTION '没有客服权限';
   END IF;
   RETURN QUERY
-    SELECT s.ai_enabled, s.ai_model, s.ai_prompt, s.welcome, s.daily_limit
+    SELECT s.ai_enabled, s.ai_model, s.ai_prompt, s.welcome, s.daily_limit,
+           s.temperature, s.max_tokens, s.context_faq_limit, s.history_turns, s.timeout_ms
     FROM public.faq_settings s WHERE s.id = 1;
 END;
 $fn$;
 GRANT EXECUTE ON FUNCTION public.admin_get_faq_settings() TO authenticated;
 
 -- ---------- 10. 管理：更新设置 ----------
+-- 十个参数：超过 8 个就别数位置了，调用方一律用命名参数 p_xxx。
 DROP FUNCTION IF EXISTS public.admin_update_faq_settings(boolean, text, text, text, integer);
+DROP FUNCTION IF EXISTS public.admin_update_faq_settings(boolean, text, text, text, integer, numeric, integer, integer, integer, integer);
 CREATE FUNCTION public.admin_update_faq_settings(
-  p_ai_enabled  boolean,
-  p_ai_model    text,
-  p_ai_prompt   text,
-  p_welcome     text,
-  p_daily_limit integer
+  p_ai_enabled        boolean,
+  p_ai_model          text,
+  p_ai_prompt         text,
+  p_welcome           text,
+  p_daily_limit       integer,
+  p_temperature       numeric,
+  p_max_tokens        integer,
+  p_context_faq_limit integer,
+  p_history_turns     integer,
+  p_timeout_ms        integer
 )
 RETURNS boolean
 LANGUAGE plpgsql
@@ -264,18 +290,38 @@ BEGIN
   IF p_daily_limit IS NOT NULL AND (p_daily_limit < 1 OR p_daily_limit > 200) THEN
     RAISE EXCEPTION '每日提问上限要在 1 到 200 之间';
   END IF;
+  IF p_temperature IS NOT NULL AND (p_temperature < 0 OR p_temperature > 1) THEN
+    RAISE EXCEPTION '温度要在 0 到 1 之间';
+  END IF;
+  IF p_max_tokens IS NOT NULL AND (p_max_tokens < 50 OR p_max_tokens > 2000) THEN
+    RAISE EXCEPTION '单次最大字数要在 50 到 2000 之间';
+  END IF;
+  IF p_context_faq_limit IS NOT NULL AND (p_context_faq_limit < 0 OR p_context_faq_limit > 100) THEN
+    RAISE EXCEPTION '上下文 FAQ 条数要在 0 到 100 之间';
+  END IF;
+  IF p_history_turns IS NOT NULL AND (p_history_turns < 0 OR p_history_turns > 8) THEN
+    RAISE EXCEPTION '历史轮数要在 0 到 8 之间';
+  END IF;
+  IF p_timeout_ms IS NOT NULL AND (p_timeout_ms < 5000 OR p_timeout_ms > 120000) THEN
+    RAISE EXCEPTION '超时要在 5000 到 120000 毫秒之间';
+  END IF;
   UPDATE public.faq_settings
-     SET ai_enabled  = COALESCE(p_ai_enabled, false),
-         ai_model    = COALESCE(p_ai_model, ''),
-         ai_prompt   = COALESCE(p_ai_prompt, ai_prompt),
-         welcome     = COALESCE(NULLIF(trim(p_welcome), ''), welcome),
-         daily_limit = COALESCE(p_daily_limit, daily_limit),
-         updated_at  = now()
+     SET ai_enabled        = COALESCE(p_ai_enabled, false),
+         ai_model          = COALESCE(p_ai_model, ''),
+         ai_prompt         = COALESCE(p_ai_prompt, ai_prompt),
+         welcome           = COALESCE(NULLIF(trim(p_welcome), ''), welcome),
+         daily_limit       = COALESCE(p_daily_limit, daily_limit),
+         temperature       = COALESCE(p_temperature, temperature),
+         max_tokens        = COALESCE(p_max_tokens, max_tokens),
+         context_faq_limit = COALESCE(p_context_faq_limit, context_faq_limit),
+         history_turns     = COALESCE(p_history_turns, history_turns),
+         timeout_ms        = COALESCE(p_timeout_ms, timeout_ms),
+         updated_at        = now()
    WHERE id = 1;
   RETURN FOUND;
 END;
 $fn$;
-GRANT EXECUTE ON FUNCTION public.admin_update_faq_settings(boolean, text, text, text, integer) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_update_faq_settings(boolean, text, text, text, integer, numeric, integer, integer, integer, integer) TO authenticated;
 
 -- ---------- 11. 灰度开关 ----------
 INSERT INTO public.feature_flags (flag_key, label, description, enabled, sort_order)

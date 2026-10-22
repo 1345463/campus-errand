@@ -24,8 +24,8 @@ Page({
     appVersion: config.appVersion,
     school: config.school,
     notice: config.notice,
-    // 客服联系方式：config.support 里填了哪几项，就渲染成几行可复制的菜单
-    supportRows: [],
+    // 联系客服不再放这里：智能客服页统一承接（AI 回答 + 转人工工单），
+    // 同一个诉求留两个入口只会让用户不知道点哪个。
   },
 
   onLoad: function () {
@@ -35,26 +35,10 @@ Page({
       motionClass: motion.rootClass(),
       reduceMotion: motion.reduced(),
     })
-    this.buildSupport()
   },
 
   onShow: function () {
     this.load()
-  },
-
-  // 客服行：三个渠道留空时这一块不渲染，由 WXML 兜底成「联系客服 → 意见反馈」
-  buildSupport: function () {
-    const s = config.support || {}
-    const defs = [
-      { key: 'wechat', icon: '💬', label: '客服微信', value: s.wechat },
-      { key: 'qq', icon: '🐧', label: '客服 QQ', value: s.qq },
-      { key: 'email', icon: '✉️', label: '客服邮箱', value: s.email },
-    ]
-    const rows = []
-    defs.forEach(function (d) {
-      if (d.value) rows.push(d)
-    })
-    this.setData({ supportRows: rows })
   },
 
   load: function () {
@@ -161,18 +145,4 @@ Page({
       })
   },
 
-  copySupport: function (event) {
-    const value = String(event.currentTarget.dataset.value || '')
-    if (!value) return
-    motion.haptic('light')
-    wx.setClipboardData({
-      data: value,
-      success: function () {
-        ui.toast({ title: '已复制：' + value, icon: 'none' })
-      },
-      fail: function () {
-        ui.toast({ title: '复制失败，请长按文字手动复制', icon: 'none' })
-      },
-    })
-  },
 })

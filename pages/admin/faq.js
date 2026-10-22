@@ -44,6 +44,15 @@ Page({
     welcome: '',
     dailyLimit: '20',
     settingsSaving: false,
+
+    // 模型 API 参数（与 support 页 llmChat 一一对应）
+    temperature: '0.3',
+    maxTokens: '400',
+    timeoutSec: '30',
+    historyTurns: '3',
+    contextFaqLimit: '40',
+    testing: false,
+    testText: '',
   },
 
   onLoad: function () {
@@ -133,6 +142,10 @@ Page({
         let modelIndex = current ? modelIds.indexOf(current) : -1
         if (modelIndex < 0 && modelIds.length) modelIndex = 0
 
+        // 这四个是新加的参数，服务端可能还没刷出来，取不到就按兜底值显示
+        const temperature = Number(settings.temperature)
+        const timeoutSec = Math.round((Number(settings.timeout_ms) || 30000) / 1000)
+
         page.setData({
           list: list,
           loading: false,
@@ -146,6 +159,12 @@ Page({
           modelHint: modelIds.length
             ? ''
             : '没有可用模型：请先在云服务里开通大模型能力，或稍后重试',
+          temperature: isNaN(temperature) ? '0.3' : String(temperature),
+          maxTokens: String(Number(settings.max_tokens) || 400),
+          timeoutSec: String(timeoutSec),
+          historyTurns: String(Number(settings.history_turns) || 0),
+          contextFaqLimit: String(Number(settings.context_faq_limit) || 0),
+          testText: '',
         })
         return null
       })
@@ -178,6 +197,62 @@ Page({
     this.setData({ dailyLimit: event.detail.value || '' })
   },
 
+  onTemperatureInput: function (event) {
+    this.setData({ temperature: event.detail.value || '' })
+  },
+
+  onMaxTokensInput: function (event) {
+    this.setData({ maxTokens: event.detail.value || '' })
+  },
+
+  onTimeoutInput: function (event) {
+    this.setData({ timeoutSec: event.detail.value || '' })
+  },
+
+  onHistoryInput: function (event) {
+    this.setData({ historyTurns: event.detail.value || '' })
+  },
+
+  onContextInput: function (event) {
+    this.setData({ contextFaqLimit: event.detail.value || '' })
+  },
+
+  // 连通测试：改完参数不用真去客服页问一轮才知道配错没。
+  // 用的是页面上「此刻填的值」，不用先保存 —— 先保存再测的话，
+  // 配错了等于把错值先写进库里。
+  testModel: function () {
+    const page = this
+    if (page.data.testing) return
+    const modelId = page.data.modelIds[page.data.modelIndex]
+    if (!modelId) {
+      ui.toast({ title: '没有可选模型', icon: 'none' })
+      return
+    }
+    const started = Date.now()
+    page.setData({ testing: true, testText: '正在调用…' })
+    api
+      .llmChat(
+        modelId,
+        [
+          { role: 'system', content: '你只做连通性检查，用户说什么都只回两个字：正常' },
+          { role: 'user', content: '连通性检查' },
+        ],
+        null,
+        { temperature: Number(page.data.temperature) || 0.3, maxTokens: Number(page.data.maxTokens) || 400 }
+      )
+      .then(function (answer) {
+        const cost = Date.now() - started
+        const reply = String(answer || '').trim().slice(0, 40)
+        page.setData({
+          testing: false,
+          testText: '调用成功，耗时 ' + cost + ' ms' + (reply ? '，模型返回：' + reply : ''),
+        })
+      })
+      .catch(function (error) {
+        page.setData({ testing: false, testText: '调用失败：' + api.getErrorMessage(error) })
+      })
+  },
+
   saveSettings: function () {
     const page = this
     if (page.data.settingsSaving) return
@@ -191,6 +266,34 @@ Page({
       return
     }
 
+    // 模型参数逐个卡范围：这些值直接进 llmChat，超界会被服务端整条拒绝，
+    // 用户端看到的就是「AI 答不上来」，很难联想到是后台配了一个 200 度的温度
+    const temperature = Number(page.data.temperature)
+    const maxTokens = Number(page.data.maxTokens)
+    const timeoutSec = Number(page.data.timeoutSec)
+    const historyTurns = Number(page.data.historyTurns)
+    const contextFaqLimit = Number(page.data.contextFaqLimit)
+    if (isNaN(temperature) || temperature < 0 || temperature > 1) {
+      ui.toast({ title: '温度要在 0 到 1 之间', icon: 'none' })
+      return
+    }
+    if (isNaN(maxTokens) || maxTokens < 50 || maxTokens > 2000) {
+      ui.toast({ title: '最大字数要在 50 到 2000 之间', icon: 'none' })
+      return
+    }
+    if (isNaN(timeoutSec) || timeoutSec < 5 || timeoutSec > 120) {
+      ui.toast({ title: '超时要在 5 到 120 秒之间', icon: 'none' })
+      return
+    }
+    if (isNaN(historyTurns) || historyTurns < 0 || historyTurns > 8) {
+      ui.toast({ title: '历史轮数要在 0 到 8 之间', icon: 'none' })
+      return
+    }
+    if (isNaN(contextFaqLimit) || contextFaqLimit < 0 || contextFaqLimit > 100) {
+      ui.toast({ title: '注入 FAQ 条数要在 0 到 100 之间', icon: 'none' })
+      return
+    }
+
     page.setData({ settingsSaving: true })
     ui.loading({ title: '保存中', mask: true })
     api
@@ -200,6 +303,11 @@ Page({
         ai_prompt: page.data.aiPrompt,
         welcome: page.data.welcome,
         daily_limit: limit,
+        temperature: temperature,
+        max_tokens: maxTokens,
+        context_faq_limit: contextFaqLimit,
+        history_turns: historyTurns,
+        timeout_ms: Math.round(timeoutSec * 1000),
       })
       .then(function () {
         ui.hideLoading()

@@ -1,21 +1,27 @@
 /* 智能客服页：自定义导航 + 上会话下输入，整页不滚动，只有会话区滚动 */
 
 .support-page {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   height: 100vh;
+  overflow: hidden;
   box-sizing: border-box;
   /* .page 默认给了 60rpx 底部留白，这里整页撑满，留白交给会话区自己 */
   padding-bottom: 0;
   background: var(--bg);
 }
 
+/* 会话区用绝对定位而不是 flex 撑高：
+   scroll-view 作为 flex 子项时，各基础库给出的高度并不一致，
+   量错高度 = 内容排不满 / 新气泡被排在可视区外。
+   绝对定位 + 明确的 top/bottom，高度永远等于「导航条以下到屏幕底部」。 */
 .sup-body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  position: relative;
 }
 
 /* ---------- 热门问题 ---------- */
@@ -68,6 +74,7 @@
 /* ---------- 会话区 ---------- */
 .sup-scroll {
   flex: 1;
+  flex-basis: 0;
   min-height: 0;
   padding: 20rpx 24rpx;
   box-sizing: border-box;

@@ -195,8 +195,9 @@ Page({
     input: '',
     countText: '0 / ' + MAX_LEN,
     sending: false,
-    // scroll-view 的滚动位置：这个值每次都必须变大，组件才会真的动一次
-    scrollTop: 0,
+    // 滚动锚点：滚到它 = 滚到底。值反复在「空串 ↔ chat-bottom」之间切，
+    // 是因为 scroll-into-view 只在值变化时才触发一次滚动。
+    toView: '',
 
     // 热门问题（点一下直接问）
     hot: [],
@@ -222,9 +223,6 @@ Page({
       motionClass: motion.rootClass(),
       // 一个会话窗口一个 ID，整页生命周期内复用（服务端用它做路由与计量）
       conversationId: 'cs_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
-      // 临时：打开布局调试条，确认空白成因后连同 WXML 里那一行一起删掉
-      debug: true,
-      debugInfo: '测量中…',
     })
     page.boot()
   },
@@ -306,6 +304,12 @@ Page({
           String(settings.welcome || '').trim() || '你好，我是校园跑腿的智能助手，常见问题可以直接问我。'
         page.pushBot(welcome, 'tip')
         page.setData({ loading: false })
+        // 关键：.sup-scroll 是在 loading 变 false 之后才渲染的，
+        // onReady 里根本量不到它（量到 0，之后再没更新，贴底判定就一直空转）。
+        // 所以要在这里补量一次，多等一帧让渲染落地。
+        setTimeout(function () {
+          page.measureViewport()
+        }, 260)
         return null
       })
       .catch(function (error) {
@@ -387,38 +391,23 @@ Page({
   // 值落在合法区间内，组件只需夹一点点，行为在所有版本上一致。
   // 递增的 seq 是为了让「值变了」这个触发条件成立（内容高度没变时也要能滚）。
   // --------------------------------------------------------------------------
-  scrollToBottom: function (again) {
+  // --------------------------------------------------------------------------
+  // 滚到底 = 滚到内容末尾那个 id 固定的锚点（#chat-bottom）。
+  // 三次踩坑换来的结论：
+  //   ① scroll-into-view 指消息节点 —— 节点没渲染完就指，滚空；
+  //   ② scroll-top 塞超大值 —— 内容不足一屏时基础库会把内容顶上去，屏幕中间
+  //      留一大片空白（就是你截图里那个样子）；
+  //   ③ scroll-top 塞实测高度 —— 得先量，而量高度的时机很容易踩空
+  //      （onReady 时页面还在 loading，.sup-scroll 根本不在 DOM 里）。
+  // 锚点法不需要量任何东西，只需要「值变了」这个触发条件 —— 所以先清空再赋值。
+  // --------------------------------------------------------------------------
+  scrollToBottom: function () {
     const page = this
-    if (typeof wx.createSelectorQuery !== 'function') return
-    page._scrollSeq = (page._scrollSeq || 0) + 1
-    const seq = page._scrollSeq
-    try {
-      const query = wx.createSelectorQuery().in(page)
-      query
-        .select('.sup-chat')
-        .boundingClientRect(function (rect) {
-          if (!rect || !rect.height) return
-          // 内容还没高过一屏时不要滚动：此时 maxScroll 是 0，硬塞一个非零值
-          // 出去，基础库只会把内容往上顶，屏幕中间就是一片空白 —— 这正是
-          // 「上一版改完还是空很多」的成因。
-          const viewport = page._viewport || 0
-          if (viewport > 0 && rect.height <= viewport + 8) {
-            page.setData({ scrollTop: 0 })
-            return
-          }
-          // 上取整避免半像素误差，+seq 保证每次都是新值（内容高度没变时也要能触发）
-          page.setData({ scrollTop: Math.ceil(rect.height) + seq })
-          // 流式输出时高度一直在涨，收尾再补一次，确保最后一段也在视野里
-          if (!again) {
-            setTimeout(function () {
-              page.scrollToBottom(true)
-            }, 120)
-          }
-        })
-        .exec()
-    } catch (e) {
-      /* 查询失败不打断会话 */
-    }
+    if (!(page.data.messages || []).length) return
+    if (page.data.toView) page.setData({ toView: '' })
+    setTimeout(function () {
+      page.setData({ toView: 'chat-bottom' })
+    }, 50)
   },
 
   // 节流版：流式输出每个字都会回调一次，逐字滚会把 setData 刷爆。
@@ -434,32 +423,21 @@ Page({
     }, 120)
   },
 
-  // 用户滑动时记一下是否还在底部：不在的话自动滚动暂停，看完再往下翻一点才恢复
+  // 用户滑动时记一下是否还在底部：不在的话自动滚动暂停，看完再往下翻一点才恢复。
+  // 只依赖事件自带的数据，不再依赖之前量出来的视口高度 ——
+  // 那个值在页面还在 loading 时量过一次就再没更新过，一直是 0，
+  // 导致所有依赖它的判断都成了空转（上一版的贴底判定就是这么失效的）。
   onScroll: function (event) {
     const page = this
-    const viewport = page._viewport || 0
     const detail = event.detail || {}
     const height = Number(detail.scrollHeight || 0)
     const top = Number(detail.scrollTop || 0)
-    if (viewport > 0) {
-      const distance = height - top - viewport
-      page._atBottom = distance < 60
-      // 临时调试条：把「可视高度 / 内容高度 / 当前位置」写在会话区上方，
-      // 用来确认空白到底是滚动错位还是气泡本身被撑高。定位后记得删掉。
-      if (page.data.debug) {
-        page.setData({
-          debugInfo:
-            '视口 ' +
-            Math.round(viewport) +
-            ' · 内容 ' +
-            Math.round(height) +
-            ' · 位置 ' +
-            Math.round(top) +
-            ' · 距底 ' +
-            Math.round(distance),
-        })
-      }
-    }
+    const viewport = page._viewport || 0
+    // 视口高度没量到时不做判断，保持「未知」——
+    // 否则算出来一定是「没贴底」，会自动滚动从此永久停摆
+    if (!height || !viewport) return
+    // 滚到底部附近（留 60px 容差）就算贴底，用户往上翻就自动暂停跟随
+    page._atBottom = height - top - viewport < 60
   },
 
   // ---------- 输入 ----------

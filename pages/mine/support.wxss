@@ -80,20 +80,20 @@
   /* 内边距挪到内容层：滚动条贴边，量出来的高度就是内容真实高度 */
 }
 
-/* 会话内容层：所有消息的真实包裹盒，滚动到底时以它的高度为准。
-   注意别给它设 height / flex，否则高度不等于内容高度。
-   justify-content: flex-end 是为了让消息在「不足一屏」时贴着底部，
-   这是聊天页该有的观感 —— 消息从上往下排会显得中间空一大块。 */
+/* 会话内容层：消息从顶部往下排，别给它设 height / min-height / flex。
+   上一版试过 min-height:100% + justify-content:flex-end 想让消息贴底，
+   结果在 scroll-view 里 100% 没有可参照的高度，反而把布局搞乱了。 */
 .sup-chat {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  min-height: 100%;
-  padding: 20rpx 24rpx 32rpx;
+  padding: 20rpx 24rpx 24rpx;
   box-sizing: border-box;
 }
 
-/* 临时调试条，定位完删除 */
+/* 滚动锚点：必须有布局盒，否则 scroll-into-view 找不到目标 */
+.chat-bottom {
+  height: 1rpx;
+}
+
+/* 临时调试条，确认完删除 */
 .sup-debug {
   flex: none;
   padding: 8rpx 24rpx;

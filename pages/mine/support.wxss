@@ -76,14 +76,22 @@
   flex: 1;
   flex-basis: 0;
   min-height: 0;
-  padding: 20rpx 24rpx;
+  box-sizing: border-box;
+  /* 内边距挪到内容层：滚动条贴边，量出来的高度就是内容真实高度 */
+}
+
+/* 会话内容层：所有消息的真实包裹盒，滚动到底时以它的高度为准。
+   注意别给它设 height / flex，否则高度不等于内容高度。 */
+.sup-chat {
+  padding: 20rpx 24rpx 32rpx;
   box-sizing: border-box;
 }
 
 .msg-row {
   display: flex;
   flex-direction: column;
-  margin-bottom: 28rpx;
+  /* 消息之间只留一道窄缝，视觉上才连贯 */
+  margin-bottom: 16rpx;
 }
 
 .msg-row.mine {
@@ -94,18 +102,12 @@
   align-items: flex-start;
 }
 
-.msg-meta {
-  font-size: 22rpx;
-  color: var(--t3);
-  margin-bottom: 8rpx;
-}
-
 .msg-bubble {
   max-width: 78%;
   padding: 18rpx 24rpx;
   border-radius: 20rpx;
   font-size: 28rpx;
-  line-height: 1.7;
+  line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -128,17 +130,15 @@
 }
 
 .msg-tag {
-  margin-top: 8rpx;
+  margin-top: 6rpx;
+  padding: 0 6rpx;
   font-size: 22rpx;
+  line-height: 1.4;
   color: var(--t3);
 }
 
 .msg-tag.warn {
   color: var(--warn);
-}
-
-.chat-pad {
-  height: 24rpx;
 }
 
 /* ---------- 输入区 ---------- */

@@ -51,23 +51,23 @@
       scroll-top="{{scrollTop}}"
       bindscroll="onScroll"
     >
-      <view
-        wx:for="{{messages}}"
-        wx:for-item="msg"
-        wx:key="id"
-        class="msg-row {{msg.role === 'me' ? 'mine' : 'peer'}}"
-      >
-        <view class="msg-meta">
-          <text wx:if="{{msg.role === 'me'}}">我 · {{msg.timeText}}</text>
-          <text wx:elif="{{msg.kind === 'faq'}}">常见问题 · {{msg.timeText}}</text>
-          <text wx:elif="{{msg.kind === 'tip'}}">助手 · {{msg.timeText}}</text>
-          <text wx:else>AI 助手 · {{msg.timeText}}</text>
+      <view class="sup-chat">
+        <view
+          wx:for="{{messages}}"
+          wx:for-item="msg"
+          wx:key="id"
+          class="msg-row {{msg.role === 'me' ? 'mine' : 'peer'}}"
+        >
+          <view class="msg-bubble {{msg.pending ? 'pending' : ''}}">{{msg.text}}</view>
+          <!-- 发送方与时间挤在同一行的小字里，少一行 = 少一道视觉分隔 -->
+          <view class="msg-tag {{msg.failed ? 'warn' : ''}}">
+            <text wx:if="{{msg.role === 'me'}}">我 · {{msg.timeText}}</text>
+            <text wx:elif="{{msg.kind === 'faq'}}">常见问题 · {{msg.timeText}} · 来自后台配置的固定回答</text>
+            <text wx:elif="{{msg.kind === 'tip'}}">助手 · {{msg.timeText}}</text>
+            <text wx:else>AI 助手 · {{msg.timeText}}</text>
+          </view>
         </view>
-        <view class="msg-bubble {{msg.pending ? 'pending' : ''}}">{{msg.text}}</view>
-        <view wx:if="{{msg.kind === 'faq'}}" class="msg-tag">来自后台配置的固定回答</view>
-        <view wx:elif="{{msg.failed}}" class="msg-tag warn">这次失败了，可以换个问法或转人工</view>
       </view>
-      <view class="chat-pad"></view>
     </scroll-view>
 
     <!-- 输入区：AI 可用时把今天剩几次写在旁边，用完了用户能自己看懂为什么没反应 -->

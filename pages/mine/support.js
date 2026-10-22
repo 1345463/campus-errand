@@ -106,6 +106,20 @@ function sanitize(text) {
     .slice(0, MAX_LEN)
 }
 
+// 进气泡之前统一洗一遍文本。
+// 两个目的：① 模型输出常常带首尾换行 / 连续空行，气泡 white-space 是 pre-wrap，
+//   这些空行会原样渲染出来，看着就像「消息之间空了一大块」；
+// ② 顺手压掉行尾空格，避免气泡右边出现莫名的空白。
+function tidyText(text) {
+  return String(text || '')
+    .replace(/\r/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\n+/, '')
+    .replace(/\n+$/, '')
+    .trim()
+}
+
 function buildSystemPrompt(settings, faqList) {
   const base = String((settings && settings.ai_prompt) || '').trim() || DEFAULT_PROMPT
   // 后台可以关掉资料注入（填 0），只想让模型纯按提示词答时用得上
@@ -308,7 +322,16 @@ Page({
   pushMsg: function (msg) {
     const page = this
     const list = (page.data.messages || []).slice()
-    list.push(msg)
+    const next = {
+      id: msg.id,
+      role: msg.role,
+      kind: msg.kind,
+      text: tidyText(msg.text),
+      timeText: msg.timeText,
+      pending: !!msg.pending,
+    }
+    if (msg.failed) next.failed = true
+    list.push(next)
     page.setData({ messages: list })
     // 用户正贴着底部时，新气泡要自己滚进视野，否则要手动拉到底才看得到
     page.scheduleScroll()
@@ -320,7 +343,7 @@ Page({
       id: nextId(),
       role: 'bot',
       kind: kind || 'ai',
-      text: String(text || ''),
+      text: text,
       timeText: nowText(),
       pending: false,
     })
@@ -334,7 +357,7 @@ Page({
         id: item.id,
         role: item.role,
         kind: item.kind,
-        text: String(text || ''),
+        text: tidyText(text),
         timeText: item.timeText,
         pending: false,
       }
@@ -352,15 +375,47 @@ Page({
 
   // --------------------------------------------------------------------------
   // 滚动到底
-  // 之前用 scroll-into-view：它要求目标节点此刻已经渲染出来，而我们总是在
-  // setData 的同一帧里就去指定，运气不好就滚了个寂寞，新回答被丢在屏幕外。
-  // scroll-top 更稳：给一个比内容高度大得多的值，组件自己会夹到底部。
-  // 另一个细节 —— 它只在「值变了」时才触发，所以每次都 +1 换出一个新值。
+  // 走过两段弯路，记下来免得再踩：
+  //   1) scroll-into-view 要求目标节点此刻已渲染，而我们总在 setData 同一帧去指，
+  //      运气不好就滚了个寂寞；
+  //   2) 传一个超大值（如 999999）指望组件自动夹取，实测在部分基础库上会
+  //      真的把内容顶上去，屏幕中间留一大片空白。
+  // 现在的做法：先量出内容真实高度，再把它设成 scroll-top ——
+  // 值落在合法区间内，组件只需夹一点点，行为在所有版本上一致。
+  // 递增的 seq 是为了让「值变了」这个触发条件成立（内容高度没变时也要能滚）。
   // --------------------------------------------------------------------------
-  scrollToBottom: function () {
+  scrollToBottom: function (again) {
     const page = this
+    if (typeof wx.createSelectorQuery !== 'function') return
     page._scrollSeq = (page._scrollSeq || 0) + 1
-    page.setData({ scrollTop: 1000000 + page._scrollSeq })
+    const seq = page._scrollSeq
+    try {
+      const query = wx.createSelectorQuery().in(page)
+      query
+        .select('.sup-chat')
+        .boundingClientRect(function (rect) {
+          if (!rect || !rect.height) return
+          // 内容还没高过一屏时不要滚动：此时 maxScroll 是 0，硬塞一个非零值
+          // 出去，基础库只会把内容往上顶，屏幕中间就是一片空白 —— 这正是
+          // 「上一版改完还是空很多」的成因。
+          const viewport = page._viewport || 0
+          if (viewport > 0 && rect.height <= viewport + 8) {
+            page.setData({ scrollTop: 0 })
+            return
+          }
+          // 上取整避免半像素误差，+seq 保证每次都是新值（内容高度没变时也要能触发）
+          page.setData({ scrollTop: Math.ceil(rect.height) + seq })
+          // 流式输出时高度一直在涨，收尾再补一次，确保最后一段也在视野里
+          if (!again) {
+            setTimeout(function () {
+              page.scrollToBottom(true)
+            }, 120)
+          }
+        })
+        .exec()
+    } catch (e) {
+      /* 查询失败不打断会话 */
+    }
   },
 
   // 节流版：流式输出每个字都会回调一次，逐字滚会把 setData 刷爆。

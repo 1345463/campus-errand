@@ -15,6 +15,7 @@
 - [5. 踩坑知识库](#5-踩坑知识库)
 - [6. 校验体系](#6-校验体系)
 - [7. 遗留事项与风险](#7-遗留事项与风险)
+- [8. 合并外部 AI 开发的踩坑与解法](#8-合并外部-ai-开发的踩坑与解法)
 
 ---
 
@@ -971,7 +972,213 @@ node campus-errand/tools/style-lint.js campus-errand
 - **前台积分14个新开关默认全 false**，只有 super 能切。
 - **智能客服暂时只能走 WorkBuddy Cloud 的免密钥 LLM 通道**：不支持在后台填自己的第三方
   API Key / Base URL。要接第三方模型得另做一条通道，且小程序端不能明文放 Key、还要配 request 合法域名。
-- **AI 每日配额记在本地 `storage`**（`ai_support_quota_v1`）：清缓存或换设备就会归零，
-  所以它是「防止一台机器刷干配额」的软限制，不是严格的账号级限流。
+- ~~AI 每日配额记在本地 `storage`~~ **R39 起改为服务端按账号记账**：
+  `begin_support_ai` 先预留、`finish_support_ai` 成功计入 / 失败释放，
+  记录落在 `support_ai_requests`（按 Asia/Singapore 日期切分，预占 130 秒自动过期）。
+  局限：模型仍走客户端直连，绕过端上代码仍可直接调 `llmChat`，
+  所以它是**端上路径的配额**，不是严格的成本网关。
 - **客服会话的上下文靠端上拼 history 携带**：目前最多带 `history_turns` 轮（默认 3），
   更早的内容模型看不到；也没有做会话长度裁剪，超长对话理论上会顶到模型上限。
+
+---
+
+## 8. 合并外部 AI 开发的踩坑与解法（2026-10-23）
+
+> **背景**：另一个 AI（GitHub 账号 `MTKD0 <zhuangangyu@gmail.com>`）从分支
+> `codex/fix-orders-support` 提了一个大 PR，自称修了「订单 20 项 + 客服 18 项」。
+> 合进来用了整整一晚上，踩了 9 个坑。这一节把每个坑的现象、真因、解法记下来，
+> 以后不管是人还是 AI 提的改动，都按这里过一遍。
+
+### 8.1 看清单要展开，别只看汇总行
+
+**现象**：`git diff --stat` 给的是 31 个文件 / +1372−435 行，看着挺干净。
+但 `git show --stat <commit>` 展开后是 **235 个文件 / +37147 行** ——
+多出来的是 `.agents/skills/cloudbase/**`：**209 个文件、2.2 MB** 的 CloudBase 官方 skill 文档。
+
+**真因**：对方也是用 AI Agent 开发，Agent 把运行时的 skill 资料一起提交了。
+`project.config.json` 里的 `packOptions.ignore` 能挡住微信上传包，**挡不住 git 仓库体积**。
+
+**解法**：
+- 合并前用 `git show --stat` 把文件分成「代码 / 文档 / 第三方资料」三类，逐个看
+- 第三方资料单独一轮清掉（R42）
+- 汇总行会把噪声平均掉，务必展开
+
+**教训**：AI 生成的提交经常夹带运行时产物，人要看一眼文件清单。
+
+### 8.2 先装依赖再跑测试，别急着判「代码坏了」
+
+**现象**：合完跑 `npm test`，27 项里挂 1 项：
+`Cannot find module '@electric-sql/pglite'`。
+
+**真因**：对方引入了 PGlite 做数据库回归测试（在本地进程里跑真 PostgreSQL 迁移），
+但本机没装这个依赖。**测试框架缺失，不是被测代码的问题。**
+
+**解法**：`npm ci --ignore-scripts`，装完 27 项全过。
+
+**教训**：拉别人的 PR 后第一步是装依赖。看到「测试挂了」先分清是
+「代码逻辑错」还是「环境缺东西」—— 报错栈里出现 `Cannot find module` 一律先怀疑后者。
+
+### 8.3 `reset --hard` 只回退被跟踪的文件，文档会脱节
+
+**现象**：用户要求「撤销所有从 GitHub 拉取的改动」，`git reset --hard cc97d5c` 之后，
+仓库里的 `docs/ITERATIONS.md` 回到了 R38，但**工作区根目录**的
+`校园跑腿-迭代全记录.md`（不在 git 里）还留着 R39 的内容 ——
+两份文档不一致，统计口径还写着「39 轮 / 116 个函数」。
+
+**真因**：项目文档一直有**两份**：根目录那份是给人看的（git 之外），
+`campus-errand/docs/ITERATIONS.md` 才是被跟踪的。`reset --hard` 只管后者。
+
+**解法**：以仓库版本为准重新 `cp` 覆盖根目录那份，再补删 R39 段落、改回 38 轮 / 110 函数。
+
+**教训**：任何 git 层面的回退，都要检查 git 之外的副本（根目录文档、`.workbuddy/memory/`）。
+
+### 8.4 🔴 最大的坑：被「表面症状」带偏了六轮
+
+**现象**：客服页「消息之间空一大截」，从 R36 到 R38 **连改六轮**，
+一直在调 `scroll-view` 的高度（`flex:1` / `height:auto` / `height:0` /
+`scroll-into-view` / `scroll-top` 塞大值 / 整页滚动），每一种都失败。
+调试条实测：**内容 1053px，三条消息加起来才 302px** —— 中间 751px 幽灵高度。
+
+**真因**（对方的改动一句话点破）：`app.wxss` 里有一条全局规则
+
+```css
+.home, .mine { min-height: 100vh; }
+```
+
+而客服页消息行的 class 恰好叫 `mine` → **每一条「我发的」消息都被撑到一屏高**。
+问题根本不在滚动容器，六轮全打在空处。对方把类名改成 `msg-mine` / `msg-peer`
+之后，「点一下就滚动」这类问题也一起消失了。
+
+**解法**：
+- 类名加前缀：`msg-mine` / `msg-peer` / `sup-card`，不用 `mine` / `home` / `page` / `card` 这类通用词
+- 排查「高度异常」时**先量单个元素**：`boundingClientRect().height` 远大于内容
+  （几十行的气泡报 700+），基本就是全局 `min-height` / `height` 撞车
+- 写业务 class 前先 `grep app.wxss`，确认没被占用
+
+**教训（最值钱的一条）**：
+**当同一处连改两轮还不好，就该怀疑「问题不在这里」，而不是继续加大力度。**
+这一轮之前一直假设「滚动容器算错高度」，从来没去查「消息元素本身是不是被撑高了」。
+
+### 8.5 外部 PR 只能当「改进输入」，不能当「审计结论」
+
+**现象**：对方自称修了 38 项，合进来之后**仍剩 5 个安全 / 功能问题**：
+
+| 问题 | 严重度 | 真相 |
+|---|---|---|
+| `create_order` / `complete_order` 不校验图片归属，`get_order_asset` 只校验「路径挂在这张单上」 | P0 | 任何人建单塞 `asset:123` 就能读别人的证件照，`media_assets.id` 是 bigserial 可枚举 |
+| `getOrder` 用 `select('*')` 直读 orders | P0 | 绕过 `get_order_detail` 的脱敏，把 `contact` / 取餐码下发到客户端 |
+| 评价页 `goBack` 用 try/catch 兜底 | P1 | `navigateBack` 失败走 `fail` 回调，不抛异常，catch 永不执行 |
+| 举报权限键三处不一致 | P1 | 客服能看不能做，审核员反而没入口 |
+| `admin_dashboard_stats` 白名单漏 `dispatch` | P1 | 第八级权限进不了后台，形同虚设 |
+
+**解法**：独立做一次全量审阅（37 页 / 15 模块 / 22 个 SQL），补 R40；
+图片越权另写 `sql/fix-asset-authorization.sql`（触发器 + 第三道校验）。
+
+**教训**：对方修的是「用户能看见的 bug」，没做安全审计。
+**合入之后必须自己再扫一遍安全面**，尤其是「服务端鉴权」和「脱敏口径」这两块。
+
+### 8.6 权限键要在三处对齐，改一处必须 grep 另外两处
+
+**现象**：举报模块的权限判断在三个地方各写了一套：
+
+| 位置 | 写法 | 后果 |
+|---|---|---|
+| `pages/admin/dashboard.js` 卡片 | `perm: 'can_support'` | 按 support 显示待办数字 |
+| `pages/admin/dashboard.js` 入口 | `check: 'support'` | 客服看到入口，审核员看不到 |
+| `pages/admin/reports.js` 门禁 | `profile.is_admin` | 任何后台身份都放行 |
+| 服务端 `admin_handle_report` | `admin_has_perm('review')` | 只有 review 能真正处理 |
+
+**真因**：`profiles.is_admin` 的语义是「有任意后台权限即为 true」，
+拿它当「审核权限」用等于没有门禁。
+
+**解法**：三处统一到 `review`，`reports.js` 改用 `perms.load()` + `perms.has('review')`。
+
+**教训**：一个新权限键涉及「服务端 RPC / 前端入口 / 前端页面门禁」三处，
+只改一处就会出现「看得见点不动」或「该看见的看不见」。
+
+### 8.7 历史里有别人的提交，`reset --soft` 是安全的抹法
+
+**现象**：`main` 历史上出现了三个第三方作者的提交（`1e013eb` / `19ac0bf` / `aeb2dfe`），
+用户要求「清除另一个人提交的代码」。
+
+**解法**：
+```bash
+git write-tree                       # ① 先记下当前文件树 hash
+git reset --soft cc97d5c             # ② HEAD 退回合入前，工作区和索引不动
+git add -A && git commit             # ③ 压成一条自己的整合提交
+git rev-parse HEAD^{tree}            # ④ 比对：与 ① 一致 → 代码零改动
+git push --force origin main
+```
+本次改写前后都是 `4d86e16c…`，**文件内容一个字节没变**，只换了提交边界与作者。
+R1–R38 的逐轮历史和 5 个 tag 完全没受影响。
+
+**教训**：改写历史前**必须**记文件树 hash —— 这是唯一能自证
+「只动历史、没动代码」的硬证据，比任何口头说明都可靠。
+
+### 8.8 迁移工具要写全限定名，多语句用 `DO` 块包
+
+**现象**：以为 `workbuddy_cloudservice_db_exec_sql` 在本会话不可用，
+让用户去管理面板手工粘贴 SQL，绕了一大圈才发现工具一直在。
+
+**真因**：ToolSearch 要写**全限定名** `mcp__genie-baas__workbuddy_cloudservice_db_exec_sql`，
+只写后半截搜不到。
+
+**第二个坑**：这个工具**一次只接受一条语句**，多条直接报
+`42601 cannot insert multiple commands into a prepared statement`。
+
+**解法**：把迁移文件拆成单条语句，整体包进一个 `DO` 块 ——
+```sql
+DO $do$ BEGIN
+  EXECUTE $q1$CREATE OR REPLACE FUNCTION ...$q1$;
+  EXECUTE $q2$REVOKE ALL ON FUNCTION ...$q2$;
+END $do$;
+```
+`DO` 本身算**一条**语句，既绕过限制，又保证整文件原子执行（中间失败全回滚）。
+内层用递增的 `$q1$`…`$qN$` 美元引用，避免和函数体里的 `$fn$` / `$function$` 撞车。
+拆分脚本：`.workbuddy/tmp/split_sql.py`（正确处理注释 / 单引号 / 美元引用）。
+
+**教训**：ToolSearch 一律用全限定名；多语句迁移别想着"分几十次调用"，用 `DO` 块一次搞定。
+
+### 8.9 前后端联动的改动，要核对「前端调的函数库里有没有」
+
+**现象**：合入后前端已经在调 `list_my_orders_v2` / `abandon_order` /
+`begin_support_ai` / `rate_support_answer`，但这四个函数在数据库里**还不存在**。
+如果直接发版，订单列表、放弃接单、AI 客服会全部报错。
+
+**解法**：先按顺序执行三个迁移，再发版：
+1. `sql/fix-order-support-workflows.sql` —— 7 个 RPC + 3 张表
+2. `sql/restore-admin-password.sql` —— 3 张表 + `activate_admin`
+3. `sql/fix-asset-authorization.sql` —— 触发器 + `get_order_asset` + `can_dispatch`
+
+执行后核对：`public` 有 29 张表 / 117 个函数 / 4 个触发器，
+7 个新 RPC 的参数名与前端调用逐一对齐。
+
+**教训**：合入别人的前后端联动改动，**发布前必须列一张「前端 RPC ↔ 数据库函数」对照表**
+逐个确认存在，而不是等用户点了才报 `function does not exist`。
+
+### 8.10 合并外部 AI 改动的 SOP（下次照这个走）
+
+```
+① git fetch && git show --stat <commit>     分类：代码 / 文档 / 第三方资料
+② npm ci --ignore-scripts && npm test       先装依赖，再判测试
+③ 独立审阅安全面                            服务端鉴权 + 脱敏口径，不因"他修了很多"跳过
+④ 核对前端 RPC ↔ 数据库函数                 列对照表，缺的先迁移
+⑤ 清理非产物文件                            第三方资料 / 预览壳 / 个人记录
+⑥ 需要抹作者时 reset --soft + 树 hash 校验   证明代码零改动
+⑦ 四件套 + npm test 全绿后再推              不要在红的校验下发布
+```
+
+### 8.11 一句话总结
+
+| 坑 | 一句话 |
+|---|---|
+| 夹带第三方资料 | 看清单要展开，`--stat` 汇总行会骗人 |
+| 缺依赖 | 见到 `Cannot find module` 先装再判 |
+| 文档脱节 | `reset --hard` 只管被跟踪的文件 |
+| **六轮改错方向** | **同一处连改两轮不好，就该怀疑「问题不在这里」** |
+| 安全审计缺位 | 外部 PR 是输入，不是结论 |
+| 权限键漂移 | 三处对齐，改一处 grep 全部 |
+| 抹作者 | 先记树 hash，`reset --soft` 才敢下手 |
+| 迁移工具 | 全限定名 + `DO` 块包多语句 |
+| 前后端脱节 | 发布前列 RPC 对照表 |
+

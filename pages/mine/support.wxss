@@ -1,47 +1,20 @@
-/* 智能客服页：自定义导航 + 会话区内部纵向排列。
-   这一版是第四次重写，把前几轮所有踩过的坑一次性绕开：
-   ① 整页不滚动（height:100vh + overflow:hidden），只有中间的 scroll-view 滚；
-   ② scroll-view 的高度给死成像素（JS 算好写进内联 style），不用 flex:1、不用 auto ——
-      flex 子项高度各基础库不一致，auto 又会被内容撑开，两者都导致"滚到底"落点错位；
-   ③ 输入区回文档流（flex:none），不固定、不预留底部空白 ——
-      固定输入区 + 底部留白那一版就是"中间空一大截"的来源。
-   ④ 消息之间不留大间距，气泡用 pre-wrap 但文本已由 tidyText 清洗过空行。 */
+/* 智能客服页：整页滚动 + 固定输入区。
+   彻底不用 scroll-view 滚消息 —— 它的内容高度在各基础库上算不准，
+   五轮修复都没治住（内容被撑到 1053px 而消息只有 302px）。
+   整页滚动最简单也最可靠：内容多高页面就多高，pageScrollTo 直接滚到底。
+   输入区 position:fixed 钉在屏幕底，消息从它上面滚过；
+   会话内容用 padding-bottom 腾出空间，值由 JS 按输入区实测高度给。 */
 
 .support-page {
-  position: relative;
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
   box-sizing: border-box;
-  /* .page 默认给了底部留白，这页整块撑满，留白交给会话区自己 */
+  /* .page 默认有底部留白，这页用固定输入区，留白交给 sup-chat 的 padding-bottom */
   padding-bottom: 0;
   background: var(--bg);
 }
 
-/* 会话区用绝对定位把 top/bottom 交给导航条和屏幕底，
-   高度永远等于「导航条以下到屏幕底」，不受父级 padding 影响。 */
-.sup-body {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
-
-/* ---------- 调试条（临时）---------- */
-.sup-debug {
-  flex: none;
-  padding: 6rpx 24rpx;
-  background: #FFF4E5;
-  color: #B45309;
-  font-size: 22rpx;
-  text-align: center;
-}
-
 /* ---------- 热门问题 ---------- */
 .sup-hot {
-  flex: none;
   padding: 16rpx 24rpx 18rpx;
   background: #FFFFFF;
   border-bottom: 1rpx solid var(--fill);
@@ -86,30 +59,19 @@
   color: var(--brand-600);
 }
 
-/* ---------- 会话滚动区 ---------- */
-/* 高度由内联 style 给死成像素。这里只给宽度和盒模型。
-   别加 height / min-height / flex —— 会让内联高度失效。 */
-.sup-scroll {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* 消息层：从顶部往下排，不要 height / min-height / flex-end，
-   否则消息会被顶到可视区外、上面留一片空白（踩过）。 */
+/* ---------- 会话内容 ---------- */
+/* 普通块级容器，消息从上往下排，内容高度 = 消息实际高度之和。
+   别加 height / min-height / flex / justify-content —— 这些是之前
+   "内容被撑到 1053px、消息之间空一大截" 的根源。
+   padding-bottom 由内联 style 给（输入区高度 + 余量）。 */
 .sup-chat {
   padding: 20rpx 24rpx 24rpx;
   box-sizing: border-box;
 }
 
-/* 滚动锚点：必须有布局盒，scroll-into-view 才找得到 */
-.chat-end {
-  height: 1rpx;
-}
-
 .msg-row {
   display: flex;
   flex-direction: column;
-  /* 消息之间只留一道窄缝，视觉上才连贯 */
   margin-bottom: 16rpx;
 }
 
@@ -127,7 +89,7 @@
   border-radius: 20rpx;
   font-size: 28rpx;
   line-height: 1.65;
-  /* pre-wrap 保留模型输出里的换行；空行已由 tidyText 压掉，不会虚高 */
+  /* pre-wrap 保留模型输出里的换行；空行已由 tidyText 压掉 */
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -144,7 +106,7 @@
   border-top-right-radius: 6rpx;
 }
 
-/* 流式回答过程中气泡是同一个，加一点呼吸感，别看着像卡死 */
+/* 流式回答过程中气泡是同一个，加一点呼吸感 */
 .msg-bubble.pending {
   opacity: 0.75;
 }
@@ -162,11 +124,14 @@
 }
 
 /* ---------- 输入区 ---------- */
-/* flex: none 钉在文档流底部，跟着会话区一起排。
-   别改回 position: fixed —— 那样必须在下面垫一块等高的留白，
-   留白算不准就是一整块空白（就是用户说的"中间空一大截"）。 */
+/* position:fixed 钉在屏幕底部。z-index 10：比内容高、比转人工弹层(20)低。
+   textarea 在 fixed 容器里，auto-height + adjust-position 配合键盘弹起。 */
 .sup-input {
-  flex: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
   padding: 14rpx 24rpx 24rpx;
   background: #FFFFFF;
   border-top: 1rpx solid var(--fill);

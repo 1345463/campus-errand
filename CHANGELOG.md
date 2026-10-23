@@ -513,3 +513,17 @@ _提交时间：2026-10-23 14:50:00_
 - tidyText 收紧（全角空格归一、连续空行压单行），R36「别用 scroll-view」的结论作废。
 
 _提交时间：2026-10-23 15:20:00_
+
+## R38 · 整页重写：彻底弃用 scroll-view，普通文档流 + 固定输入区（10-23 16:50）
+
+- 用户截图判决：调试条显示「内容 1053 · 各条高[87,78,137]」——内容 1053px，消息才 302px，
+  751px 幽灵高度卡在消息之间。scroll-view 内容层被撑开，前五轮补丁治不了根，用户要求直接重写。
+- 最终方案：删掉 scroll-view，消息放普通 view（内容高度 = 消息之和）；整页滚动 + wx.pageScrollTo
+  （优先实测位置，量不到兜底 999999）；输入区 position:fixed 钉底部；chatPad = 输入区实测高 + 24px。
+- 贴底判定用 onPageScroll 的 scrollTop + 量出的文档高窗口高；新消息强制 _atBottom=true。
+- 删掉三处临时调试代码（debugInfo / sup-debug / measureLayout）。
+- 业务逻辑零改动：FAQ / AI 流式 / 上下文 / 违规词 / 配额 / 转人工全部保留。
+- 根因结论：scroll-view 内容高度是基础库黑盒，六轮全试过（flex:1/auto/height:0/scroll-into-view/
+  scroll-top 大值/scroll-top 实测），全都有失效方式。整页滚动内容高度物理上不可能出幽灵。
+
+_提交时间：2026-10-23 16:50:00_

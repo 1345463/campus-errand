@@ -3,6 +3,7 @@ const api = require('../../utils/api')
 const guard = require('../../utils/guard')
 const config = require('../../utils/config')
 const motion = require('../../utils/motion')
+const perms = require('../../utils/perms')
 
 Page({
   data: {
@@ -17,6 +18,7 @@ Page({
     adminPanelOpen: false,
     adminCode: '',
     adminSaving: false,
+    adminError: '',
 
     // 关于
     agreementVersionText: '未签署',
@@ -28,12 +30,13 @@ Page({
     // 同一个诉求留两个入口只会让用户不知道点哪个。
   },
 
-  onLoad: function () {
+  onLoad: function (options) {
     const sys = motion.systemInfo()
     this.setData({
       navTotal: sys.navTotalHeight,
       motionClass: motion.rootClass(),
       reduceMotion: motion.reduced(),
+      adminPanelOpen: !!(options && options.admin === '1'),
     })
   },
 
@@ -47,7 +50,7 @@ Page({
       .getSession()
       .then(function (session) {
         if (!session) {
-          page.setData({ logged: false })
+          page.setData({ logged: false, isAdmin: false, adminCode: '', adminError: '', adminPanelOpen: false })
           return null
         }
         page.setData({ logged: true })
@@ -109,40 +112,51 @@ Page({
   },
 
   onAdminTap: function () {
+    if (this.data.adminSaving) return
+    if (!this.data.logged) return guard.ensureLogin()
     if (this.data.isAdmin) {
-      ui.toast({ title: '管理员权限已开通', icon: 'none' })
-      return
+      return this.goDashboard()
     }
-    this.setData({ adminPanelOpen: !this.data.adminPanelOpen })
+    this.setData({ adminPanelOpen: !this.data.adminPanelOpen, adminCode: '', adminError: '' })
   },
 
   onAdminCodeInput: function (event) {
-    this.setData({ adminCode: event.detail.value || '' })
+    this.setData({ adminCode: event.detail.value || '', adminError: '' })
   },
 
   submitAdminCode: function () {
     const page = this
+    if (!page.data.logged) return guard.ensureLogin()
     const code = String(page.data.adminCode || '').trim()
     if (!code) {
       ui.toast({ title: '请输入管理员口令', icon: 'none' })
       return
     }
     if (page.data.adminSaving) return
-    page.setData({ adminSaving: true })
+    page.setData({ adminSaving: true, adminError: '' })
     ui.loading({ title: '处理中', mask: true })
-    api
+    return api
       .activateAdmin(code)
       .then(function (profile) {
+        if (!profile || !profile.is_admin) throw new Error('后台权限校验未通过，请重试')
         ui.hideLoading()
-        page.setData({ adminSaving: false, adminPanelOpen: false, adminCode: '' })
-        page.setData({ isAdmin: !!(profile && profile.is_admin) })
-        ui.toast({ title: '已开通管理员', icon: 'success' })
+        perms.reset()
+        page.setData({ adminSaving: false, adminPanelOpen: false, adminCode: '', adminError: '', isAdmin: true })
+        ui.toast({ title: '后台密码验证通过', icon: 'success' })
+        page.goDashboard()
       })
       .catch(function (error) {
         ui.hideLoading()
-        page.setData({ adminSaving: false })
+        page.setData({ adminSaving: false, adminCode: '', adminError: api.getErrorMessage(error) })
         guard.toastError(error)
       })
   },
+
+  goDashboard: function () {
+    this.goPage('/pages/admin/dashboard')
+  },
+
+  onHide: function () { this.setData({ adminCode: '' }) },
+  onUnload: function () { this.setData({ adminCode: '' }) },
 
 })

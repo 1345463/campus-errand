@@ -97,6 +97,16 @@ GitHub Actions 使用相同命令。默认禁止密码缓存、密码自动登�
 订单与智能客服的修复范围、数据库迁移安装顺序、测试边界和真机清单见
 [`docs/FIX-REPORT-2026-10-23.md`](docs/FIX-REPORT-2026-10-23.md)。
 新版必须先在目标库执行 `sql/fix-order-support-workflows.sql`，再发布小程序。
+后台密码入口与服务端安装步骤见 [后台入口恢复说明](docs/ADMIN-ACCESS.md)。
+目标库还需执行 `sql/restore-admin-password.sql`；仅更新前端不会修改线上口令。
+
+开发目录已迁移到 `D:\GDYD`。CloudBase 开发技能已安装在 `.agents/skills/cloudbase`，
+由 `skills-lock.json` 固定来源；这些开发资料不进入小程序上传包。
+当前业务后端仍是 WorkBuddy Cloud PostgreSQL。
+
+本地浏览器适配测试：`npm run preview:web`，打开 `http://127.0.0.1:4317`。
+仅使用隔离模拟数据，测试范围及新发现的客服样式冲突见 [浏览器测试记录](docs/WEB-TEST-2026-10-23.md)。
+微信开发者工具已用当前账号的测试号导入 `D:\GDYD` 并运行，详见 [微信测试记录](docs/WECHAT-TEST-2026-10-23.md)。正式上传前须改成目标正式小程序的 AppID。
 
 ## 六、关于 Git 历史（务必知情）
 
@@ -131,7 +141,7 @@ git push -u origin main && git push --tags
 
 ## 八、已知风险
 
-- 管理员口令硬编码（`activate_admin`），本质是调试后门，正式运营需替换。
+- 后台入口的服务端迁移使用加盐摘要、失败限流与审计；共享管理员口令仍应定期轮换，并仅供受信任人员使用。
 - 未接支付，钱包不可提现（页面已如实说明）。
 - 旧对象存储的证件照不可读，需用户重新提交。
 - AI 配额已按账号在服务端记账，但模型客户端直连仍可绕过计数；严格成本防刷需要可信服务端网关。

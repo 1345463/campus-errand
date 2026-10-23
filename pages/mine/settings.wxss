@@ -40,6 +40,12 @@
   background: var(--fill);
 }
 
+.admin-error {
+  margin-top: 16rpx;
+  color: var(--warn);
+  font-size: 24rpx;
+}
+
 /* ===== 关于 ===== */
 
 .about {

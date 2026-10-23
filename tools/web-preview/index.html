@@ -1,0 +1,19 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>校园跑腿 · 浏览器测试</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef2f7;color:#17243b;font:15px/1.6 system-ui,"Microsoft YaHei",sans-serif}header{padding:20px 32px;background:#fff;border-bottom:1px solid #dbe2ec}h1{margin:0;font-size:24px}header p{margin:4px 0 0;color:#627084}main{display:flex;gap:32px;justify-content:center;padding:24px}aside{width:310px}section{background:#fff;border:1px solid #dbe2ec;border-radius:14px;padding:18px;margin-bottom:16px}h2{font-size:16px;margin:0 0 12px}.links{display:grid;grid-template-columns:1fr 1fr;gap:8px}button,select{font:inherit;border:1px solid #ccd7e5;background:white;border-radius:8px;padding:9px;cursor:pointer}button:hover{border-color:#2563eb;color:#2563eb}select{width:100%;margin:5px 0 12px}iframe{background:#fff;border:8px solid #25354d;border-radius:30px;width:446px;height:860px;box-shadow:0 15px 50px #1d355722}small{color:#627084}.badge{color:#b45309;background:#fff7df;padding:3px 10px;border-radius:20px}#state{white-space:pre-wrap;font-size:13px}#errors{color:#b91c1c;white-space:pre-wrap}#logs{font:12px/1.6 ui-monospace,monospace;word-break:break-all;max-height:190px;overflow:auto}label{font-size:13px;color:#526176}@media(max-width:850px){main{flex-direction:column;align-items:center}aside{width:min(430px,100%)}iframe{width:min(446px,100%)}header{padding:16px}}
+</style>
+<header><h1>校园跑腿 · 浏览器测试</h1><p><span class="badge">隔离模拟数据</span> 加载仓库原始 JS / WXML / WXSS；不连接线上服务，不代表微信真机验证。</p></header>
+<main><aside>
+<section><h2>测试页面</h2><div class="links"><button data-route="/pages/mine/index">我的与后台</button><button data-route="/pages/orders/list">我的订单</button><button data-route="/pages/hall/index">任务大厅</button><button data-route="/pages/order/create?type=express">发布任务</button><button data-route="/pages/mine/support">智能客服</button><button data-route="/pages/order/detail?id=202">送达测试单</button><button id="back">返回上一页</button></div></section>
+<section><h2>测试条件</h2><label for="identity">模拟身份</label><select id="identity"><option value="owner">发布方（已认证，用户角色）</option><option value="runner">接单员</option><option value="guest">未登录</option><option value="fresh">全新会话测试账号</option></select><label for="ai">AI 响应</label><select id="ai"><option value="normal">正常流式回答</option><option value="timeout">超时（5 秒）</option><option value="failure">请求失败</option><option value="blank">仅空白回答</option></select><button id="more">触发上拉加载</button> <button id="refresh">下拉刷新</button><p><small>登录、选图、上传和后端均为测试替身。布局、按钮、输入及页面控制器来自原始源码。</small></p></section>
+<section><h2>当前状态</h2><div id="state">启动中…</div><div id="errors"></div></section>
+<section><h2>最近接口调用</h2><div id="logs"></div></section>
+</aside><iframe title="小程序原始页面预览" id="device" src="/frame"></iframe></main>
+<script>
+const frame=document.getElementById('device');const send=(action,value)=>frame.contentWindow.postMessage({source:'campus-preview-controls',action,value},location.origin)
+document.querySelectorAll('[data-route]').forEach(button=>button.onclick=()=>send('navigate',button.dataset.route))
+document.getElementById('identity').onchange=event=>send('identity',event.target.value)
+document.getElementById('ai').onchange=event=>send('ai',event.target.value)
+document.getElementById('more').onclick=()=>send('more');document.getElementById('refresh').onclick=()=>send('refresh');document.getElementById('back').onclick=()=>send('back')
+window.addEventListener('message',event=>{if(event.origin!==location.origin||event.data.source!=='campus-preview-runtime')return;const data=event.data;document.getElementById('state').textContent=data.state;document.getElementById('errors').textContent=data.errors.join('\n');document.getElementById('logs').textContent=data.logs.slice(-7).join('\n');document.getElementById('identity').value=data.identity})
+</script></html>

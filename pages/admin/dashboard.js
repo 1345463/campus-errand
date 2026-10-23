@@ -127,11 +127,7 @@ Page({
     return flags
       .ensure()
       .then(function () {
-        // 灰度没开直接收口：不拉统计、不列入口
-        if (!flags.on('admin_dashboard')) {
-          page.setData({ grayOff: true, loading: false, cardRows: [], entries: [] })
-          return null
-        }
+        // 管理入口不能被自身开关挡住；登录和服务端权限仍是必要条件。
         return api.getSession().then(function (session) {
           if (!session) {
             page.setData({ grayOff: false, needLogin: true, loading: false })

@@ -9,7 +9,7 @@ function run(args) {
 }
 function syntax(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (['node_modules','miniprogram_npm','.git'].includes(entry.name)) continue
+    if (['node_modules','miniprogram_npm','.git','.agents'].includes(entry.name)) continue
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) syntax(full)
     else if (entry.name.endsWith('.js')) run(['--check', full])

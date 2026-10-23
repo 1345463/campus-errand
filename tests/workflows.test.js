@@ -129,6 +129,20 @@ test('single-character FAQ matches and empty answers are rejected; failed histor
   h.cleanup()
 })
 
+test('chat rows cannot inherit viewport-sized global page styles', () => {
+  const css=fs.readFileSync(path.join(root,'app.wxss'),'utf8').replace(/\/\*[\s\S]*?\*\//g,'')
+  const pageClasses=new Set()
+  for(const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if(!/min-height\s*:\s*(?:100|9\d)(?:s|d)?vh\b/.test(rule[2])) continue
+    for(const selector of rule[1].matchAll(/\.([\w-]+)/g)) pageClasses.add(selector[1])
+  }
+  const template=fs.readFileSync(path.join(root,'pages/mine/support.wxml'),'utf8')
+  const rowClass=template.match(/class="(msg-row[^\"]*)"/)[1]
+  const directions=[...rowClass.matchAll(/'([\w-]+)'/g)].map(match=>match[1])
+  for(const direction of directions) assert.equal(pageClasses.has(direction),false,
+    'message class '+direction+' inherits full viewport min-height')
+})
+
 test('scroll measures current document before scrolling and keyboard changes update padding', () => {
   const order=[];let options
   const h=page('pages/mine/support.js',{}, {wx:{pageScrollTo:x=>{order.push('scroll');options=x}}})

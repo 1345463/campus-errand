@@ -75,11 +75,11 @@
   margin-bottom: 16rpx;
 }
 
-.msg-row.mine {
+.msg-row.msg-mine {
   align-items: flex-end;
 }
 
-.msg-row.peer {
+.msg-row.msg-peer {
   align-items: flex-start;
 }
 
@@ -94,13 +94,13 @@
   word-break: break-all;
 }
 
-.msg-row.peer .msg-bubble {
+.msg-row.msg-peer .msg-bubble {
   background: #FFFFFF;
   color: var(--t1);
   border-top-left-radius: 6rpx;
 }
 
-.msg-row.mine .msg-bubble {
+.msg-row.msg-mine .msg-bubble {
   background: var(--brand);
   color: #FFFFFF;
   border-top-right-radius: 6rpx;

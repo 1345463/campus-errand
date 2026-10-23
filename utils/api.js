@@ -125,6 +125,7 @@ async function registerWithPhone(payload) {
 }
 
 async function activateAdmin(code) {
+  await requireSession()
   const result = await cloud.database.rpc('activate_admin', { p_code: code })
   if (result.error) throw new Error(getErrorMessage(result.error))
   const rows = Array.isArray(result.data) ? result.data : []

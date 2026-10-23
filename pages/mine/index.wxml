@@ -318,17 +318,16 @@
         <text class="menu-arrow">></text>
       </view>
 
-      <!-- 管理员工作台：灰度开且有任意后台权限时出现，是全部后台页的唯一入口 -->
+      <!-- 后台入口始终可达，具体权限由服务端验证。 -->
       <view
-        wx:if="{{flagsOn.admin_dashboard && isAnyAdmin}}"
         class="menu-item pressable"
         hover-class="press"
         hover-stay-time="100"
-        bindtap="goDashboard"
+        bindtap="goAdminEntry"
       >
         <text class="menu-icon">🗂️</text>
-        <text class="menu-label">管理员工作台</text>
-        <text class="menu-value">全部后台功能</text>
+        <text class="menu-label">{{isAnyAdmin || isAdmin ? '管理员工作台' : '后台密码入口'}}</text>
+        <text class="menu-value">{{isAnyAdmin || isAdmin ? '全部后台功能' : '输入后台密码'}}</text>
         <text class="menu-arrow">></text>
       </view>
 

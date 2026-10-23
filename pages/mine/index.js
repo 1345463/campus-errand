@@ -649,6 +649,12 @@ Page({
     this.goPage('/pages/admin/dashboard')
   },
 
+  goAdminEntry: function () {
+    if (!this.data.logged) return guard.ensureLogin()
+    if (this.data.isAnyAdmin || this.data.isAdmin) return this.goDashboard()
+    this.goPage('/pages/mine/settings?admin=1')
+  },
+
   goRental: function () {
     this.goPage('/pages/rental/index')
   },

@@ -49,25 +49,29 @@
     <view class="menu-list">
       <view class="menu-item last pressable" hover-class="press" hover-stay-time="100" bindtap="onAdminTap">
         <text class="menu-icon">🛡️</text>
-        <text class="menu-label">管理员权限</text>
-        <text class="menu-value">{{isAdmin ? '已开通' : '未开通'}}</text>
+        <text class="menu-label">后台密码入口</text>
+        <text class="menu-value">{{isAdmin ? '进入工作台' : logged ? '输入密码' : '请先登录'}}</text>
         <text class="menu-arrow">></text>
       </view>
     </view>
-    <view wx:if="{{adminPanelOpen && !isAdmin}}" class="admin-panel">
+    <view wx:if="{{logged && adminPanelOpen && !isAdmin}}" class="admin-panel">
       <input
         class="field-input"
-        placeholder="管理员口令"
+        placeholder="请输入后台密码"
         password="{{true}}"
         value="{{adminCode}}"
         bindinput="onAdminCodeInput"
+        bindconfirm="submitAdminCode"
+        disabled="{{adminSaving}}"
+        maxlength="80"
       />
       <view
         class="btn-primary top-gap pressable {{adminSaving ? 'btn-disabled' : ''}}"
         hover-class="press"
         bindtap="submitAdminCode"
-      >{{adminSaving ? '处理中…' : '确认开通'}}</view>
-      <view class="hint">开通后可查看全部订单，并直接获得接单资格（仅调试期使用）</view>
+      >{{adminSaving ? '验证中…' : '验证并进入后台'}}</view>
+      <view wx:if="{{adminError}}" class="admin-error">{{adminError}}</view>
+      <view class="hint">密码由服务端验证，通过后进入管理员工作台。</view>
     </view>
   </view>
 

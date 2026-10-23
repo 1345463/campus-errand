@@ -26,7 +26,7 @@ const fs = require('fs')
 const path = require('path')
 
 const ROOT = path.resolve(process.argv[2] || path.join(__dirname, '..'))
-const SKIP = new Set(['node_modules', 'miniprogram_npm', '.git', 'tools', 'docs'])
+const SKIP = new Set(['node_modules', 'miniprogram_npm', '.git', '.agents', 'tools', 'docs'])
 
 function walk(dir, ext, out) {
   for (const name of fs.readdirSync(dir)) {

@@ -1,7 +1,6 @@
 const ui = require('../../utils/ui')
 const api = require('../../utils/api')
 const guard = require('../../utils/guard')
-const cloudModule = require('../../utils/cloud')
 
 const MAX_COMMENT = 200
 // 二次点击确认的自动解除时间，和 orders/list 的 askHide 保持一致
@@ -17,21 +16,10 @@ const TAG_OPTIONS = {
 const SCORE_WORDS = ['', '很不满意', '不太满意', '一般', '比较满意', '非常满意']
 
 // 取「我在这张单上的评价状态」。
-// 服务端函数 my_order_review_state 已经建好，但 utils/api.js 的 module.exports 里
-// 目前没有 myOrderReviewState 这一项 —— 这里做一层兜底：
-// api 上有就直接用，没有就直接调同名 RPC，页面不至于因为缺一个导出而整个白屏。
-// （等 api.js 补上导出后，下面这个分支自然就走不到了）
+// api.myOrderReviewState 早就导出了，直接调即可 —— 页面不要再自己 require cloud 裸调 RPC，
+// 那是绕过 api 层的第二套错误处理。
 function fetchReviewState(orderId) {
-  if (typeof api.myOrderReviewState === 'function') {
-    return api.myOrderReviewState(orderId)
-  }
-  return cloudModule.cloud.database
-    .rpc('my_order_review_state', { p_order_id: orderId })
-    .then(function (result) {
-      if (result.error) throw new Error(api.getErrorMessage(result.error))
-      const rows = Array.isArray(result.data) ? result.data : []
-      return rows.length ? rows[0] : null
-    })
+  return api.myOrderReviewState(orderId)
 }
 
 // from_role 是评价者的身份，用它区分「我写的」和「对方写的」，
@@ -145,7 +133,10 @@ Page({
   // 只有「已完成」的单才开放互评，进行中 / 已取消的单不给入口
   loadOrder: function (relation) {
     const page = this
-    return api.getOrder(page.data.orderId).then(function (order) {
+    // 走 get_order_detail 而不是裸读 orders 表：
+    // 前者由服务端统一脱敏（contact / 图片在没接单时会被清掉），
+    // 后者 select('*') 会把整行敏感字段下发到客户端。
+    return api.getOrderDetail(page.data.orderId).then(function (order) {
       if (!order) {
         page.setData({ loading: false, denied: true, deniedText: '订单不存在，可能已被删除' })
         return null
@@ -298,12 +289,13 @@ Page({
   },
 
   goBack: function () {
-    // 直接分享链接进来时页面栈里没有上一页，退回订单列表兜底
-    try {
-      wx.navigateBack()
-    } catch (e) {
-      wx.switchTab({ url: '/pages/orders/list' })
-    }
+    // 直接分享链接进来时页面栈里没有上一页，退回订单列表兜底。
+    // navigateBack 失败走的是 fail 回调，不会同步抛错 —— 用 try/catch 兜不住（踩过）。
+    wx.navigateBack({
+      fail: function () {
+        wx.switchTab({ url: '/pages/orders/list' })
+      },
+    })
   },
 
   goLogin: function () {

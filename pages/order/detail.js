@@ -10,6 +10,7 @@ const ARM_TEXT = {
   cancel: '再点一次，确认取消',
   complete: '再点一次，确认已送达',
   confirm: '再点一次，确认完成并支付',
+  abandon: '再点一次，确认放弃接单',
 }
 const ARM_TIMEOUT = 4000
 const SETTLE_WAIT_HOURS = 48
@@ -106,6 +107,9 @@ Page({
     images: [],
     // 送达佐证：接单员提交的照片 与 已展示的预览
     deliverPhotos: [],
+    deliverPreviews: [],
+    uploading: false,
+    needLogin: false,
     deliverImageUrls: [],
     isOwner: false,
     isRunner: false,
@@ -156,7 +160,7 @@ Page({
   onLoad: function (options) {
     const page = this
     page.setData({ id: Number(options.id) || 0 })
-    flags.ensure().then(function () {
+    page._flagsReady = flags.ensure().then(function () {
       page.setData({
         timelineOn: flags.on('order_timeline'),
         reviewOn: flags.on('order_review'),
@@ -166,7 +170,8 @@ Page({
   },
 
   onShow: function () {
-    this.load()
+    const page = this
+    return Promise.resolve(page._flagsReady).then(function () { return page.load() })
   },
 
   onUnload: function () {
@@ -191,11 +196,20 @@ Page({
     if (!id) return Promise.resolve()
 
     // 走服务端 get_order_detail：没接单的人拿到的是脱敏结果（图片 / 联系方式被清空）
-    return Promise.all([api.getSession(), api.getOrderDetail(id), api.getProfile().catch(function () { return null })])
-      .then(function (result) {
+    return api.getSession().then(function (session) {
+      if (!session) {
+        page.setData({ needLogin: true, hidden: false, order: {}, images: [], deliverImageUrls: [],
+          primary: { key: 'login', label: '登录后查看或接单' }, errorText: '', canReport: false })
+        return null
+      }
+      return Promise.all([Promise.resolve(session), api.getOrderDetail(id), api.getProfile().catch(function () { return null }),
+      api.isOrderHidden(id), api.getOrderRelation(id)])
+    }).then(function (result) {
+        if (!result) return null
         const session = result[0]
         const order = result[1]
         const profile = result[2]
+        page.setData({ needLogin: !session })
         if (!order) {
           // 读不到有两种可能：单子真没了，或者当前账号根本没资格看（未认证接单员）。
           // 对后者给一句明确的话，别让人以为是系统坏了。
@@ -205,28 +219,18 @@ Page({
               ? '订单不存在或已被删除'
               : '该任务仅对接单员开放，完成接单员认证后即可查看',
             primary: null,
+            order: {}, images: [], canReport: false,
           })
           return null
         }
         const isAdmin = !!(profile && profile.is_admin)
 
-        // 已删除（隐藏）的订单对自己等于不存在：即便直接带 id 进来也不给看内容
-        return api
-          .isOrderHidden(id)
-          .catch(function () {
-            return false
-          })
-          .then(function (hidden) {
-            if (hidden) {
-              page.setData({ hidden: true, errorText: '', order: {}, images: [], primary: null, canReport: false })
-              return true
-            }
-            return false
-          })
-          .then(function (hidden) {
-            if (hidden) return null
-            return page.loadRelation(id, session, order, isAdmin)
-          })
+        if (result[3]) {
+          page.setData({ hidden: true, order: {}, images: [], primary: null, canReport: false })
+          return null
+        }
+        page.setData({ hidden: false })
+        return page.loadRelation(id, session, order, isAdmin, result[4])
       })
       .catch(function (error) {
         const message = api.getErrorMessage(error)
@@ -235,20 +239,10 @@ Page({
       })
   },
 
-  // 关系判定优先走服务端函数；万一 RPC 不通，退回本地比较，
-  // 不能因为一次请求失败就把操作按钮整个弄没
-  loadRelation: function (id, session, order, isAdmin) {
+  // 身份始终由服务端判断，避免大整数 ID 在客户端失真。
+  loadRelation: function (id, session, order, isAdmin, relation) {
     const page = this
-    return api
-      .getOrderRelation(id)
-      .catch(function () {
-        if (!session || !session.user) return 'none'
-        const uid = String(session.user.id)
-        if (order.runner_id != null && String(order.runner_id) === uid) return 'runner'
-        if (String(order.owner_id) === uid) return 'owner'
-        return 'none'
-      })
-      .then(function (relation) {
+    return Promise.resolve().then(function () {
             const isOwner = relation === 'owner'
             const isRunner = relation === 'runner'
             // 与服务端 get_order_detail 的口径保持一致：本人 / 接单员 / 管理员
@@ -257,7 +251,7 @@ Page({
             // 服务端 report_order 会按身份记录 owner / runner / viewer 供管理员判断。
             const canReport = !!session
 
-            let primary = null
+            let primary = session ? null : { key: 'login', label: '登录后接单' }
             if (session) {
               if (order.status === 'pending') {
                 if (isOwner) {
@@ -316,6 +310,9 @@ Page({
               isRunner: isRunner,
               isAdmin: isAdmin,
               canSeeContact: canSeeContact,
+              canAbandon: isRunner && order.status === 'accepted',
+              peerCreditText: '',
+              canReview: false,
               expectTimeText: order.expect_time || '越快越好',
               genderText: order.gender_limit && order.gender_limit !== '不限' ? order.gender_limit : '',
               tagsText: (order.tags || []).join('、'),
@@ -406,25 +403,18 @@ Page({
                 })
             }
 
-            if (order.images && order.images.length) {
-              // 任务图是发布方传的，接单员接单后要能看到 —— 同样得带订单号读
+            const loadImages = function () {
+              if (!order.images || !order.images.length) {
+                page.setData({ images: [] })
+                return Promise.resolve()
+              }
               return api.getOrderImageUrls(order.images, id).then(function (rows) {
-                const ok = (rows || []).filter(function (row) {
-                  return row && row.url
-                })
+                const ok = (rows || []).filter(function (row) { return row && row.url })
                 page.setData({ images: ok.map(function (row) { return row.url }) })
-                // 有图但一张都没拿到时，把原因摆到页面上，别让用户对着空白猜
-                if (!ok.length) {
-                  const reason = (rows[0] && rows[0].error) || '服务端没有返回链接'
-                  page.setData({ errorText: '图片加载失败：' + reason })
-                  if (typeof console !== 'undefined' && console.error) {
-                    console.error('[order/detail] load images failed:', reason, '| paths =', order.images)
-                  }
-                }
-              }).then(loadDeliver).then(tail).then(tailCredit).then(tailReview)
+                if (!ok.length) page.setData({ errorText: '图片加载失败，请稍后重试' })
+              }).catch(function () { page.setData({ images: [], errorText: '图片加载失败，请稍后重试' }) })
             }
-            page.setData({ images: [] })
-            return loadDeliver().then(tail).then(tailCredit).then(tailReview)
+            return Promise.all([loadImages(), loadDeliver(), tail(), tailCredit(), tailReview()])
           })
       .catch(function (error) {
         const message = api.getErrorMessage(error)
@@ -477,8 +467,13 @@ Page({
     const page = this
     const action = page.data.primary
     if (!action) return
-    if (page.data.busy) {
+    if (page.data.busy || page.data.uploading) {
       ui.toast({ title: '正在处理，请稍候', icon: 'none' })
+      return
+    }
+
+    if (action.key === 'login') {
+      require('../../utils/login-return').goLogin()
       return
     }
 
@@ -508,6 +503,7 @@ Page({
         armLabel: label || ARM_TEXT[key] || '再点一次确认',
         errorText: '',
       })
+      if (key === 'complete') return Promise.resolve(null)
       page._armTimer = setTimeout(function () {
         page._armTimer = null
         if (page.data.armKey === key) page.setData({ armKey: '', armLabel: '' })
@@ -527,11 +523,19 @@ Page({
       page.armOrRun('complete', [])
       return
     }
-    // 已经选过照片、并且处于二次确认状态：这一下就是真提交，别再弹一次选图
-    if (page.data.armKey === 'complete' && (page.data.deliverPhotos || []).length) {
-      page.clearArm()
-      return page.runRpc('complete', page.data.deliverPhotos)
+    if ((page.data.deliverPhotos || []).length) {
+      if (page.data.armKey === 'complete') {
+        page.clearArm()
+        return page.runRpc('complete', page.data.deliverPhotos)
+      }
+      return page.armOrRun('complete', page.data.deliverPhotos, '确认用这 ' + page.data.deliverPhotos.length + ' 张照片提交送达')
     }
+    return page.chooseDeliverPhotos()
+  },
+
+  chooseDeliverPhotos: function () {
+    const page = this
+    if (page.data.busy || page.data.uploading) return
     if (!ui.available('chooseMedia')) {
       ui.toast({ title: '当前环境不支持拍照，请在微信小程序里使用', icon: 'none' })
       return
@@ -548,44 +552,59 @@ Page({
           ui.toast({ title: '请先拍照或选择照片', icon: 'none' })
           return
         }
+        page.setData({ uploading: true })
         ui.loading({ title: '上传佐证中', mask: true })
         Promise.all(
           files.map(function (tempPath) {
-            return api.uploadImage(tempPath, 'deliver').catch(function () {
-              return ''
-            })
+            return api.uploadImage(tempPath, 'deliver').then(function (path) { return { path: path, preview: tempPath } })
           })
         )
           .then(function (paths) {
             ui.hideLoading()
-            const ok = paths.filter(function (path) {
-              return !!path
-            })
-            if (!ok.length) {
-              ui.toast({ title: '照片上传失败，请重试', icon: 'none' })
-              return null
-            }
-            page.setData({ deliverPhotos: ok })
-            // 二次确认仍然保留：提交后发布方会立刻收到通知，撤不回来。
-            // 文案里带上张数，让接单员知道自己提交的是哪几张
-            return page.armOrRun('complete', ok, '再点一次，用这 ' + ok.length + ' 张照片提交送达')
+            page.setData({ uploading: false, deliverPhotos: paths.map(function (row) { return row.path }),
+              deliverPreviews: paths.map(function (row) { return row.preview }) })
+            return page.armOrRun('complete', page.data.deliverPhotos, '确认用这 ' + paths.length + ' 张照片提交送达')
           })
           .catch(function (error) {
             ui.hideLoading()
-            page.toastError(error)
+            page.setData({ uploading: false })
+            page.fail(error)
           })
       },
     })
   },
 
+  removeDeliverPhoto: function (event) {
+    if (this.data.busy || this.data.uploading) return
+    const index = Number(event.currentTarget.dataset.index)
+    const photos = this.data.deliverPhotos.slice()
+    const previews = this.data.deliverPreviews.slice()
+    photos.splice(index, 1)
+    previews.splice(index, 1)
+    this.clearArm()
+    this.setData({ deliverPhotos: photos, deliverPreviews: previews })
+  },
+
+  previewDeliverDraft: function (event) {
+    wx.previewImage({ current: this.data.deliverPreviews[Number(event.currentTarget.dataset.index)], urls: this.data.deliverPreviews })
+  },
+
+  abandon: function () {
+    if (this.data.busy || this.data.uploading) return
+    return this.armOrRun('abandon')
+  },
+
   doAccept: function () {
     const page = this
-    api
+    if (page.data.busy) return Promise.resolve()
+    page.setData({ busy: true })
+    return api
       .getProfile()
       .then(function (profile) {
         if (!profile) throw new Error('请先登录')
-        if (profile.role !== 'runner') {
-          ui.toast({ title: '请先在「我的」切换为接单员', icon: 'none' })
+        if (!(profile.cert_status === 'approved' || profile.role === 'runner')) {
+          page.setData({ busy: false })
+          ui.toast({ title: '请先完成接单员认证', icon: 'none' })
           return null
         }
         return page.runRpc('accept')
@@ -714,7 +733,9 @@ Page({
     const id = page.data.id
     page.setData({ busy: true, errorText: '' })
     const call =
-      kind === 'accept'
+      kind === 'abandon'
+        ? api.abandonOrder(id)
+        : kind === 'accept'
         ? api.acceptOrder(id)
         : kind === 'complete'
           ? api.completeOrder(id, images)
@@ -731,10 +752,10 @@ Page({
                 ? '已提交，等发布方确认'
                 : kind === 'confirm'
                   ? '已确认，赏金已打给接单员'
-                  : '已取消',
+                  : kind === 'abandon' ? '已放弃，任务重新开放' : '已取消',
           icon: 'success',
         })
-        page.setData({ busy: false })
+        page.setData({ busy: false, deliverPhotos: [], deliverPreviews: [] })
         return page.load()
       })
       .catch(function (error) {

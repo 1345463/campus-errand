@@ -335,6 +335,8 @@ Page({
   toggleGoods: function (event) {
     const page = this
     const id = String(event.currentTarget.dataset.id || '')
+    // 防重复：连点会发两次 upsert，状态来回翻
+    if (page.data.actingId) return
     const row = page.data.list.filter(function (item) {
       return item.id === id
     })[0]
@@ -342,18 +344,28 @@ Page({
     const next = !row.enabled
     page.setData({ actingId: id, errorText: '' })
     ui.loading({ title: next ? '上架中' : '下架中', mask: true })
+    // admin_upsert_point_goods 是全字段覆盖。直接用列表快照会把「管理员停留期间
+    // 被用户兑换掉的库存」写回旧值，凭空多出可兑换份数。所以先拉一次最新数据，
+    // 只用它来改 enabled，其余字段跟着服务端的最新值走。
     api
-      .adminUpsertPointGoods({
-        id: id,
-        name: row.name,
-        emoji: row.emoji,
-        cost: row.cost,
-        stock: row.stock,
-        descr: row.descr,
-        benefit_type: row.benefitType,
-        deduct_value: row.benefitType === 'deduct' ? row.deductValue : 0,
-        enabled: next,
-        sort_order: row.sortOrder,
+      .adminListPointGoods()
+      .then(function (rows) {
+        const fresh = (rows || []).filter(function (item) {
+          return String(item.id || '') === id
+        })[0]
+        const src = fresh || {}
+        return api.adminUpsertPointGoods({
+          id: id,
+          name: src.name != null ? String(src.name) : row.name,
+          emoji: src.emoji != null ? String(src.emoji) : row.emoji,
+          cost: src.cost != null ? Number(src.cost) : row.cost,
+          stock: src.stock != null ? Number(src.stock) : row.stock,
+          descr: src.descr != null ? String(src.descr) : row.descr,
+          benefit_type: src.benefit_type != null ? String(src.benefit_type) : row.benefitType,
+          deduct_value: src.deduct_value != null ? Number(src.deduct_value) : row.deductValue,
+          enabled: next,
+          sort_order: src.sort_order != null ? Number(src.sort_order) : row.sortOrder,
+        })
       })
       .then(function () {
         ui.hideLoading()
@@ -441,6 +453,9 @@ Page({
 
   doAdjust: function () {
     const page = this
+    // 防重复：网络慢时连点会发两笔 admin_adjust_points，积分直接翻倍，
+    // 而且两笔都有独立流水，事后只能手工冲正。
+    if (page.data.adjusting) return
     const uid = page.data.pickedUid
     if (!uid) {
       ui.toast({ title: '先搜索并选中一个同学', icon: 'none' })
@@ -460,21 +475,23 @@ Page({
       ui.toast({ title: '请填写调整原因', icon: 'none' })
       return
     }
-    // 扣到不够减时服务端会按 0 收口，这里提前说清楚，免得管理员以为数字错了
-    if (delta < 0 && -delta > page.data.pickedPoints) {
-      ui.confirm({
-        title: '积分不足',
-        content:
-          page.data.pickedName + ' 当前只有 ' + page.data.pickedPoints + ' 分，扣减后会被置为 0，确定继续吗？',
-        confirmText: '继续扣减',
-        cancelText: '取消',
-      }).then(function (ok) {
-        if (!ok) return
-        page.submitAdjust(uid, delta, remark)
-      })
-      return
-    }
-    page.submitAdjust(uid, delta, remark)
+    // 加/扣积分都是不可撤销的账目变动，统一过一次确认（不区分是否够扣，
+    // 够不够扣写在文案里，避免弹两次框）。
+    const shortage = delta < 0 && -delta > page.data.pickedPoints
+    ui.confirm({
+      title: shortage ? '积分不足，确认继续？' : '确认调整积分',
+      content:
+        page.data.pickedName + '：' + (delta > 0 ? '+' : '') + delta + ' 分' +
+        (shortage
+          ? '（当前只有 ' + page.data.pickedPoints + ' 分，扣减后会被置为 0）'
+          : '') +
+        '\n原因：' + remark,
+      confirmText: shortage ? '继续扣减' : '确认调整',
+      cancelText: '取消',
+    }).then(function (ok) {
+      if (!ok) return
+      page.submitAdjust(uid, delta, remark)
+    })
   },
 
   submitAdjust: function (uid, delta, remark) {

@@ -1,7 +1,7 @@
 {
   "miniprogramRoot": "./",
   "compileType": "miniprogram",
-  "appid": "touristappid",
+  "appid": "wxf73d4e1b04e62d79",
   "projectname": "campus-errand",
   "description": "校园跑腿代办小程序",
   "packOptions": {

@@ -1,5 +1,6 @@
 const ui = require('../../utils/ui')
 const api = require('../../utils/api')
+const perms = require('../../utils/perms')
 
 // 管理员处理用户对订单的举报。
 // 两种处置：
@@ -55,10 +56,12 @@ Page({
           page.setData({ needLogin: true, list: [], loading: false })
           return
         }
-        return api
-          .getProfile()
-          .then(function (profile) {
-            if (!profile || !profile.is_admin) {
+        // 门禁用 review 权限，与服务端 admin_handle_report 里的 admin_has_perm('review') 对齐。
+        // 之前只判 is_admin（任何后台身份都为 true），客服能进却处理不了。
+        return perms
+          .load()
+          .then(function () {
+            if (!perms.has('review')) {
               page.setData({ denied: true, list: [], loading: false })
               return
             }

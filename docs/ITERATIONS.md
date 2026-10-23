@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 WorkBuddy Cloud
-> 统计截止：2026-10-23 14:50 ｜ 累计 **38 轮迭代**、**37 个页面**、**23 张表**、**110 个数据库函数**
+> 统计截止：2026-10-24 00:20 ｜ 累计 **41 轮迭代**、**37 个页面**、**29 张表**、**117 个数据库函数**、**4 个触发器**
 
 ---
 
@@ -9,7 +9,7 @@
 
 - [0. 项目概况](#0-项目概况)
 - [1. 技术基线（不可动摇的约定）](#1-技术基线不可动摇的约定)
-- [2. 迭代时间线（38 轮）](#2-迭代时间线38-轮)
+- [2. 迭代时间线（41 轮）](#2-迭代时间线41-轮)
 - [3. 数据库演进总览](#3-数据库演进总览)
 - [4. 前端页面与模块总览](#4-前端页面与模块总览)
 - [5. 踩坑知识库](#5-踩坑知识库)
@@ -65,7 +65,7 @@
 
 ---
 
-## 2. 迭代时间线（38 轮）
+## 2. 迭代时间线（41 轮）
 
 ### Day 1 — 2026-10-14：从录屏原型到可用链路
 
@@ -561,6 +561,96 @@ height:0 方向对但还是被某种方式撑到 1053、scroll-into-view 滚空�
 **业务逻辑零改动**：FAQ 匹配、大模型流式、上下文、违规词、配额、转人工全部保留原样。
 
 **待办**：无（调试条已删，功能完整）。
+
+---
+
+### Day 9 — 2026-10-23 晚：合入修复分支 + 安全加固
+
+#### R39 · 合入 `codex/fix-orders-support` 分支
+
+从 GitHub 快进合入 3 个提交（`1e013eb` → `19ac0bf` → `aeb2dfe`），
+覆盖订单工作流 20 项 + 智能客服可靠性 18 项 + 测试/CI 基建。
+
+**最关键的修复：客服页消息间隔空白的真正根因**
+—— `app.wxss:1816` 有一条全局规则 `.home, .mine { min-height: 100vh; }`，
+而客服页消息行的 class 就叫 `mine`，于是**每条「我发的」消息都被撑到一屏高**。
+R36–R38 六轮都在调 scroll-view 容器高度，方向完全错了。本分支把类名改成
+`msg-mine` / `msg-peer`，空白问题从根上消失。
+
+**其余主要修复**：
+- 订单：`list_my_orders_v2` 服务端分页/筛选、请求序号防乱序、登录草稿返回、
+  放弃接单 `abandon_order`、送达照片可空、联系方式校验、赏金两位小数
+- 客服：键盘高度适配、服务端配额（`begin/finish_support_ai`）、FAQ 单字误命中、
+  空气泡、`Promise.race` 超时、会话本地保存、反馈/重新生成
+- 安全：删除明文密码存储（`rememberPassword`/`autoLogin` 改 false）、
+  `accept_order` 补认证校验 + 禁止自接自单、`completeOrder` 前端不再硬拦空照片
+- 后台：工作台入口不再被 `admin_dashboard` 开关挡死；设置页新增「后台密码入口」
+- 配置：`project.config.json` 填真实 appid，`.agents` 加入 packOptions.ignore
+
+#### R40 · 审阅补漏：图片越权 + 权限键对齐
+
+R39 之后做了一次全量代码审阅（37 页 / 15 模块 / 22 个 SQL），
+本次修掉审阅中发现但分支没覆盖的 5 项：
+
+| # | 问题 | 修法 |
+|---|---|---|
+| P0-1 | **图片越权读取**：`create_order`/`complete_order` 不校验 asset 归属，`get_order_asset` 只校验「路径挂在单上」→ 任何人建单塞 `asset:123` 就能读别人的图（含证件照，id 可枚举） | 新增 `sql/fix-asset-authorization.sql`：① `orders` 表加 BEFORE INSERT/UPDATE 触发器校验每个 `asset:<id>` 属于调用者；② `get_order_asset` 补「图片必须属于本单参与方」第三道校验 |
+| P0-4 | `getOrder` 用 `select('*')` 直读 orders，绕过脱敏 | 改为只取非敏感字段；评价页改用 `getOrderDetail`（服务端脱敏） |
+| P1-3 | 评价页 `goBack` 用 try/catch 兜底，`navigateBack` 失败走 fail 回调，catch 永不执行 | 改 `fail` 回调 switchTab |
+| P1-4 | 举报模块权限键三处不一致（dashboard 用 support / 页面用 is_admin / 服务端用 review）→ 客服能看不能做，审核员没入口 | 三处统一到 `review` |
+| P1-5 | `admin_dashboard_stats` 白名单漏 `dispatch` → 第八级权限进不了后台 | SQL 补 `v_dispatch` + 返回 `can_dispatch`（改返回列需 DROP 重建） |
+
+**顺手清理**：评价页去掉了 `require('../../utils/cloud')` 的裸调兜底分支
+（`api.myOrderReviewState` 早已导出，那段是死代码，还绕过 api 层错误处理）。
+
+**✅ 迁移已执行**（2026-10-23 23:5x，经 `workbuddy_cloudservice_db_exec_sql` 直连真库）：
+1. `sql/fix-order-support-workflows.sql` —— 7 个 RPC + 3 张表（order_abandonments /
+   support_ai_requests / support_answer_ratings），全部 RLS 已开
+2. `sql/restore-admin-password.sql` —— 3 张表 + `activate_admin` 重写（盐值哈希 + 15 分钟限频 + 审计）
+3. `sql/fix-asset-authorization.sql` —— `orders` 触发器 + `get_order_asset` 归属校验 + `can_dispatch`
+
+**执行方式（踩坑记录）**：这个 MCP 工具一次只接受**一条**语句，多条会报
+`42601 cannot insert multiple commands into a prepared statement`。
+所以把整个迁移文件拆成单条语句，包进一个 `DO $$ BEGIN EXECUTE $qN$...$qN$; ... END $$;`
+—— `DO` 本身是一条语句，既绕过限制又保证整文件原子执行（出错全回滚）。
+内层用递增的 `$q1$`…`$qN$` 美元引用，避免和函数体里的 `$fn$` / `$function$` 撞车。
+
+**校验**：四件套 + UI 冒烟全绿；`npm test` 36 项全过；上传包 1.34 MB / 2.00 MB。
+
+---
+
+#### R41 · 修 FAQ 新增/编辑无效 + 审阅遗留问题
+
+**用户报的问题：客服配置页的「+ 新增」「编辑」点了没反应。**
+
+根因不是绑定错了，也不是方法没执行 —— 用测试沙箱跑 `newFaq()` / `editFaq()`，
+`editing` 确实变成 `true`、表单数据也回填了。问题是**表单卡片是页面的最后一块**
+（在 AI 兜底设置 + 模型 API 配置 + FAQ 列表之后），点完新卡片出现在列表下方一两屏，
+屏幕上什么都不变，看起来就是"点了没反应"。
+
+修法：`openForm()` 里走 `setData` 回调，再 `scrollToForm()` 用
+`createSelectorQuery` 量 `#faq-form` 的位置 + `wx.pageScrollTo` 滚过去；
+量不到就退化滚到底（表单本来就是最后一块）。加了回归测试锁死这个行为。
+
+**同批修掉的审阅遗留项**：
+
+| # | 问题 | 修法 |
+|---|---|---|
+| P1-7 | 积分调整没有防重，连点两次发两笔 `admin_adjust_points` → 积分翻倍 | `doAdjust` 首行加 `adjusting` 守卫；正常加减也统一过一次确认（够不够扣写进文案，不弹两次） |
+| P1-8 | 商品上下架用列表快照整行 upsert，把用户已兑换掉的库存写回旧值 → 凭空多出可兑份数 | 先 `adminListPointGoods()` 拉最新行，只用它改 `enabled`；加 `actingId` 防重 |
+| P1-9 | 生产页面留着「生成测试申请」，会往真实审核队列插「测试同学」 | 删按钮 + `makeDemo` + `api.insertDemoApplication` |
+| P1-10 | 报价留空当 0 元提交（`Number('') === 0`） | 先判空串，再判 `> 0`，并限两位小数 |
+| P1-11 | `getErrorMessage` 直接透出英文 message：断网显示 `request:fail timeout`、token 失效显示 `no active session` | 按 SDK 的 `kind` 契约映射中文；**中文 message 原样透出**（那是我们自己 RPC 的 `RAISE EXCEPTION` 业务文案） |
+| P2 | toast 超长被静默截断 | 超 40 字补省略号，让用户知道还有后半句 |
+| P2 | `orders/list` 的 `_hideTimer` 没清理 | 补 `onHide` / `onUnload` |
+| P2 | `buildTitle` 拿 `description` 前 20 字当标题 → 取餐码/姓名尾号公开到任务大厅 | 标题只由「服务名 + 去向」组成，description 只在详情里给参与者看 |
+| P2 | 大厅 `quickAccept` 无并发锁，连点两张卡可并发接两单 | 加 `_accepting` 标记，成功/失败都复位 |
+| P2 | FAQ 排序留空变 0，排到全站最前面 | 空串按 100，收口到 0..9999 整数 |
+
+**顺带确认无问题**（审阅里怀疑、实测正常的）：`moderation.js` 的词库缓存判断
+（`cached.index.block.length`）是对的，不会每次重发请求。
+
+**校验**：四件套 + UI 冒烟全绿；`npm test` **37 项全过**（新增 FAQ 回归测试 1 项）。
 
 ---
 

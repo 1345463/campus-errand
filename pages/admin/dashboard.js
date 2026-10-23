@@ -10,7 +10,7 @@ const perms = require('../../utils/perms')
 const CARD_DEFS = [
   { key: 'pending_certs', label: '待审核认证', perm: 'can_review', url: '/pages/admin/review' },
   { key: 'pending_rentals', label: '待报价租赁', perm: 'can_rental', url: '/pages/admin/rental' },
-  { key: 'pending_reports', label: '待处理举报', perm: 'can_support', url: '/pages/admin/reports' },
+  { key: 'pending_reports', label: '待处理举报', perm: 'can_review', url: '/pages/admin/reports' },
   { key: 'pending_settles', label: '待核查结算', perm: 'can_settle', url: '/pages/admin/settle' },
   { key: 'pending_feedbacks', label: '待处理反馈', perm: 'can_support', url: '/pages/admin/feedback' },
   { key: 'today_orders', label: '今日订单', perm: 'can_super', url: '' },
@@ -25,7 +25,9 @@ const ENTRY_DEFS = [
   { key: 'review', label: '审核接单员', icon: '🪪', url: '/pages/admin/review', check: 'review', desc: '实名认证审核' },
   { key: 'rental', label: '租赁申请与报价', icon: '📷', url: '/pages/admin/rental', check: 'rental', desc: '相机租赁工单' },
   { key: 'items', label: '机型与挂牌价', icon: '🏷️', url: '/pages/admin/items', check: 'rental', desc: '改价 / 上下架' },
-  { key: 'reports', label: '举报处理', icon: '🛡️', url: '/pages/admin/reports', check: 'support', desc: '下架违规订单' },
+  // 举报处理走 review 权限：服务端 admin_handle_report 判的就是 admin_has_perm('review')。
+  // 之前这里写 support，导致客服看得到入口却每次下架都被拒。
+  { key: 'reports', label: '举报处理', icon: '🛡️', url: '/pages/admin/reports', check: 'review', desc: '下架违规订单' },
   { key: 'settle', label: '结算核查', icon: '🧾', url: '/pages/admin/settle', check: 'settle', desc: '48 小时未确认申诉' },
   { key: 'points', label: '积分商城', icon: '🎁', url: '/pages/admin/points', check: 'settle', flag: 'point_mall', desc: '商品 / 积分 / 核销' },
   { key: 'dispatch', label: '批量发单', icon: '📦', url: '/pages/admin/dispatch', check: 'dispatch', flag: 'admin_batch_order', desc: '同栋同层一次发多单' },
@@ -127,11 +129,7 @@ Page({
     return flags
       .ensure()
       .then(function () {
-        // 灰度没开直接收口：不拉统计、不列入口
-        if (!flags.on('admin_dashboard')) {
-          page.setData({ grayOff: true, loading: false, cardRows: [], entries: [] })
-          return null
-        }
+        // 管理入口不能被自身开关挡住；登录和服务端权限仍是必要条件。
         return api.getSession().then(function (session) {
           if (!session) {
             page.setData({ grayOff: false, needLogin: true, loading: false })

@@ -8,7 +8,7 @@
 **历史可回溯**：`main` 上有 31 次提交，按 R1 → R29 的迭代顺序排列，
 里程碑打了 `v0.1.0` ~ `v0.5.0` 五个 tag。`git log --reverse` 即可顺着时间线回到任意一轮。
 
-> 📘 **38 轮迭代的完整过程、踩坑知识库、数据库演进与函数清单见 [`docs/ITERATIONS.md`](docs/ITERATIONS.md)**
+> 📘 **41 轮迭代的完整过程、踩坑知识库、数据库演进与函数清单见 [`docs/ITERATIONS.md`](docs/ITERATIONS.md)**
 > 📄 逐轮变更见 [`CHANGELOG.md`](CHANGELOG.md)（正序）
 
 ---
@@ -69,8 +69,8 @@ campus-errand/
 
 ## 四、数据库
 
-- **23 张表，全量 RLS**（上面 21 张 + `faq_items` / `faq_settings`）
-- **110 个数据库函数**，命名约定 `p_` 前缀参数。
+- **29 张表，全量 RLS**（上面 21 张 + `faq_items` / `faq_settings`）
+- **117 个数据库函数**，命名约定 `p_` 前缀参数。
 - 迁移脚本按 `sql/` 下的顺序执行即可重建；每个脚本都写成幂等。
 
 ### 订单状态机
@@ -85,26 +85,24 @@ pending ──accept──> accepted ──complete──> waiting_confirm ─�
 ## 五、本地校验（每次改完必跑）
 
 ```bash
-# 1. 全量语法检查
-for f in $(find . -name "*.js" -not -path "./node_modules/*" -not -path "./miniprogram_npm/*"); do node --check "$f"; done
-
-# 2. 页面注册 / 四件套 / 事件绑定校验（放工作区根目录，别放进包内）
-node verify-mp.js
-
-# 3. 微信上传预检 + 真实包体积（必须 ESM 解析，才能抓出重复声明）
-node --experimental-vm-modules check-mp.js campus-errand
-
-# 4. WXSS / WXML 样式预检（通配符 / 兄弟选择器 / {{ }} 配对 / CSS 变量是否已定义）
-node campus-errand/tools/style-lint.js campus-errand
+npm ci --ignore-scripts
+npm test
+npm run check
 ```
 
-`check-mp.js` 的七项检查：ESM 严格解析 / JSON 可解析 / WXML 标签配对 + id 唯一 /
-页面文件齐全 / `usingComponents` 指向存在 / 按 `packOptions.ignore` 算真实上传体积 /
-裸包名能在 `miniprogram_npm` 解析。
+`npm run check` 包含安全配置门禁、全量 JS 语法、页面和事件检查、ESM 上传预检、
+真实包体积、WXML/WXSS 样式检查与回归测试。测试与构建工具均被排除在小程序上传包之外。
+GitHub Actions 使用相同命令。默认禁止密码缓存、密码自动登录和预置账号。
 
-> ⚠️ `node --check` 抓不到「同名函数重复声明」：非严格 Script 里顶层函数声明是 var 作用域，
-> 重复声明合法；微信 CI 按 ES Module 解析会直接编译失败。只有 `vm.SourceTextModule` 能抓到，
-> 这正是 R12 那个「上传失败」的真因。
+订单与智能客服的修复范围、数据库迁移安装顺序见
+[`docs/ITERATIONS.md`](docs/ITERATIONS.md)（R39 / R40 / R41）。
+
+发布前必须在目标库按顺序执行三个迁移：
+1. `sql/fix-order-support-workflows.sql` —— 订单分页 / 放弃接单 / AI 配额
+2. `sql/restore-admin-password.sql` —— 后台密码（盐值哈希 + 限频 + 审计）
+3. `sql/fix-asset-authorization.sql` —— 图片归属校验 + dispatch 权限
+
+后台密码入口在「我的 → 设置 → 后台密码入口」。当前业务后端是 WorkBuddy Cloud PostgreSQL。
 
 ## 六、关于 Git 历史（务必知情）
 
@@ -139,10 +137,10 @@ git push -u origin main && git push --tags
 
 ## 八、已知风险
 
-- 管理员口令硬编码（`activate_admin`），本质是调试后门，正式运营需替换。
+- 后台入口的服务端迁移使用加盐摘要、失败限流与审计；共享管理员口令仍应定期轮换，并仅供受信任人员使用。
 - 未接支付，钱包不可提现（页面已如实说明）。
 - 旧对象存储的证件照不可读，需用户重新提交。
-- `utils/config.js` 的 `rememberPassword / autoLogin / presetAccount` 为联调调试态，上线前必须关。
+- AI 配额已按账号在服务端记账，但模型客户端直连仍可绕过计数；严格成本防刷需要可信服务端网关。
 
 ---
 

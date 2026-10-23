@@ -323,8 +323,41 @@ Page({
   },
 
   // ---------- FAQ 编辑 ----------
+  // 表单是整个页面的最后一张卡片。点「新增 / 编辑」时如果只是 setData，
+  // 新卡片会出现在列表下方一两屏的位置，屏幕上什么都不变 —— 用户看到的就是
+  // 「点了没反应」。所以每次打开表单都要把页面滚过去。
+  scrollToForm: function () {
+    if (typeof wx.createSelectorQuery !== 'function') return
+    // 等一帧让 auto-height 的 textarea 把高度撑开，否则量到的位置会偏上
+    setTimeout(function () {
+      // 页面级查询，不要加 .in(this)：那是组件内查询的用法
+      const query = wx.createSelectorQuery()
+      query.select('#faq-form').boundingClientRect()
+      query.selectViewport().scrollOffset()
+      query.exec(function (res) {
+        const box = (res && res[0]) || null
+        const view = (res && res[1]) || {}
+        // 量不到就退化成滚到底 —— 表单是页面最后一张卡片，滚到底一定能看到
+        if (!box) {
+          wx.pageScrollTo({ scrollTop: 999999, duration: 200 })
+          return
+        }
+        // boundingClientRect 是相对视口的，加上当前 scrollTop 才是文档绝对位置
+        const top = Math.max((Number(view.scrollTop) || 0) + box.top - 12, 0)
+        wx.pageScrollTo({ scrollTop: top, duration: 200 })
+      })
+    }, 80)
+  },
+
+  openForm: function (patch) {
+    const page = this
+    page.setData(patch, function () {
+      page.scrollToForm()
+    })
+  },
+
   newFaq: function () {
-    this.setData({
+    this.openForm({
       editing: true,
       editingId: 0,
       formTitle: '新增常见问题',
@@ -346,7 +379,7 @@ Page({
       return item.id === id
     })[0]
     if (!row) return
-    page.setData({
+    page.openForm({
       editing: true,
       editingId: id,
       formTitle: '编辑常见问题',
@@ -410,7 +443,11 @@ Page({
       return
     }
 
-    const sort = Number(form.sort_order)
+    // 排序留空按 100 处理（Number('') === 0，直接算会排到全站最前面），
+    // 并收口到 0..9999 的整数，避免脏值把列表顺序搞乱。
+    const sortRaw = String(form.sort_order == null ? '' : form.sort_order).trim()
+    const sortNum = sortRaw === '' ? 100 : Number(sortRaw)
+    const sortOrder = isNaN(sortNum) ? 100 : Math.min(Math.max(Math.round(sortNum), 0), 9999)
     page.setData({ saving: true })
     ui.loading({ title: '保存中', mask: true })
     api
@@ -420,7 +457,7 @@ Page({
         question: question,
         answer: answer,
         keywords: String(form.keywords || '').trim(),
-        sort_order: isNaN(sort) ? 100 : sort,
+        sort_order: sortOrder,
         enabled: !!form.enabled,
       })
       .then(function () {

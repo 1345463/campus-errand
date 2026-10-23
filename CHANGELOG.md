@@ -527,3 +527,52 @@ _提交时间：2026-10-23 15:20:00_
   scroll-top 大值/scroll-top 实测），全都有失效方式。整页滚动内容高度物理上不可能出幽灵。
 
 _提交时间：2026-10-23 16:50:00_
+
+## R39 · 合入 codex/fix-orders-support 分支（10-23 23:40）
+
+- 从 GitHub 快进合入 3 个提交：订单工作流 20 项 + 客服可靠性 18 项 + 测试/CI 基建。
+- **根因修复**：客服页消息空白来自 `app.wxss` 全局 `.home, .mine { min-height: 100vh }`
+  与消息行 class `mine` 撞车 —— 每条自己发的消息被撑到一屏高。类名改 `msg-mine` / `msg-peer`。
+- 订单：list_my_orders_v2 服务端分页筛选、请求序号防乱序、登录草稿返回、放弃接单、
+  送达照片可空、联系方式校验、赏金两位小数。
+- 客服：键盘高度适配、服务端配额、FAQ 单字误命中、空气泡、Promise.race 超时、会话本地保存。
+- 安全：删除明文密码存储；accept_order 补认证校验 + 禁止自接自单；completeOrder 不再前端硬拦。
+- 后台：工作台入口不再被自身开关挡死；设置页新增后台密码入口。
+- 配置：project.config.json 填真实 appid，.agents 加入 packOptions.ignore。
+
+## R40 · 审阅补漏：图片越权 + 权限键对齐（10-23 23:40）
+
+- P0-1 图片越权：新增 sql/fix-asset-authorization.sql —— orders 表加触发器校验
+  asset:<id> 归属；get_order_asset 补「图片必须属于本单参与方」第三道校验。
+- P0-4 getOrder 改只取非敏感字段；评价页改用 getOrderDetail（服务端脱敏）。
+- P1-3 评价页 goBack 改 fail 回调（try/catch 兜不住 navigateBack 失败）。
+- P1-4 举报权限键三处统一到 review（dashboard 卡片/入口 + reports 门禁 + 服务端）。
+- P1-5 admin_dashboard_stats 补 v_dispatch / can_dispatch，第八级权限可用。
+- 清理评价页 require('../../utils/cloud') 裸调兜底死代码。
+- 校验：四件套 + UI 冒烟全绿；npm test 36 项全过；1.34 MB / 2.00 MB。
+
+## 数据库迁移已执行（10-23 23:58）
+
+- 通过 `workbuddy_cloudservice_db_exec_sql` 直连真库（`wbapp_yPJnSvicojPmz998PjKfpM`）执行三个迁移：
+  1. fix-order-support-workflows.sql — 7 个 RPC + 3 张表，RLS 全开
+  2. restore-admin-password.sql — 3 张表 + activate_admin 重写
+  3. fix-asset-authorization.sql — orders 触发器 + get_order_asset 归属校验 + can_dispatch
+- 验证：public schema 29 张表 / 27 张开 RLS；7 个新 RPC 参数与前端调用逐一对齐。
+- 执行技巧：MCP 只接受单条语句（多条报 42601），把整文件拆成语句后包进
+  `DO $$ BEGIN EXECUTE $qN$...$qN$; ... END $$;` —— 单语句 + 原子执行。
+
+## R41 · 修 FAQ 新增/编辑无效 + 审阅遗留问题（10-24 00:20）
+
+- **FAQ 新增/编辑点击"无效"**：根因不是绑定错，是表单卡片在页面最底部（AI 设置 +
+  模型配置 + FAQ 列表之后），点完新卡片出现在列表下方一两屏，屏幕没变化。
+  修法：`openForm()` 走 setData 回调 + `scrollToForm()` 量 `#faq-form` 位置后
+  `wx.pageScrollTo`；量不到退化滚到底。新增回归测试。
+- P1-7 积分调整：加 `adjusting` 防重 + 统一二次确认（不再只在"不够扣"时弹）。
+- P1-8 商品上下架：先拉最新数据再 upsert，避免把已兑换的库存写回旧值。
+- P1-9 删除「生成测试申请」按钮 + makeDemo + api.insertDemoApplication。
+- P1-10 报价留空当 0 元：判空串 + 必须 > 0 + 两位小数。
+- P1-11 getErrorMessage 按 SDK kind 映射中文；中文业务文案（我们自己的 RAISE EXCEPTION）原样透出。
+- P2 toast 超长补省略号；orders/list 补 onHide/onUnload 清理定时器；
+  buildTitle 不再拿 description 当标题（避免取餐码公开到大厅）；大厅 quickAccept 加并发锁；
+  FAQ 排序留空按 100。
+- 校验：四件套 + 冒烟全绿；npm test 37 项全过。

@@ -30,9 +30,6 @@
 
     <view class="tool-row">
       <view class="doc-btn" bindtap="retry">刷新列表</view>
-      <view class="doc-btn {{actingId === -1 ? 'disabled' : ''}}" bindtap="makeDemo">
-        {{actingId === -1 ? '生成中…' : '生成测试申请'}}
-      </view>
     </view>
 
     <view wx:if="{{loading}}" class="empty">加载中…</view>

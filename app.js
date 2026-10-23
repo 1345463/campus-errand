@@ -8,6 +8,7 @@ App({
   onLaunch() {
     const app = this
     const api = require('./utils/api')
+    require('./utils/ui').removeStorage('savedAccount')
     app.checkUpdate()
     api
       .restoreSession()

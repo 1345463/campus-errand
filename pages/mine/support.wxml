@@ -17,6 +17,10 @@
   </view>
 
   <view wx:else>
+    <view class="sup-tools">
+      <text bindtap="clearChat">清空对话</text>
+      <text wx:if="{{ticketId}}" bindtap="openTicket">查看工单 #{{ticketId}}</text>
+    </view>
     <!-- 热门问题：第一次进来最容易发生的就是"不知道该问什么" -->
     <view wx:if="{{hot.length > 0}}" class="sup-hot">
       <view class="sup-hot-head" bindtap="toggleHot">
@@ -47,23 +51,30 @@
         wx:for="{{messages}}"
         wx:for-item="msg"
         wx:key="id"
-        class="msg-row {{msg.role === 'me' ? 'mine' : 'peer'}}"
+        class="msg-row {{msg.role === 'me' ? 'msg-mine' : 'msg-peer'}}"
       >
         <view class="msg-bubble {{msg.pending ? 'pending' : ''}}">{{msg.text}}</view>
         <!-- 发送方与时间挤在同一行的小字里，少一行 = 少一道视觉分隔 -->
         <view class="msg-tag {{msg.failed ? 'warn' : ''}}">
           <text wx:if="{{msg.role === 'me'}}">我 · {{msg.timeText}}</text>
-          <text wx:elif="{{msg.kind === 'faq'}}">常见问题 · {{msg.timeText}} · 来自后台配置的固定回答</text>
+          <text wx:elif="{{msg.kind === 'faq'}}">常见问题 · {{msg.timeText}}</text>
           <text wx:elif="{{msg.kind === 'tip'}}">助手 · {{msg.timeText}}</text>
           <text wx:else>AI 助手 · {{msg.timeText}}</text>
+        </view>
+        <view wx:if="{{msg.role === 'bot' && !msg.pending && (msg.kind === 'faq' || msg.question)}}" class="sup-actions">
+          <text wx:if="{{!msg.failed && !msg.rating}}" data-id="{{msg.id}}" data-rating="helpful" bindtap="rateAnswer">有帮助</text>
+          <text wx:if="{{!msg.failed && !msg.rating}}" data-id="{{msg.id}}" data-rating="unhelpful" bindtap="rateAnswer">没帮助</text>
+          <text wx:if="{{msg.rating}}">已反馈</text>
+          <text wx:if="{{msg.question}}" data-id="{{msg.id}}" bindtap="regenerate">重新生成</text>
         </view>
       </view>
     </view>
 
     <!-- 输入区：固定在屏幕底部，消息从它上方滚过 -->
-    <view class="sup-input">
-      <view wx:if="{{aiReady}}" class="sup-quota">今日 AI 提问剩余 {{aiLeftText}} / {{aiLimit}} 次</view>
-      <view wx:else class="sup-quota dim">AI 未开启，只回答后台配置的常见问题</view>
+    <view class="sup-input" style="bottom:{{keyboardHeight}}px">
+      <view wx:if="{{aiReady && !signedIn}}" class="sup-quota" bindtap="goLogin">登录后可使用 AI 回答，点此登录</view>
+      <view wx:elif="{{aiReady}}" class="sup-quota">今日 AI 提问剩余 {{aiLeftText}} / {{aiLimit}} 次</view>
+      <view wx:else class="sup-quota dim">可咨询常见问题，也可以转人工</view>
       <view class="sup-input-row">
         <textarea
           class="sup-textarea"
@@ -72,11 +83,17 @@
           value="{{input}}"
           bindinput="onInput"
           bindfocus="onFocus"
-          maxlength="{{200}}"
+          maxlength="{{inputLimit}}"
+          fixed="{{true}}"
+          hold-keyboard="{{true}}"
+          adjust-position="{{false}}"
+          bindkeyboardheightchange="onKeyboardHeightChange"
+          bindlinechange="measureInput"
           show-confirm-bar="{{false}}"
           auto-height="{{true}}"
         />
       </view>
+      <view wx:if="{{inputWarning}}" class="sup-warning">{{inputWarning}}</view>
       <view class="sup-send-row">
         <view class="sup-human" hover-class="press" hover-stay-time="90" bindtap="openHuman">转人工</view>
         <text class="sup-count">{{countText}}</text>

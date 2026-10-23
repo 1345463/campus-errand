@@ -252,30 +252,4 @@ Page({
   goLogin: function () {
     wx.switchTab({ url: '/pages/mine/index' })
   },
-
-  // 调试入口：没人提交申请时，管理员自己造一条走通审核流程。
-  // 注意：插入成功就立刻在页面里留可见提示，哪怕随后刷新列表失败也不会「像没反应」。
-  makeDemo: function () {
-    const page = this
-    if (page.data.actingId) return
-    page.setData({ actingId: -1, errorText: '', tipText: '' })
-    ui.loading({ title: '生成中', mask: true })
-    api
-      .insertDemoApplication('测试同学')
-      .then(function () {
-        ui.hideLoading()
-        ui.toast({ title: '已生成测试申请', icon: 'success' })
-        page.setData({ actingId: 0, tab: 'pending', tipText: '已生成一条测试申请' })
-        return page.load().catch(function () {
-          return null
-        })
-      })
-      .catch(function (error) {
-        ui.hideLoading()
-        const message = api.getErrorMessage(error)
-        if (typeof console !== 'undefined' && console.error) console.error('[admin/review] demo failed:', message, error)
-        page.setData({ actingId: 0, errorText: '生成失败：' + message })
-        ui.toast({ title: '生成失败：' + message, icon: 'none' })
-      })
-  },
 })

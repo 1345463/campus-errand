@@ -153,13 +153,26 @@ Page({
   savePrice: function (event) {
     const page = this
     const id = Number(event.currentTarget.dataset.id)
-    const price = Number(String(page.data.price || '').trim())
-    const deposit = Number(String(page.data.deposit || '').trim())
-    if (!isFinite(price) || price < 0) {
-      ui.toast({ title: '请输入正确的日租金', icon: 'none' })
+    // Number('') === 0，只判 price < 0 会让「清空输入框直接保存」写成 0 元日租金。
+    // 所以先判空串，再判数值范围，最后限两位小数。
+    const priceRaw = String(page.data.price || '').trim()
+    const depositRaw = String(page.data.deposit || '').trim()
+    if (!priceRaw) {
+      ui.toast({ title: '请填写日租金', icon: 'none' })
       return
     }
-    if (!isFinite(deposit) || deposit < 0) {
+    if (!/^\d+(\.\d{1,2})?$/.test(priceRaw)) {
+      ui.toast({ title: '日租金最多两位小数', icon: 'none' })
+      return
+    }
+    const price = Number(priceRaw)
+    if (!isFinite(price) || price <= 0) {
+      ui.toast({ title: '日租金必须大于 0', icon: 'none' })
+      return
+    }
+    // 押金允许为 0；留空按 0 处理，但不能是负数或非法字符
+    const deposit = depositRaw ? Number(depositRaw) : 0
+    if (!isFinite(deposit) || deposit < 0 || (depositRaw && !/^\d+(\.\d{1,2})?$/.test(depositRaw))) {
       ui.toast({ title: '请输入正确的押金（没有就填 0）', icon: 'none' })
       return
     }

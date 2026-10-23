@@ -9,7 +9,7 @@ const fs = require('fs')
 const path = require('path')
 
 // 这个脚本是开发工具，故意放在小程序包外面，避免被打包进上传产物
-const root = path.join(__dirname, 'campus-errand')
+const root = path.resolve(process.argv[2] || path.join(__dirname, '..'))
 const app = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'))
 const appCss = fs.readFileSync(path.join(root, 'app.wxss'), 'utf8')
 
@@ -106,3 +106,5 @@ app.pages.forEach(function (p) {
 
 console.log('----')
 console.log(problems === 0 ? '校验通过：没有致命问题' : '发现 ' + problems + ' 个必须修的问题')
+
+process.exitCode = problems ? 1 : 0

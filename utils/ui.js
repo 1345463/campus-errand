@@ -20,11 +20,15 @@ function fallbackLog(tag, text) {
 }
 
 function toast(title, icon) {
-  const text = pickText(title, '').slice(0, 40)
+  // showToast 一行放不下太多字，超出会被系统直接截断（看不出还有后半句）。
+  // 这里主动截断并补省略号，用户至少知道「话说完了/没说完」。
+  const raw = pickText(title, '')
+  const text = raw.length > 40 ? raw.slice(0, 40) + '…' : raw
   const kind = pickIcon(title, icon)
   if (available('showToast')) {
     try {
-      wx.showToast({ title: text, icon: kind, duration: 2200 })
+      const duration = title && typeof title === 'object' && Number(title.duration) > 0 ? Number(title.duration) : 2200
+      wx.showToast({ title: text, icon: kind, duration: duration })
       return
     } catch (e) {
       /* 继续走兜底 */
@@ -51,7 +55,7 @@ function hideLoading() {
   }
 }
 
-// 确认框：API 缺失、调用失败或迟迟不回调时都按 defaultConfirm 收尾，绝不悬着不返回
+// 可见弹窗一直等待用户选择；API 缺失或失败才使用默认值。
 function confirm(options) {
   const opts = options || {}
   const fallback = !!opts.defaultConfirm
@@ -65,12 +69,8 @@ function confirm(options) {
     const finish = function (value) {
       if (settled) return
       settled = true
-      clearTimeout(timer)
       resolve(value)
     }
-    const timer = setTimeout(function () {
-      finish(fallback)
-    }, opts.timeout || 15000)
     try {
       wx.showModal({
         title: opts.title || '提示',

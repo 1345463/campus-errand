@@ -113,7 +113,7 @@ Page({
   },
 
   onShow: function () {
-    this.loadFlags()
+    return this.loadFlags(true)
   },
 
   onPullDownRefresh: function () {
@@ -134,7 +134,7 @@ Page({
   },
 
   onReachBottom: function () {
-    if (this.data.hasMore && !this.data.loadingMore) this.loadMore()
+    if (this.data.hasMore && !this.data.loading && !this.data.loadingMore) this.loadMore()
   },
 
   // 吸顶阴影 + 回到顶部按钮：只在跨过阈值时 setData，滚动过程中不频繁刷新
@@ -154,14 +154,14 @@ Page({
     }
   },
 
-  loadFlags: function () {
+  loadFlags: function (silent) {
     const page = this
     return flags.ensure().then(function () {
       page.setData({
         filterOn: flags.on('hall_filter'),
         buildingOn: flags.on('hall_building_filter'),
       })
-      return page.loadHall(true)
+      return page.loadHall(true, silent)
     })
   },
 
@@ -238,7 +238,7 @@ Page({
 
   // 大厅只对已认证接单员开放：散户进来只能看到锁定卡，
   // 服务端 orders 的读策略也做了同样一层拦截，两边一致。
-  checkRunner: function () {
+  checkRunner: function (request) {
     const page = this
     return Promise.all([
       api.getSession().catch(function () {
@@ -248,8 +248,11 @@ Page({
         return null
       }),
     ]).then(function (result) {
+      if (request !== undefined && request !== page._request) return false
       const session = result[0]
       const profile = result[1]
+      page._currentUser = session && session.user ? String(session.user.id) : ''
+      if (page._loadedUser && page._loadedUser !== page._currentUser) page.setData({ hall: [] })
       if (!session || !profile) {
         page.setData({
           lockTitle: '任务大厅仅对接单员开放',
@@ -281,28 +284,40 @@ Page({
     wx.switchTab({ url: '/pages/mine/index' })
   },
 
-  loadHall: function (reset) {
+  loadHall: function (reset, silent) {
     const page = this
-    page.setData({ loading: true })
+    const request = page._request = (page._request || 0) + 1
+    page.setData({ loading: !silent || !page.data.hall.length, loadingMore: false })
     return page
-      .checkRunner()
+      .checkRunner(request)
       .then(function (qualified) {
+        if (request !== page._request) return null
         if (!qualified) {
           page.setData({ loading: false, hall: [], hallError: false, hasMore: false, locked: true })
           return null
         }
         page.setData({ locked: false })
-        return api
-          .listHallOrders({
+        const keep = silent && page._loadedUser === page._currentUser
+        const target = keep ? Math.max(page._offset || HALL_SIZE, HALL_SIZE) : HALL_SIZE
+        const all = []
+        function fetchNext() {
+          return api.listHallOrders({
             serviceType: page.data.filterOn ? page.data.filterType : '',
             sort: page.data.filterOn ? page.data.sortKey : 'time',
             building: page.data.buildingOn ? page.data.building : '',
             floor: page.data.buildingOn ? page.data.floor : '',
             limit: HALL_SIZE,
-            offset: 0,
+            offset: all.length,
           })
           .then(function (list) {
-            const rows = list || []
+            if (request !== page._request) return null
+            const batch = list || []
+            Array.prototype.push.apply(all, batch)
+            const rows = all
+            const serverTotal = Number(rows.length ? rows[0].total : 0) || 0
+            if (batch.length && rows.length < target && rows.length < serverTotal) return fetchNext()
+            page._offset = rows.length
+            page._loadedUser = page._currentUser
             // list_hall_orders 每行都带 count(*) OVER() 算出的总数，比分页长度准
             const total = Number(rows.length ? rows[0].total : 0) || 0
             page.setData({
@@ -320,19 +335,26 @@ Page({
             return null
           })
           .catch(function (error) {
+            if (request !== page._request) return null
             console.error('[hall] load failed', api.getErrorMessage(error))
-            page.setData({ loading: false, hall: [], hallError: true, hasMore: false })
+            page.setData({ loading: false, hallError: true, hasMore: false })
             return null
           })
+        }
+        return fetchNext()
       })
       .catch(function () {
-        page.setData({ loading: false, hall: [], hallError: true })
+        if (request !== page._request) return null
+        page.setData({ loading: false, hallError: true })
         return null
       })
   },
 
   loadMore: function () {
     const page = this
+    if (page.data.loading || page.data.loadingMore) return Promise.resolve()
+    const request = page._request
+    const offset = page._offset || 0
     page.setData({ loadingMore: true })
     return api
       .listHallOrders({
@@ -341,28 +363,36 @@ Page({
         building: page.data.buildingOn ? page.data.building : '',
         floor: page.data.buildingOn ? page.data.floor : '',
         limit: PAGE_SIZE,
-        offset: page.data.hall.length,
+        offset: offset,
       })
       .then(function (list) {
+        if (request !== page._request) return null
         const rows = list || []
+        page._offset = offset + rows.length
         const total = Number(rows.length ? rows[0].total : 0) || 0
         // 追加的第二页从第 0ms 开始，不要接着第一页的延迟往下排
+        const ids = {}
         const next = page.data.hall.concat(
           motion.stagger(
             rows.map(function (item) {
               return page.toCard(item)
             })
           )
-        )
+        ).filter(function (row) {
+          if (ids[row.id]) return false
+          ids[row.id] = true
+          return true
+        })
         page.setData({
           hall: next,
           loadingMore: false,
-          hasMore: total > next.length,
+          hasMore: rows.length > 0 && total > page._offset,
           totalText: total ? '共 ' + total + ' 个任务可接' : '',
         })
         return null
       })
       .catch(function () {
+        if (request !== page._request) return null
         page.setData({ loadingMore: false })
         ui.toast({ title: '加载更多失败', icon: 'none' })
         return null
@@ -403,6 +433,9 @@ Page({
   // 服务端 accept_order 的门槛校验和详情页按钮走的是同一个 RPC，不存在绕过。
   quickAccept: function (event) {
     const page = this
+    // 一次只接一单：不设锁的话，连点两张卡会并发发两笔 accept_order，
+    // 弹窗会叠两个，业务上「一次接一单」的预期也被打破。
+    if (page._accepting) return
     const id = event.currentTarget.dataset.id
     motion.haptic('medium')
     ui
@@ -415,6 +448,7 @@ Page({
       })
       .then(function (ok) {
         if (!ok) return null
+        page._accepting = true
         ui.loading('接单中')
         return api
           .acceptOrder(id)
@@ -430,6 +464,10 @@ Page({
             ui.toast({ title: api.getErrorMessage(error), icon: 'none' })
             // 状态可能已经变了，顺手刷一下列表
             return page.loadHall(true)
+          })
+          .then(function (result) {
+            page._accepting = false
+            return result
           })
       })
   },

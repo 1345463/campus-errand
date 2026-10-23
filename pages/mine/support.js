@@ -16,11 +16,11 @@ const moderation = require('../../utils/moderation')
 //
 // 三条硬约束（改动时别破）：
 //   1) 用户输入先过本地违规词，再拼进 prompt —— 防止用提问改写系统指令；
-//   2) 每人每天 AI 提问有上限，存在本地，防止一台机器把配额刷干；
+//   2) AI 提问先由服务端预留账号配额，失败释放；
 //   3) 大模型只能看到 FAQ 当"平台资料"，资料里没有的必须说答不准并引导转人工。
 
 const MAX_LEN = 200
-const QUOTA_KEY = 'ai_support_quota_v1'
+const SESSION_PREFIX = 'supportConversationV2:'
 const HOT_LIMIT = 8
 // 后端没给值时用的兜底：三个上限集中放在这里，别散进各个函数
 const CONTEXT_FAQ_LIMIT = 40
@@ -31,26 +31,6 @@ const DEFAULT_PROMPT =
   '你是「校园跑腿」小程序的智能客服助手。只回答与本平台相关的问题。' +
   '用中文简短回答，单次不超过 120 字。只能依据下面「平台资料」回答；' +
   '资料里没有的直接说明答不准，并请用户点「转人工」，绝不编造价格、时限或规则。'
-
-function dayKey() {
-  const d = new Date()
-  const m = d.getMonth() + 1
-  const day = d.getDate()
-  return d.getFullYear() + '-' + (m < 10 ? '0' + m : m) + '-' + (day < 10 ? '0' + day : day)
-}
-
-// 每日配额记在本地：改日期就自动归零，不依赖服务端也不依赖登录态
-function readQuota() {
-  const raw = ui.getStorage(QUOTA_KEY)
-  if (!raw || raw.day !== dayKey()) return 0
-  return Number(raw.used) || 0
-}
-
-function bumpQuota() {
-  const used = readQuota() + 1
-  ui.setStorage(QUOTA_KEY, { day: dayKey(), used: used })
-  return used
-}
 
 function norm(text) {
   try {
@@ -74,16 +54,17 @@ function splitKeywords(raw) {
 // 只有一个字（如「钱」）单独出现时不该直接定性，需要配合更长的词。
 function matchFaq(text, list) {
   const key = norm(text)
-  if (!key) return null
+  if (key.length < 2) return null
   let best = null
   let bestScore = 0
   ;(list || []).forEach(function (item) {
     let score = 0
     const q = norm(item.question)
-    if (q && (key.indexOf(q) >= 0 || q.indexOf(key) >= 0)) score += 20
+    if (!tidyText(item.answer)) return
+    if (q && (key === q || (key.length >= 4 && q.indexOf(key) >= 0) || (q.length >= 4 && key.indexOf(q) >= 0))) score += 20
     splitKeywords(item.keywords).forEach(function (word) {
       const kw = norm(word)
-      if (!kw || key.indexOf(kw) < 0) return
+      if (kw.length < 2 || key.indexOf(kw) < 0) return
       score += 6 + kw.length
     })
     if (score > bestScore) {
@@ -162,7 +143,7 @@ function buildHistory(list, turns, excludeId) {
   const history = []
   ;(list || []).forEach(function (item) {
     if (excludeId && item.id === excludeId) return
-    if (item.pending) return
+    if (item.pending || item.failed || !tidyText(item.text)) return
     if (item.role === 'me') {
       history.push({ role: 'user', content: sanitize(item.text) })
     } else if (item.kind === 'ai' || item.kind === 'faq') {
@@ -205,6 +186,10 @@ Page({
     // 会话内容底部留白（px）= 固定输入区高度 + 余量。
     // 不留这块的话最后一条消息会被输入区盖住。
     chatPad: 220,
+    keyboardHeight: 0,
+    inputLimit: MAX_LEN + 1,
+    ticketId: '',
+    inputWarning: '',
 
     // 热门问题（点一下直接问）
     hot: [],
@@ -212,6 +197,7 @@ Page({
 
     // AI 能力：开关 + 有没有选模型 + 今天还剩几次
     aiReady: false,
+    signedIn: false,
     aiLimit: 20,
     aiUsed: 0,
     aiLeftText: '',
@@ -231,6 +217,8 @@ Page({
       // 一个会话窗口一个 ID，整页生命周期内复用（服务端用它做路由与计量）
       conversationId: 'cs_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
     })
+    page._alive = true
+    page._atBottom = true
     page.boot()
   },
 
@@ -243,29 +231,64 @@ Page({
     }, 200)
   },
 
+  onHide: function () { this.saveDraft() },
+
   onUnload: function () {
-    if (this._scrollTimer) clearTimeout(this._scrollTimer)
-    if (this._docTimer) clearTimeout(this._docTimer)
-    if (this._padTimer) clearTimeout(this._padTimer)
-    if (this._timeout) clearTimeout(this._timeout)
-    if (this._abort && typeof this._abort.abort === 'function') {
-      try {
-        this._abort.abort()
-      } catch (e) {
-        /* 忽略 */
-      }
-    }
-    this._scrollTimer = null
-    this._docTimer = null
-    this._timeout = null
-    this._abort = null
+    this.saveDraft()
+    this._alive = false
+    if (this._cancelAi) this._cancelAi()
+    ;['_scrollTimer', '_docTimer', '_padTimer', '_streamTimer'].forEach(function (key) {
+      if (this[key]) clearTimeout(this[key])
+      this[key] = null
+    }, this)
+  },
+
+  saveDraft: function (forLogin) {
+    if (!this._storageKey) return
+    const draft = { messages: (this.data.messages || []).slice(-100).map(function (item) {
+      return item.pending ? Object.assign({}, item, { pending: false, failed: true, text: '回答已中断，可重新生成。' }) : item
+    }), input: this.data.input, conversationId: this.data.conversationId,
+      humanContact: this.data.humanContact, humanOpen: this.data.humanOpen,
+      ticketId: this.data.ticketId, at: Date.now() }
+    ui.setStorage(this._storageKey, draft)
+    if (forLogin) ui.setStorage('supportLoginDraftV2', draft)
+  },
+
+  restoreDraft: function (session) {
+    if (this._storageKey) return
+    this._storageKey = SESSION_PREFIX + (session && session.user ? String(session.user.id) : 'guest')
+    const pendingLogin = session ? ui.getStorage('supportLoginDraftV2') : null
+    const loginDraft = pendingLogin && Date.now() - pendingLogin.at < 30 * 60000 ? pendingLogin : null
+    const draft = loginDraft || ui.getStorage(this._storageKey)
+    if (session) ui.removeStorage('supportLoginDraftV2')
+    if (!draft || Date.now() - draft.at > 7 * 86400000) return
+    const messages = (Array.isArray(draft.messages) ? draft.messages : []).slice(-100)
+    seq = Math.max(seq, Date.now())
+    this.setData({ messages: messages, input: String(draft.input || '').slice(0, MAX_LEN),
+      countText: String(draft.input || '').length + ' / ' + MAX_LEN,
+      conversationId: draft.conversationId || this.data.conversationId,
+      humanContact: draft.humanContact || '', humanOpen: !!draft.humanOpen,
+      ticketId: draft.ticketId || '' })
+  },
+
+  clearChat: function () {
+    const page = this
+    if (page.data.sending) return
+    return ui.confirm({ title: '清空对话', content: '清空本账号在这台设备上的客服聊天记录？' }).then(function (ok) {
+      if (!ok) return
+      page.setData({ messages: [], input: '', ticketId: '', countText: '0 / ' + MAX_LEN,
+        conversationId: 'cs_' + Date.now() + '_' + Math.floor(Math.random() * 100000) })
+      page.pushBot((page.data.settings || {}).welcome || '你好，有什么可以帮你？', 'tip')
+      page.saveDraft()
+      page.measureInput()
+    })
   },
 
   // 量输入区高度 -> 写进 chatPad（会话内容底部留白）。
   // 同时量一次文档总高度，贴底判定和 scrollTop 计算都要用。
   measureInput: function () {
     const page = this
-    if (typeof wx.createSelectorQuery !== 'function') return
+    if (page._alive === false || typeof wx.createSelectorQuery !== 'function') return
     try {
       const query = wx.createSelectorQuery().in(page)
       query.select('.sup-input').boundingClientRect()
@@ -273,7 +296,9 @@ Page({
         const input = (res && res[0]) || {}
         const h = heightOf(input)
         if (h > 0) {
-          page.setData({ chatPad: h + 24 })
+          page.setData({ chatPad: h + page.data.keyboardHeight + 24 }, function () {
+            page.scheduleScroll()
+          })
         }
         page.measureDoc()
       })
@@ -284,9 +309,9 @@ Page({
 
   // 量文档总高度（页面从顶部到最底部的距离）。
   // 整页滚动方案下，贴底判定 = 文档高 − 窗口高 − scrollTop < 阈值。
-  measureDoc: function () {
+  measureDoc: function (done) {
     const page = this
-    if (typeof wx.createSelectorQuery !== 'function') return
+    if (typeof wx.createSelectorQuery !== 'function') { if (done) done(0); return }
     try {
       const query = wx.createSelectorQuery()
       query.select('.support-page').boundingClientRect()
@@ -294,9 +319,10 @@ Page({
         const rect = (res && res[0]) || {}
         const h = Number(rect.height) || 0
         if (h > 0) page._docHeight = h
+        if (done) done(h)
       })
     } catch (e) {
-      /* 查询失败不用管 */
+      if (done) done(0)
     }
   },
 
@@ -312,15 +338,17 @@ Page({
           return null
         }
         page.setData({ grayOff: false })
-        return Promise.all([api.listFaqItems(), api.getFaqSettings()])
+        return Promise.all([api.listFaqItems(), api.getFaqSettings(), api.getSession()])
       })
       .then(function (result) {
         if (!result) return null
         const faqList = result[0] || []
         const settings = result[1] || {}
-        const limit = Number(settings.daily_limit) || 20
-        const used = readQuota()
+        const limit = Math.max(num(settings.daily_limit, 20), 0)
+        page.restoreDraft(result[2])
+        const used = 0
         page.setData({
+          signedIn: !!result[2],
           faqList: faqList,
           settings: settings,
           aiReady: !!(settings.ai_enabled && settings.ai_model),
@@ -332,8 +360,9 @@ Page({
         })
         const welcome =
           String(settings.welcome || '').trim() || '你好，我是校园跑腿的智能助手，常见问题可以直接问我。'
-        page.pushBot(welcome, 'tip')
+        if (!page.data.messages.length) page.pushBot(welcome, 'tip')
         page.setData({ loading: false })
+        page.refreshUsage()
         // 输入区是在 loading 变 false 之后才渲染的，在这里补量一次。
         setTimeout(function () {
           page.measureInput()
@@ -349,6 +378,15 @@ Page({
       })
   },
 
+  refreshUsage: function () {
+    const page = this
+    return api.getSupportUsage().then(function (usage) {
+      if (!usage || page._alive === false) return
+      page.setData({ aiUsed: usage.used, aiLimit: usage.daily_limit,
+        aiLeftText: String(Math.max(usage.daily_limit - usage.used, 0)) })
+    }).catch(function () {})
+  },
+
   reload: function () {
     this.boot()
   },
@@ -356,18 +394,21 @@ Page({
   // ---------- 消息 ----------
   pushMsg: function (msg) {
     const page = this
-    const list = (page.data.messages || []).slice()
+    const list = (page.data.messages || []).slice(-99)
     const next = {
       id: msg.id,
       role: msg.role,
       kind: msg.kind,
-      text: tidyText(msg.text),
+      text: tidyText(msg.text) || (msg.pending ? '正在思考…' : '这个问题暂时答不上来，请转人工。'),
       timeText: msg.timeText,
       pending: !!msg.pending,
     }
     if (msg.failed) next.failed = true
+    if (msg.question) next.question = msg.question
+    if (msg.requestId) next.requestId = msg.requestId
+    if (msg.faqId) next.faqId = msg.faqId
     list.push(next)
-    page.setData({ messages: list })
+    page.setData({ messages: list }, function () { page.saveDraft() })
     // 新消息必须自己滚进视野 —— 不受「贴底」判定限制。
     // 判定只该管流式输出要不要跟着跑，不该拦住「用户刚发的那句」和「回答刚到的那句」。
     page._atBottom = true
@@ -388,26 +429,17 @@ Page({
 
   updateMsg: function (id, text, extra) {
     const page = this
-    const list = (page.data.messages || []).map(function (item) {
-      if (item.id !== id) return item
-      const next = {
-        id: item.id,
-        role: item.role,
-        kind: item.kind,
-        text: tidyText(text),
-        timeText: item.timeText,
-        pending: false,
-      }
-      if (extra) {
-        Object.keys(extra).forEach(function (key) {
-          next[key] = extra[key]
-        })
-      }
-      return next
+    const index = (page.data.messages || []).findIndex(function (item) { return item.id === id })
+    if (index < 0 || page._alive === false) return
+    const clean = tidyText(text)
+    const patch = {}
+    patch['messages[' + index + '].text'] = clean || (extra && extra.pending ? '正在思考…' : '这个问题暂时答不上来，请转人工。')
+    patch['messages[' + index + '].pending'] = false
+    Object.keys(extra || {}).forEach(function (key) { patch['messages[' + index + '].' + key] = extra[key] })
+    page.setData(patch, function () {
+      page.scheduleScroll()
+      if (!extra || !extra.pending) page.saveDraft()
     })
-    page.setData({ messages: list })
-    // 流式渲染期间也要跟着滚：字越堆越多，不跟着走用户只能看到开头几行
-    page.scheduleScroll()
   },
 
   // --------------------------------------------------------------------------
@@ -424,22 +456,13 @@ Page({
     const page = this
     if (!(page.data.messages || []).length) return
     if (typeof wx.pageScrollTo !== 'function') return
-    const doc = page._docHeight || 0
-    const sys = motion.systemInfo()
-    const win = Number(sys.windowHeight) || 0
-    // 实测最大可滚 + 10px 余量；量不到就用大数让框架夹到底
-    const target = doc > 0 && win > 0 ? Math.max(doc - win, 0) + 10 : 999999
-    try {
-      wx.pageScrollTo({ scrollTop: target, duration: 0 })
-    } catch (e) {
-      /* 页面不可滚时不必处理 */
-    }
-    // 滚完重量一次文档高：新消息进来后内容变了
-    if (page._docTimer) clearTimeout(page._docTimer)
-    page._docTimer = setTimeout(function () {
-      page._docTimer = null
-      page.measureDoc()
-    }, 150)
+    // setData 回调后重新测量，再使用本次高度滚动。
+    page.measureDoc(function (doc) {
+      if (page._alive === false || page._atBottom === false) return
+      const win = Number(motion.systemInfo().windowHeight) || 0
+      const target = doc > 0 && win > 0 ? Math.max(doc - win, 0) : 999999
+      try { wx.pageScrollTo({ scrollTop: target, duration: 0 }) } catch (e) {}
+    })
   },
 
   // 节流版：流式输出每个字都会回调一次，逐字滚会把 setData 刷爆。
@@ -478,11 +501,20 @@ Page({
     }, 260)
   },
 
+  onKeyboardHeightChange: function (event) {
+    const height = Math.max(Number(event.detail.height) || 0, 0)
+    const page = this
+    page.setData({ keyboardHeight: height }, function () { page.measureInput() })
+  },
+
+  onResize: function () { this.measureInput() },
+
   // ---------- 输入 ----------
   onInput: function (event) {
     const page = this
-    const value = event.detail.value || ''
-    page.setData({ input: value, countText: value.length + ' / ' + MAX_LEN })
+    const raw = event.detail.value || ''
+    const value = raw.slice(0, MAX_LEN)
+    page.setData({ input: value, countText: value.length + ' / ' + MAX_LEN, inputWarning: raw.length >= MAX_LEN ? '每条最多 200 字，较长内容请分条发送。' : '' })
     // 输入框是自增高的，一行变多行会把输入区顶高，底部留白要跟着变。
     // 节流一下，别每个字都量。
     if (page._padTimer) return
@@ -493,6 +525,7 @@ Page({
   },
 
   onHotTap: function (event) {
+    if (this.data.sending) return
     const text = String(event.currentTarget.dataset.q || '')
     if (!text) return
     motion.haptic('light')
@@ -530,13 +563,13 @@ Page({
       return
     }
 
-    page.setData({ sending: true, input: '', countText: '0 / ' + MAX_LEN })
+    page.setData({ sending: true, input: '', inputWarning: '', countText: '0 / ' + MAX_LEN }, function () { page.measureInput() })
     page.pushMsg({ id: nextId(), role: 'me', kind: 'me', text: raw, timeText: nowText(), pending: false })
 
     const faq = matchFaq(raw, page.data.faqList)
     if (faq) {
       // 固定回答：零延迟、零成本，也最可信
-      page.pushBot(faq.answer, 'faq')
+      page.pushMsg({ id: nextId(), role: 'bot', kind: 'faq', text: faq.answer, timeText: nowText(), faqId: faq.id })
       page.setData({ sending: false })
       return
     }
@@ -552,110 +585,107 @@ Page({
     if (!page.data.aiReady) {
       page.pushBot(
         '这个问题我还没学会答。点下方「转人工」提交工单，客服会尽快回复你。',
-        'ai'
+        'tip'
       )
       page.setData({ sending: false })
       return
     }
-    if (page.data.aiUsed >= page.data.aiLimit) {
-      page.pushBot(
-        '今天 AI 提问次数用完了（上限 ' + page.data.aiLimit + ' 次/天）。可以先看看上面的热门问题，或点「转人工」。',
-        'ai'
-      )
-      page.setData({ sending: false })
-      return
-    }
-
     // 历史要在占位气泡之前拼：此刻 messages 里刚好是「上文 + 用户刚才那句」，
     // 占位气泡 push 进去以后会被 pending 过滤掉，所以放前放后都安全，放前面更好读。
     const history = buildHistory(page.data.messages, settings.history_turns, '')
 
-    const msgId = page.pushBot('正在思考…', 'ai')
-    page.updateMsg(msgId, '正在思考…', { pending: true })
-
-    const used = bumpQuota()
-    page.setData({
-      aiUsed: used,
-      aiLeftText: String(Math.max(page.data.aiLimit - used, 0)),
-    })
+    const msgId = nextId()
+    page.pushMsg({ id: msgId, role: 'bot', kind: 'ai', question: question, text: '正在思考…', timeText: nowText(), pending: true })
 
     const messages = [{ role: 'system', content: buildSystemPrompt(settings, page.data.faqList) }]
     if (history.length) {
       history.forEach(function (item) {
         messages.push(item)
       })
-    } else {
+    }
+    if (!history.length || history[history.length - 1].role !== 'user' || history[history.length - 1].content !== sanitize(question)) {
+      // 重生成和关闭历史时也明确携带当前问题。
       // 后台把历史轮数调成 0 时也要保证模型知道用户问了什么
       messages.push({ role: 'user', content: '用户提问：' + sanitize(question) })
     }
 
-    // 超时一道保险：弱网下流可能半天不动，别让用户对着「正在思考」干等
-    const timeoutMs = Math.max(num(settings.timeout_ms, DEFAULT_TIMEOUT_MS), 5000)
-    let controller = null
-    if (typeof AbortController === 'function') {
-      try {
-        controller = new AbortController()
-        page._abort = controller
-      } catch (e) {
-        controller = null
-      }
+    const timeoutMs = Math.min(Math.max(num(settings.timeout_ms, DEFAULT_TIMEOUT_MS), 5000), 120000)
+    let active = true
+    let claim = null
+    let controller = typeof AbortController === 'function' ? new AbortController() : null
+    let timer = null
+    let lastPartial = ''
+    let cancel = null
+    const finishClaim = function (success) {
+      if (!claim) return Promise.resolve()
+      return api.finishSupportAi(claim.request_id, success).then(function () { return page.refreshUsage() }).catch(function () {
+        // 网络恢复后下次查询会显示服务端的计数；不伪称写入成功。
+        if (page._alive !== false) ui.toast({ title: '提问次数同步失败，请稍后重试', icon: 'none' })
+      })
     }
-    if (controller) {
-      page._timeout = setTimeout(function () {
-        page._timeout = null
-        try {
-          controller.abort()
-        } catch (e) {
-          /* 忽略 */
-        }
-      }, timeoutMs)
+    const timeout = new Promise(function (resolve, reject) {
+      cancel = function () { reject(new Error('回答已中断')) }
+      page._cancelAi = cancel
+      timer = setTimeout(function () { reject(new Error('回答超时')) }, timeoutMs)
+    })
+    const request = api.beginSupportAi().then(function (ticket) {
+      claim = ticket
+      if (!active || page._alive === false) { finishClaim(false); throw new Error('回答已中断') }
+      page.setData({ aiUsed: Number(ticket.used) || 0, aiLimit: Number(ticket.daily_limit) || page.data.aiLimit,
+        aiLeftText: String(Math.max(Number(ticket.daily_limit) - Number(ticket.used), 0)) })
+      return api.llmChat(settings.ai_model, messages, function (partial) {
+        if (!active || page._alive === false) return
+        lastPartial = partial
+        if (page._streamTimer) return
+        page._streamTimer = setTimeout(function () {
+          page._streamTimer = null
+          if (active) page.updateMsg(msgId, lastPartial, { pending: true })
+        }, 80)
+      }, { conversationId: page.data.conversationId || '', signal: controller ? controller.signal : undefined,
+        temperature: num(settings.temperature, 0.3), maxTokens: num(settings.max_tokens, 400) })
+    })
+    function stop() {
+      active = false
+      clearTimeout(timer)
+      if (page._streamTimer) clearTimeout(page._streamTimer)
+      page._streamTimer = null
+      page._cancelAi = null
+      if (controller) { try { controller.abort() } catch (e) {} }
     }
+    return Promise.race([request, timeout]).then(function (answer) {
+      stop()
+      const text = tidyText(answer)
+      page.updateMsg(msgId, text || '这个我答不准，请点「转人工」让客服帮你。',
+        { pending: false, failed: !text, requestId: claim ? claim.request_id : '' })
+      if (page._alive !== false) page.setData({ sending: false })
+      return finishClaim(!!text)
+    }).catch(function (error) {
+      stop()
+      const message = api.getErrorMessage(error)
+      page.updateMsg(msgId, message === '回答超时' ? '这次回答超时了，可以重新生成或转人工。' : '回答失败：' + message + '。可重试或转人工。', { pending: false, failed: true })
+      if (page._alive !== false) page.setData({ sending: false })
+      return finishClaim(false)
+    })
+  },
 
-    api
-      .llmChat(
-        settings.ai_model,
-        messages,
-        function (partial) {
-          page.updateMsg(msgId, partial, { pending: true })
-        },
-        {
-          conversationId: page.data.conversationId || '',
-          signal: controller ? controller.signal : undefined,
-          temperature: num(settings.temperature, 0.3),
-          maxTokens: num(settings.max_tokens, 400),
-        }
-      )
-      .then(function (answer) {
-        if (page._timeout) {
-          clearTimeout(page._timeout)
-          page._timeout = null
-        }
-        page._abort = null
-        const text = String(answer || '').trim()
-        page.updateMsg(msgId, text || '这个我答不准，请点「转人工」让人工客服帮你。', { pending: false })
-        page.setData({ sending: false })
-      })
-      .catch(function (error) {
-        if (page._timeout) {
-          clearTimeout(page._timeout)
-          page._timeout = null
-        }
-        page._abort = null
-        const message = api.getErrorMessage(error)
-        if (typeof console !== 'undefined' && console.error) {
-          console.error('[mine/support] llm failed:', message, error)
-        }
-        // 自己 abort 出去的（多半是超时），换个用户看得懂的说法
-        const aborted = message.indexOf('abort') >= 0 || message.indexOf('Abort') >= 0
-        page.updateMsg(
-          msgId,
-          aborted
-            ? '这次想太久了（超过 ' + Math.round(timeoutMs / 1000) + ' 秒没答完）。可以换个简单点的问法，或点「转人工」。'
-            : 'AI 暂时答不上来（' + message + '）。可以换个问法，或点「转人工」。',
-          { pending: false, failed: true }
-        )
-        page.setData({ sending: false })
-      })
+  regenerate: function (event) {
+    if (this.data.sending) return
+    const message = (this.data.messages || []).filter(function (item) { return item.id === event.currentTarget.dataset.id })[0]
+    if (!message || !message.question) return
+    this.setData({ sending: true })
+    return this.askAi(message.question)
+  },
+
+  rateAnswer: function (event) {
+    const page = this
+    const msg = (page.data.messages || []).filter(function (item) { return item.id === event.currentTarget.dataset.id })[0]
+    if (!msg || msg.rating) return
+    const rating = event.currentTarget.dataset.rating
+    return api.rateSupportAnswer(msg.requestId || '', msg.faqId || null, rating === 'helpful').then(function () {
+      page.updateMsg(msg.id, msg.text, { rating: rating })
+      ui.toast({ title: '已收到反馈，谢谢', icon: 'none' })
+      if (rating !== 'helpful') page.openHuman()
+    }).catch(guard.toastError)
   },
 
   // ---------- 转人工 ----------
@@ -677,22 +707,30 @@ Page({
     const page = this
     if (page.data.humanSending) return
     const contact = String(page.data.humanContact || '').trim()
+    if (!(page.data.messages || []).some(function (item) { return item.role === 'me' && tidyText(item.text) })) {
+      ui.toast({ title: '请先描述需要客服处理的问题', icon: 'none' })
+      return
+    }
     const lines = []
     const list = page.data.messages || []
     for (let i = Math.max(list.length - 6, 0); i < list.length; i += 1) {
       const item = list[i]
+      if (item.kind === 'tip' || item.pending) continue
       lines.push((item.role === 'me' ? '我：' : '助手：') + item.text)
     }
-    const content = (lines.length ? lines.join('\n') + '\n\n' : '') + '（由智能客服转人工）'
+    const marker = '（由智能客服转人工）'
+    const content = lines.join('\n').slice(-(500 - marker.length - 2)) + '\n\n' + marker
 
     page.setData({ humanSending: true })
     ui.loading({ title: '提交中', mask: true })
     api
-      .submitUserFeedback('other', content.slice(0, 500), contact)
-      .then(function () {
+      .submitUserFeedback('other', content, contact)
+      .then(function (ticket) {
+        if (!ticket || !ticket.id) throw new Error('未收到工单编号，请到意见反馈核对提交结果')
+        page.setData({ ticketId: String(ticket.id) })
         ui.hideLoading()
         page.setData({ humanSending: false, humanOpen: false, humanContact: '' })
-        page.pushBot('工单已提交，客服会尽快回复，可以在「我的 → 意见反馈」里跟进。', 'tip')
+        page.pushBot('工单 #' + ticket.id + ' 已提交，客服会在工单内回复。点「查看工单」可跟进。', 'tip')
         ui.toast({ title: '已转人工', icon: 'success' })
       })
       .catch(function (error) {
@@ -706,12 +744,18 @@ Page({
             content: '提交工单要登录账号，现在去「我的」登录吗？',
             confirmText: '去登录',
           }).then(function (ok) {
-            if (ok) wx.switchTab({ url: '/pages/mine/index' })
+            if (ok) require('../../utils/login-return').goLogin()
           })
           return
         }
         guard.toastError(error)
       })
+  },
+
+  goLogin: function () { require('../../utils/login-return').goLogin() },
+
+  openTicket: function () {
+    if (this.data.ticketId) wx.navigateTo({ url: '/pages/feedback/thread?id=' + encodeURIComponent(this.data.ticketId) })
   },
 
   // 弹层里点面板本身不该关掉弹层，catchtap 需要一个空实现占位

@@ -39,11 +39,13 @@ function safeDecode(value) {
   }
 }
 
+// 标题只由「服务名 + 去向」组成，**不要拿 description 当标题**。
+// description 的占位符就写着「取餐码、外卖平台、姓名尾号」，而 title 会出现在
+// 任务大厅，对所有已认证接单员可见 —— 等于把取餐码提前公开，别人能直接凭码取走。
+// description 只在订单详情里给参与者看（服务端 get_order_detail 还有一道脱敏）。
 function buildTitle(service, form) {
-  const desc = String(form.description || '').replace(/\s+/g, ' ').trim()
-  if (desc) return desc.length > 20 ? desc.slice(0, 20) + '…' : desc
-  if (form.deliver_addr) return service.name + ' → ' + form.deliver_addr
-  if (form.pickup_addr) return service.name + ' · ' + form.pickup_addr
+  const place = String(form.deliver_addr || form.pickup_addr || '').trim()
+  if (place) return service.name + ' · ' + place
   return service.name
 }
 
@@ -111,7 +113,18 @@ Page({
     api
       .getSession()
       .then(function (session) {
+        page._draftOwner = session && session.user ? String(session.user.id) : 'guest'
         page.setData({ signedIn: !!session })
+        const draft = page._restoreDraft
+        page._restoreDraft = null
+        if (draft && (draft.owner === page._draftOwner || (draft.owner === 'guest' && draft.forLogin))) {
+          page.setData({ form: Object.assign({}, page.data.form, draft.form), previews: draft.previews || [] })
+          page._draftCoupon = draft.couponCode || ''
+          page._draftBoost = draft.boostCode || ''
+          page.syncRender()
+          page.checkInputs()
+        }
+        page.loadWallet()
       })
       .catch(function () {
         page.setData({ signedIn: false })
@@ -119,7 +132,7 @@ Page({
   },
 
   goLogin: function () {
-    wx.switchTab({ url: '/pages/mine/index' })
+    require('../../utils/login-return').goLogin()
   },
 
   onLoad: function (options) {
@@ -159,9 +172,10 @@ Page({
       previews: [],
       maxImages: 5,
     })
+    const draft = ui.getStorage('orderDraftV1')
+    if (draft && draft.type === type && Date.now() - draft.at < 24 * 3600000) page._restoreDraft = draft
     page.syncRender()
     page.refreshModWords()
-    page.loadWallet()
   },
 
   // 券包：抵扣券 + 优先展示券。两种券都能在下单时消耗，但走不同开关，
@@ -212,6 +226,10 @@ Page({
               boosts: boosts,
               boostNames: boostNames,
             })
+            if (page._draftCoupon) page.setData({ couponIndex: coupons.map(function (row) { return row.code }).indexOf(page._draftCoupon) + 1 })
+            if (page._draftBoost) page.setData({ boostIndex: boosts.map(function (row) { return row.code }).indexOf(page._draftBoost) + 1 })
+            page._draftCoupon = ''
+            page._draftBoost = ''
             page.applyPresetCode()
             return null
           })
@@ -310,10 +328,30 @@ Page({
     const page = this
     const key = event.currentTarget.dataset.key
     const patch = {}
-    patch['form.' + key] = event.detail.value
+    const value = key === 'reward' ? String(event.detail.value).replace(/[^\d.]/g, '').replace(/^(\d*\.?\d{0,2}).*$/, '$1') : event.detail.value
+    patch['form.' + key] = value
     this.setData(patch, function () {
       page.checkInputs()
     })
+  },
+
+  saveDraft: function (forLogin) {
+    if (!this.data.service) return
+    const coupon = this.data.coupons[this.data.couponIndex - 1]
+    const boost = this.data.boosts[this.data.boostIndex - 1]
+    if (forLogin) this._loginHandoff = true
+    ui.setStorage('orderDraftV1', { type: this.data.service.type, form: this.data.form,
+      owner: this._draftOwner || 'guest', forLogin: !!this._loginHandoff,
+      previews: this.data.previews, couponCode: coupon ? coupon.code : '',
+      boostCode: boost ? boost.code : '', at: Date.now() })
+  },
+
+  onHide: function () { if (!this._published) this.saveDraft() },
+  onUnload: function () { if (!this._published) this.saveDraft() },
+
+  pickExpectTime: function (event) {
+    const choices = ['越快越好', '30 分钟内', '1 小时内', '2 小时内', '今天内']
+    this.setData({ 'form.expect_time': choices[Number(event.detail.value)] || choices[0] })
   },
 
   toggleTag: function (event) {
@@ -442,6 +480,16 @@ Page({
       return
     }
 
+    if (!/^\d+(\.\d{1,2})?$/.test(String(form.reward))) {
+      ui.toast({ title: '赏金最多保留两位小数', icon: 'none' })
+      return
+    }
+    const contact = String(form.contact || '').trim()
+    if (contact && !/^(1[3-9]\d{9}|[a-zA-Z][a-zA-Z0-9_-]{5,19})$/.test(contact)) {
+      ui.toast({ title: '请填写正确的手机号或微信号', icon: 'none' })
+      return
+    }
+
     // 送达地址是宿舍的话顺手拆出楼栋楼层，大厅才能按楼栋筛
     const deliverParts = roomParts(form.deliver_addr)
     const pickupParts = roomParts(form.pickup_addr)
@@ -488,6 +536,8 @@ Page({
       })
       .then(function (created) {
         if (!created) return
+        page._published = true
+        ui.removeStorage('orderDraftV1')
         ui.toast({ title: '发布成功', icon: 'success' })
         setTimeout(function () {
           wx.switchTab({ url: '/pages/orders/list' })

@@ -168,8 +168,8 @@
       <view class="refresh-spin"></view>
       <text>加载更多…</text>
     </view>
-    <view wx:elif="{{pagingOn && hasMore}}" class="hall-more">上拉加载更多</view>
-    <view wx:elif="{{pagingOn && !searching}}" class="hall-more">已经到底了</view>
+    <view wx:elif="{{hasMore}}" class="hall-more">上拉加载更多</view>
+    <view wx:elif="{{!hasMore}}" class="hall-more">已经到底了</view>
   </view>
 
   <!-- 回到顶部 -->

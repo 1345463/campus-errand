@@ -48,3 +48,6 @@
   font-size: 22rpx;
   color: var(--t3);
 }
+
+.delivery-drafts { display: flex; gap: 16rpx; margin: 16rpx 0; }
+.delivery-thumb { width: 150rpx; height: 150rpx; border-radius: 12rpx; }

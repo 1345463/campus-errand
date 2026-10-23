@@ -7,12 +7,37 @@ const upload = require('./upload')
 const LIST_FIELDS =
   'id, service_type, service_name, title, description, pickup_addr, deliver_addr, expect_time, tags, gender_limit, reward, status, created_at, owner_name, pickup_building, pickup_floor, deliver_building, deliver_floor, discount_amount'
 
+// SDK 归一后的错误类别（CloudErrorKind），是稳定的编程契约。
+// 不要把英文 message 直接弹给用户 —— 断网会看到 request:fail timeout，
+// token 失效会看到 no active session，用户根本不知道要做什么。
+const KIND_MESSAGES = {
+  unauthenticated: '登录状态已失效，请重新登录',
+  'permission-denied': '没有权限执行这个操作',
+  'invalid-request': '提交的内容有问题，请检查后重试',
+  'not-found': '数据不存在，可能已被删除',
+  unimplemented: '该功能暂未开放',
+  'credits-exhausted': '服务额度已用完，请联系管理员',
+  'rate-limited': '操作太频繁，请稍后再试',
+  'backend-unavailable': '服务暂时不可用，请稍后重试',
+  network: '网络不太稳定，请检查网络后重试',
+}
+
+// 我们自己的 RPC 里 RAISE EXCEPTION 写的都是中文（「请先完成接单员认证」
+// 「今日 AI 提问次数已用完」），这类业务文案要原样透出，不能被 kind 覆盖。
+function hasChinese(text) {
+  return /[\u4e00-\u9fa5]/.test(String(text || ''))
+}
+
 function getErrorMessage(error) {
   if (!error) return '操作失败，请稍后重试'
   if (typeof error === 'string') return error
   if (error.code === 'invalid_username_or_password') return '账号或密码不对'
-  if (error.kind === 'invalid-request' && /incorrect/i.test(error.message || '')) return '账号或密码不对'
-  if (error.message) return error.message
+
+  const raw = String(error.message || '')
+  if (hasChinese(raw)) return raw
+  if (error.kind === 'invalid-request' && /incorrect/i.test(raw)) return '账号或密码不对'
+  if (error.kind && KIND_MESSAGES[error.kind]) return KIND_MESSAGES[error.kind]
+  if (raw) return raw
   return '操作失败，请稍后重试'
 }
 
@@ -125,6 +150,7 @@ async function registerWithPhone(payload) {
 }
 
 async function activateAdmin(code) {
+  await requireSession()
   const result = await cloud.database.rpc('activate_admin', { p_code: code })
   if (result.error) throw new Error(getErrorMessage(result.error))
   const rows = Array.isArray(result.data) ? result.data : []
@@ -360,12 +386,14 @@ async function adminListDispatchOrders(limit) {
 }
 
 // 本人的订单同样走服务端函数定位，避免客户端拿 owner_id / runner_id 做等值过滤。
-async function listMyOrders(mode, limit, offset) {
+async function listMyOrders(mode, limit, offset, status, keyword) {
   await requireSession()
-  const result = await cloud.database.rpc('list_my_orders', {
-    p_mode: mode === 'accept' ? 'accept' : 'publish',
+  const result = await cloud.database.rpc('list_my_orders_v2', {
+    p_mode: mode === 'admin' ? 'admin' : mode === 'accept' ? 'accept' : 'publish',
     p_limit: limit || 20,
     p_offset: offset || 0,
+    p_status: status || 'all',
+    p_keyword: String(keyword || '').trim(),
   })
   if (result.error) throw new Error(getErrorMessage(result.error))
   return Array.isArray(result.data) ? result.data : []
@@ -389,8 +417,16 @@ async function getOrderRelation(id) {
   return String((result.data === null || result.data === undefined ? 'none' : result.data))
 }
 
+// 只取「非敏感」的展示字段。
+// orders 的行级读策略对已认证接单员是全表放开的，select('*') 会把 contact（手机/微信）、
+// images、deliver_images（取餐码截图）一并下发 —— 想拿整单请走 getOrderDetail，
+// 那里由服务端按「是不是这一单的参与方」做脱敏。
+const ORDER_SUMMARY_FIELDS =
+  'id, owner_id, runner_id, status, reward, service_type, service_name, title, ' +
+  'created_at, accepted_at, runner_done_at, finished_at, deliver_building, deliver_floor'
+
 async function getOrder(id) {
-  const result = await cloud.database.from('orders').select('*').eq('id', id).maybeSingle()
+  const result = await cloud.database.from('orders').select(ORDER_SUMMARY_FIELDS).eq('id', id).maybeSingle()
   if (result.error) throw new Error(getErrorMessage(result.error))
   return result.data || null
 }
@@ -427,9 +463,8 @@ function acceptOrder(id) {
 
 // 接单员标记送达：必须带佐证照片（服务端会校验至少 1 张），只改状态不结算
 function completeOrder(id, images) {
-  if (!images || !images.length) {
-    return Promise.reject(new Error('请先上传送达佐证照片'))
-  }
+  // 是否强制照片由服务端 deliver_photo 开关判定。
+  images = images || []
   return cloud.database
     .rpc('complete_order', { p_order_id: id, p_images: images })
     .then(function (result) {
@@ -442,6 +477,10 @@ function completeOrder(id, images) {
       }
       return rows[0]
     })
+}
+
+function abandonOrder(id) {
+  return callOrderRpc('abandon_order', id)
 }
 
 function cancelOrder(id) {
@@ -652,13 +691,6 @@ async function listApplications(status) {
 
 // 调试用：生成一条合成申请，owner_id 是虚构值，不会污染任何真实用户的认证状态。
 // 让管理员在没有人提交申请时也能走通审核流程。
-async function insertDemoApplication(label) {
-  const result = await cloud.database.rpc('insert_demo_application', { p_label: label || '测试同学' })
-  if (result.error) throw new Error(getErrorMessage(result.error))
-  const rows = Array.isArray(result.data) ? result.data : []
-  if (!rows.length) throw new Error('生成失败')
-  return rows[0]
-}
 
 // ---- 灰度开关 ----
 
@@ -1485,6 +1517,19 @@ async function llmChat(modelId, messages, onDelta, options) {
   return answer
 }
 
+async function supportRpc(name, args) {
+  await requireSession()
+  const result = await cloud.database.rpc(name, args || {})
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  return Array.isArray(result.data) ? result.data[0] : result.data
+}
+function beginSupportAi() { return supportRpc('begin_support_ai') }
+function finishSupportAi(id, success) { return supportRpc('finish_support_ai', { p_request_id: id, p_success: success }) }
+function getSupportUsage() { return supportRpc('support_ai_usage') }
+function rateSupportAnswer(id, faqId, helpful) {
+  return supportRpc('rate_support_answer', { p_request_id: id, p_faq_id: faqId, p_helpful: helpful })
+}
+
 module.exports = {
   getErrorMessage: getErrorMessage,
   formatTime: formatTime,
@@ -1497,6 +1542,10 @@ module.exports = {
   adminUpdateFaqSettings: adminUpdateFaqSettings,
   llmModels: llmModels,
   llmChat: llmChat,
+  beginSupportAi: beginSupportAi,
+  finishSupportAi: finishSupportAi,
+  getSupportUsage: getSupportUsage,
+  rateSupportAnswer: rateSupportAnswer,
   getSession: getSession,
   requireSession: requireSession,
   login: login,
@@ -1573,6 +1622,7 @@ module.exports = {
   completeOrder: completeOrder,
   confirmOrderDone: confirmOrderDone,
   cancelOrder: cancelOrder,
+  abandonOrder: abandonOrder,
   submitSettleFeedback: submitSettleFeedback,
   adminListFeedbacks: adminListFeedbacks,
   adminResolveFeedback: adminResolveFeedback,
@@ -1593,7 +1643,6 @@ module.exports = {
   submitApplication: submitApplication,
   listApplications: listApplications,
   markCertPending: markCertPending,
-  insertDemoApplication: insertDemoApplication,
   reviewApplication: reviewApplication,
   hideMyOrder: hideMyOrder,
   restoreMyOrder: restoreMyOrder,

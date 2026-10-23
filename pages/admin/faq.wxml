@@ -206,8 +206,10 @@
         </view>
       </view>
 
-      <!-- ===== 新增 / 编辑表单 ===== -->
-      <view wx:if="{{editing}}" class="card">
+      <!-- ===== 新增 / 编辑表单 =====
+           这块在页面最底部（AI 设置 + 模型配置 + FAQ 列表之后），
+           所以点「新增 / 编辑」后必须由 JS 滚过来，否则用户以为没反应。 -->
+      <view wx:if="{{editing}}" id="faq-form" class="card">
         <view class="section-head">
           <text class="section-title">{{formTitle}}</text>
           <text class="section-more" bindtap="cancelEdit">取消</text>

@@ -107,16 +107,18 @@ function sanitize(text) {
 }
 
 // 进气泡之前统一洗一遍文本。
-// 两个目的：① 模型输出常常带首尾换行 / 连续空行，气泡 white-space 是 pre-wrap，
-//   这些空行会原样渲染出来，看着就像「消息之间空了一大块」；
-// ② 顺手压掉行尾空格，避免气泡右边出现莫名的空白。
+// 模型输出常常带首尾换行、连续空行、全角空格；气泡 white-space 是 pre-wrap，
+// 这些东西会原样渲染成空白行 —— 气泡被撑得老高，看着就像「消息之间空了一大截」。
+// 这里一律压掉：空行全部并成一行，行内多余空白归一，首尾空白全去掉。
 function tidyText(text) {
   return String(text || '')
     .replace(/\r/g, '')
+    // 全角空格 / 不间断空格都归一成普通空格，否则 trim 认不出来
+    .replace(/[\u00A0\u3000]/g, ' ')
     .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/^\n+/, '')
-    .replace(/\n+$/, '')
+    .replace(/\n[ \t]*/g, '\n')
+    // 连续空行压成一个换行：聊天气泡里不需要留白排版
+    .replace(/\n{2,}/g, '\n')
     .trim()
 }
 
@@ -139,6 +141,11 @@ function buildSystemPrompt(settings, faqList) {
 function num(value, fallback) {
   const parsed = Number(value)
   return isNaN(parsed) ? fallback : parsed
+}
+
+// selectorQuery 量不到节点时拿到的是 null / undefined，统一取高度为 0
+function heightOf(rect) {
+  return Math.round(Number(rect && rect.height) || 0)
 }
 
 // ============================================================================
@@ -195,10 +202,14 @@ Page({
     input: '',
     countText: '0 / ' + MAX_LEN,
     sending: false,
-    // 会话区底部留白 = 输入区实测高度 + 一点余量，避免最后一条被压住。
-    // 240 是首帧兜底（输入区还没渲染时量不到），量到之后会被覆盖。
-    bodyPad: 240,
-    // 临时调试信息：条数 / 每条高度 / 可滚距离，定位完一并删掉
+    // 会话滚动区高度（px）：由 JS 按「可用高 − 调试条 − 热门 − 输入区」算出来写死。
+    // 给死之后就不再依赖 flex / auto 量高度，落点永远准。
+    scrollH: 360,
+    // 滚到底的两条路：scroll-into-view 指锚点 + scroll-top 给实测最大值。
+    // 单用哪一条都有失效记录，所以叠着来。
+    toView: '',
+    scrollTop: 0,
+    // 临时调试信息，定位完一并删掉
     debugInfo: '',
 
     // 热门问题（点一下直接问）
@@ -229,40 +240,45 @@ Page({
     page.boot()
   },
 
-  // 一次量三样东西，全部写进调试条，排查「只显示一条消息」时靠它定位：
-  //   ① 每条消息的实际高度（哪条被撑高了一眼就能看出来）；
-  //   ② 输入区高度 -> 换算成会话区底部留白（bodyPad）；
-  //   ③ 整页文档高度 -> 配合窗口高度算出最大可滚距离，用来判断有没有贴底。
+  // 算会话滚动区的高度：拿会话区总高，减掉它上面和下面那几块的实测高度。
+  // 这样滚动区高度是「剩下的那截」，既不会被内容撑开，也不会算错落点。
+  // 同时把每条消息高度抓出来打到调试条上 —— 哪条被撑高一眼能看出来。
   measureLayout: function () {
     const page = this
     if (typeof wx.createSelectorQuery !== 'function') return
     try {
       const query = wx.createSelectorQuery().in(page)
-      query.selectAll('.msg-row').boundingClientRect()
+      query.select('.sup-debug').boundingClientRect()
+      query.select('.sup-hot').boundingClientRect()
       query.select('.sup-input').boundingClientRect()
-      query.select('.support-page').boundingClientRect()
+      query.select('.sup-chat').boundingClientRect()
+      query.selectAll('.msg-row').boundingClientRect()
       query.exec(function (res) {
-        const rows = (res && res[0]) || []
-        const input = (res && res[1]) || {}
-        const doc = (res && res[2]) || {}
-        const win = motion.systemInfo().windowHeight || 0
-        if (doc.height) page._docHeight = doc.height
-        if (win) page._windowHeight = win
-        const pad = Math.round(Number(input.height) || 0)
-        const next = {}
-        // 余量给 24px：输入区边框/圆角之外再留一口气，最后一条不贴着输入框
-        if (pad > 0) next.bodyPad = pad + 24
+        const debugH = heightOf(res && res[0])
+        const hotH = heightOf(res && res[1])
+        const inputH = heightOf(res && res[2])
+        const chatH = heightOf(res && res[3])
+        const rows = (res && res[4]) || []
+        // 会话区总高 = 窗口高 − 导航条高（.sup-body 就是这块）
+        const sys = motion.systemInfo()
+        const bodyH = (Number(sys.windowHeight) || 0) - (Number(sys.navTotalHeight) || 0)
+        // 滚动区 = 会话区 − 调试条 − 热门 − 输入区。至少给 120，别缩没。
+        const scrollH = Math.max(bodyH - debugH - hotH - inputH, 120)
         const heights = []
         rows.forEach(function (row) {
           heights.push(Math.round(row.height || 0))
         })
-        const maxScroll = Math.max(Math.round((page._docHeight || 0) - win), 0)
-        next.debugInfo =
-          '条数 ' + rows.length +
-          ' · 各条高[' + heights.join(',') + ']' +
-          ' · 可滚 ' + maxScroll +
-          ' · 输入区 ' + pad
-        page.setData(next)
+        page._scrollH = scrollH
+        page._chatH = chatH
+        page.setData({
+          scrollH: Math.round(scrollH),
+          debugInfo:
+            '会话区 ' + Math.round(bodyH) +
+            ' · 滚动区 ' + Math.round(scrollH) +
+            ' · 内容 ' + Math.round(chatH) +
+            ' · 各条高[' + heights.join(',') + ']' +
+            ' · 贴底 ' + (page._atBottom === false ? '否' : '是'),
+        })
       })
     } catch (e) {
       /* 查询失败不用管 */
@@ -280,7 +296,6 @@ Page({
 
   onUnload: function () {
     if (this._scrollTimer) clearTimeout(this._scrollTimer)
-    if (this._measureTimer) clearTimeout(this._measureTimer)
     if (this._padTimer) clearTimeout(this._padTimer)
     if (this._timeout) clearTimeout(this._timeout)
     if (this._abort && typeof this._abort.abort === 'function') {
@@ -365,7 +380,10 @@ Page({
     if (msg.failed) next.failed = true
     list.push(next)
     page.setData({ messages: list })
-    // 用户正贴着底部时，新气泡要自己滚进视野，否则要手动拉到底才看得到
+    // 新消息必须自己滚进视野 —— 这里不受「贴底」判定限制。
+    // 判定只该管流式输出时要不要跟着跑，不该拦住「用户刚发的那句」和「回答刚到的那句」。
+    // 之前把它也交给 scheduleScroll，就是回答永远停在视口下方的原因。
+    page._atBottom = true
     page.scheduleScroll()
     return msg.id
   },
@@ -406,34 +424,41 @@ Page({
   },
 
   // --------------------------------------------------------------------------
-  // 滚到底
-  // 最终方案：不用 scroll-view，滚动交给页面自己，用 wx.pageScrollTo。
-  // 之前在 scroll-view 上试过三种写法，全都不行，记下来别再回头：
-  //   ① scroll-into-view 指消息节点 —— 节点没渲染完就指，滚空；
-  //   ② scroll-top 塞超大值 —— 内容不足一屏时基础库会把内容顶上去，
-  //      屏幕中间留一大片空白（就是截图里那个样子）；
-  //   ③ scroll-top 塞实测高度 —— 得先量，而量高度的时机很容易踩空
-  //      （onReady 时页面还在 loading，滚动区根本还没渲染）。
-  // 页面滚动没有这些毛病：超过最大可滚距离时框架自己会夹到底部，
-  // 既不会滚过头，也不需要知道内容有多高。
-  // duration 给 0：流式输出时每次都带动画会一卡一卡的。
+  // 滚到底 —— 两条路一起走，一条失效另一条兜底。
+  //
+  // 路 1 scroll-into-view 指末尾锚点（#chat-end）。
+  //     它只在「值变了」时才触发，所以先清空再赋值。
+  //     关键是走 setData 的回调而不是 setTimeout：回调保证节点已经渲染完，
+  //     在 setData 同一帧指向刚创建的锚点会滚空（前面几轮就是这么滚了个寂寞的）。
+  //
+  // 路 2 scroll-top 给实测的最大可滚距离（内容高 - 视口高）。
+  //     值必须落在合法区间内；塞超大值 999999 在部分基础库上会把内容顶上去、
+  //     屏幕中间留一大片空白 —— 就是用户截图里那个样子，别再试。
+  //
+  // 页面级 pageScrollTo 一并否决：fail 会被静默吞掉，真失败了也看不出来；
+  // 而且整页滚动时输入区必须固定、下面还得垫一块等高留白，
+  // 那块留白算不准就是「中间空一大截」。
   // --------------------------------------------------------------------------
   scrollToBottom: function () {
     const page = this
     if (!(page.data.messages || []).length) return
-    if (typeof wx.pageScrollTo !== 'function') return
-    try {
-      // 内容不足一屏时这一调用会失败，属于正常情况，安静吞掉即可
-      wx.pageScrollTo({ scrollTop: 999999, duration: 0, fail: function () {} })
-    } catch (e) {
-      /* 页面不可滚时不必处理 */
+    const go = function () {
+      // 路 2：最大可滚 = 内容高 - 视口高；再加 1 保证「值变了」这个触发条件成立
+      const viewH = page._scrollH || page.data.scrollH || 0
+      const contentH = page._chatH || 0
+      const target = Math.max(Math.round(contentH - viewH), 0) + 1
+      // 两条路同一帧一起给：scroll-into-view 管准，scroll-top 管保底
+      page.setData({ toView: 'chat-end', scrollTop: target })
     }
-    // 滚完再量一次：新气泡进来后文档高度变了，贴底判定要用最新值
-    if (page._measureTimer) clearTimeout(page._measureTimer)
-    page._measureTimer = setTimeout(function () {
-      page._measureTimer = null
+    // 路 1 的前置：先把锚点值清空，否则值没变根本不触发
+    page.setData({ toView: '' }, go)
+    // 滚完把布局重量一次：新气泡进来后内容高度变了，
+    // 调试条要显示最新数字，下一次 scroll-top 也要用最新值。
+    if (page._padTimer) clearTimeout(page._padTimer)
+    page._padTimer = setTimeout(function () {
+      page._padTimer = null
       page.measureLayout()
-    }, 60)
+    }, 200)
   },
 
   // 节流版：流式输出每个字都会回调一次，逐字滚会把 setData 刷爆。
@@ -449,25 +474,27 @@ Page({
     }, 120)
   },
 
-  // 页面级滚动回调：记一下用户是否还贴在底部，不在的话自动滚动暂停，
-  // 用户自己往下翻回底部附近才恢复跟随（不然翻历史时会被一直拽回底部）。
-  // 文档高度和窗口高度都是量出来的，没量到时不做判断、保持「未知」——
-  // 否则算出来一定「没贴底」，自动滚动会从第一条起就永久停摆。
-  onPageScroll: function (event) {
+  // scroll-view 自带的滚动回调：detail 里就有 scrollTop / scrollHeight，
+  // 不用再去量文档高、窗口高 —— 之前就是拿那两个量出来的值算贴底，
+  // 自定义导航下 windowHeight 和真实可视高对不齐，算错一次就永久停止跟随。
+  onScroll: function (event) {
     const page = this
-    const top = Number((event && event.scrollTop) || 0)
-    const doc = page._docHeight || 0
-    const win = page._windowHeight || 0
-    if (!doc || !win) return
+    const detail = (event && event.detail) || {}
+    const top = Number(detail.scrollTop || 0)
+    const contentH = Number(detail.scrollHeight || 0)
+    const viewH = Number(page._scrollH || 0)
+    // 没量到就不下判断、保持未知：否则算出来一定「没贴底」，自动跟随会永久停摆
+    if (!contentH || !viewH) return
     // 留 60px 容差：手指滑动很难精确停在 0
-    page._atBottom = doc - win - top < 60
+    page._atBottom = contentH - top - viewH < 60
   },
 
-  // 键盘弹起时把页面拉到底：不然最后一条消息会被键盘盖住，
+  // 键盘弹起时把会话拉到底：不然最后一条消息会被键盘盖住，
   // 用户一边打字一边看不到自己刚发的那句。
   onFocus: function () {
     const page = this
     setTimeout(function () {
+      page._atBottom = true
       page.scrollToBottom()
     }, 260)
   },
@@ -477,8 +504,8 @@ Page({
     const page = this
     const value = event.detail.value || ''
     page.setData({ input: value, countText: value.length + ' / ' + MAX_LEN })
-    // 输入框是自增高的一行变多行会把输入区顶高，底部留白得跟着变，
-    // 否则最后一条消息会被压住。节流一下，别每个字都量。
+    // 输入框是自增高的，一行变多行会把输入区顶高，会话滚动区要跟着缩短。
+    // 节流一下，别每个字都量。
     if (page._padTimer) return
     page._padTimer = setTimeout(function () {
       page._padTimer = null
@@ -497,6 +524,11 @@ Page({
   toggleHot: function () {
     motion.haptic('light')
     this.setData({ hotOpen: !this.data.hotOpen })
+    // 热门问题展开/收起会改变上下两块的高度，会话滚动区要重算，否则会空一截或多一截
+    const page = this
+    setTimeout(function () {
+      page.measureLayout()
+    }, 60)
   },
 
   send: function () {

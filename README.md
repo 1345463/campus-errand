@@ -8,7 +8,7 @@
 **历史可回溯**：`main` 上有 31 次提交，按 R1 → R29 的迭代顺序排列，
 里程碑打了 `v0.1.0` ~ `v0.5.0` 五个 tag。`git log --reverse` 即可顺着时间线回到任意一轮。
 
-> 📘 **36 轮迭代的完整过程、踩坑知识库、数据库演进与函数清单见 [`docs/ITERATIONS.md`](docs/ITERATIONS.md)**
+> 📘 **37 轮迭代的完整过程、踩坑知识库、数据库演进与函数清单见 [`docs/ITERATIONS.md`](docs/ITERATIONS.md)**
 > 📄 逐轮变更见 [`CHANGELOG.md`](CHANGELOG.md)（正序）
 
 ---

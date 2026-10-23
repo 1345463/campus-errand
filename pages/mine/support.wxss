@@ -1,25 +1,42 @@
-/* 智能客服页：自定义导航 + 会话区在文档流里、输入区固定在底部。
-   滚动交给页面本身（wx.pageScrollTo），不再用 scroll-view ——
-   scroll-view 在这个页面上踩了四轮坑：scroll-into-view 滚空、
-   scroll-top 塞大数会把内容顶上去留一片空白、flex 子项高度各基础库不一致、
-   height:auto 被内容撑开导致 flex-grow 失效。页面滚动没有这些问题，
-   而且超过最大可滚距离时框架会自己夹取，不会出现「滚过头」的空白。 */
+/* 智能客服页：自定义导航 + 会话区内部纵向排列。
+   这一版是第四次重写，把前几轮所有踩过的坑一次性绕开：
+   ① 整页不滚动（height:100vh + overflow:hidden），只有中间的 scroll-view 滚；
+   ② scroll-view 的高度给死成像素（JS 算好写进内联 style），不用 flex:1、不用 auto ——
+      flex 子项高度各基础库不一致，auto 又会被内容撑开，两者都导致"滚到底"落点错位；
+   ③ 输入区回文档流（flex:none），不固定、不预留底部空白 ——
+      固定输入区 + 底部留白那一版就是"中间空一大截"的来源。
+   ④ 消息之间不留大间距，气泡用 pre-wrap 但文本已由 tidyText 清洗过空行。 */
 
 .support-page {
   position: relative;
-  /* 用 min-height：内容少时铺满一屏，内容多时自然撑高，页面才能滚起来 */
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   box-sizing: border-box;
-  /* .page 默认给了底部留白，这里由会话区自己算（要避开固定输入区） */
+  /* .page 默认给了底部留白，这页整块撑满，留白交给会话区自己 */
   padding-bottom: 0;
   background: var(--bg);
 }
 
-/* 会话区正常文档流，底部留白由 JS 按输入区实测高度填（见 support.js 的 bodyPad），
-   少了最后一条会被压住，多了又是用户眼里的一片空白 —— 所以必须量。 */
+/* 会话区用绝对定位把 top/bottom 交给导航条和屏幕底，
+   高度永远等于「导航条以下到屏幕底」，不受父级 padding 影响。 */
 .sup-body {
-  position: relative;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
+}
+
+/* ---------- 调试条（临时）---------- */
+.sup-debug {
+  flex: none;
+  padding: 6rpx 24rpx;
+  background: #FFF4E5;
+  color: #B45309;
+  font-size: 22rpx;
+  text-align: center;
 }
 
 /* ---------- 热门问题 ---------- */
@@ -69,29 +86,24 @@
   color: var(--brand-600);
 }
 
-/* ---------- 会话区 ---------- */
-/* 会话内容层：消息从顶部往下排。
-   别给它设 height / min-height / flex，更别用 justify-content:flex-end
-   想把消息顶到底部 —— 那需要容器有确定高度，页面滚动时没有这个参照，
-   结果就是消息被推到可视区外、上面留一大片空白。 */
+/* ---------- 会话滚动区 ---------- */
+/* 高度由内联 style 给死成像素。这里只给宽度和盒模型。
+   别加 height / min-height / flex —— 会让内联高度失效。 */
+.sup-scroll {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 消息层：从顶部往下排，不要 height / min-height / flex-end，
+   否则消息会被顶到可视区外、上面留一片空白（踩过）。 */
 .sup-chat {
   padding: 20rpx 24rpx 24rpx;
   box-sizing: border-box;
 }
 
-/* 临时调试条，确认完删除。
-   用 fixed 而不是文档流：页面会滚到底，文档流里的调试条一滚就没影了。
-   top 由行内样式给（要避开自定义导航条）。 */
-.sup-debug {
-  position: fixed;
-  left: 0;
-  right: 0;
-  z-index: 30;
-  padding: 8rpx 24rpx;
-  background: #FFF4E5;
-  color: #B45309;
-  font-size: 22rpx;
-  text-align: center;
+/* 滚动锚点：必须有布局盒，scroll-into-view 才找得到 */
+.chat-end {
+  height: 1rpx;
 }
 
 .msg-row {
@@ -115,6 +127,7 @@
   border-radius: 20rpx;
   font-size: 28rpx;
   line-height: 1.65;
+  /* pre-wrap 保留模型输出里的换行；空行已由 tidyText 压掉，不会虚高 */
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -149,15 +162,11 @@
 }
 
 /* ---------- 输入区 ---------- */
-/* 固定在视口底部：放在文档流里会随历史消息一起滚走。
-   z-index 要低于转人工弹层（20），弹层才能盖住它。 */
+/* flex: none 钉在文档流底部，跟着会话区一起排。
+   别改回 position: fixed —— 那样必须在下面垫一块等高的留白，
+   留白算不准就是一整块空白（就是用户说的"中间空一大截"）。 */
 .sup-input {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 12;
-  box-sizing: border-box;
+  flex: none;
   padding: 14rpx 24rpx 24rpx;
   background: #FFFFFF;
   border-top: 1rpx solid var(--fill);

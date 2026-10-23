@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 WorkBuddy Cloud
-> 统计截止：2026-10-24 00:35 ｜ 累计 **42 轮迭代**、**37 个页面**、**29 张表**、**117 个数据库函数**、**4 个触发器**
+> 统计截止：2026-10-24 01:40 ｜ 累计 **43 轮迭代**、**37 个页面**、**29 张表**、**117 个数据库函数**、**4 个触发器**
 
 ---
 
@@ -9,7 +9,7 @@
 
 - [0. 项目概况](#0-项目概况)
 - [1. 技术基线（不可动摇的约定）](#1-技术基线不可动摇的约定)
-- [2. 迭代时间线（42 轮）](#2-迭代时间线42-轮)
+- [2. 迭代时间线（43 轮）](#2-迭代时间线43-轮)
 - [3. 数据库演进总览](#3-数据库演进总览)
 - [4. 前端页面与模块总览](#4-前端页面与模块总览)
 - [5. 踩坑知识库](#5-踩坑知识库)
@@ -679,6 +679,59 @@ R1–R38 的逐轮历史与 5 个 tag 未受影响。
 `project.config.json` 里为 `.agents` / `skills-lock.json` 加的 packOptions.ignore。
 
 ---
+#### R43 · text 返回的 RPC 被整类误判为报错（红条显示 owner / runner）
+
+**用户报的现象**：任务详情页整页进入错误态，顶部红条写着 `runner`，中间 toast 也是
+`runner`；换发布者账号打开同一张单，红条变成 `owner`。
+
+**这不是角色文案，是错误信息本身。** 根因分两段：
+
+1. WorkBuddy Cloud SDK 的 `processResponse` 对响应体做 `JSON.parse`，**解析失败时把
+   响应体原文塞进 `error.message`**：
+   ```js
+   try { data = JSON.parse(body) } catch { error = { message: body } }
+   ```
+2. PostgREST 对 `RETURNS text` 的函数返回的是**裸字符串** `runner`（不是带引号的
+   `"runner"`），不是合法 JSON → SDK 判成失败 → 前端 `getOrderRelation` 看到
+   `result.error` 就 `throw new Error('runner')` → 整页进错误态。
+
+所以那个位置显示的值**随账号身份变化**：发布者 `owner`、接单员 `runner`、路人 `none`。
+
+**同一类中招的共 7 个函数**（全部 `RETURNS text`）：
+
+| 函数 | 前端表现 |
+|---|---|
+| `order_relation` | 订单详情整页红条（本次报的就是它） |
+| `admin_set_perm` | 后台设置权限后弹 `granted`，看着像失败 |
+| `admin_delete_banner` | 删除轮播后弹 `deleted`，以为没删掉 |
+| `hide_my_order` / `restore_my_order` | 删除提示 `deleted` / 恢复提示 `restored` |
+| `mark_message_read` / `mark_all_messages_read` | 标已读后弹 `read` |
+
+`boolean` / `bigint` / `integer` / `void` 返回的不受影响 —— `true`、`123` 本身就是合法
+JSON，空响应体也正常。这就是为什么 `order_hidden`（boolean）一直没事，而
+`order_relation`（text）一直坏。这解释了为什么之前没人发现：坏的全是「只回一个状态词」
+的接口，看着像小毛病。
+
+**修法**（`sql/fix-text-rpc-returns.sql`）：7 个函数全部改成 `RETURNS TABLE(result text)`
+（`order_relation` 用 `TABLE(relation text)`），响应体变成 `[{"result":"deleted"}]`。
+改返回类型必须先 `DROP FUNCTION` 再 `CREATE`，重建后 **GRANT 要重新执行**（权限绑在函数 oid 上）。
+顺带给 `order_relation` 补上漏掉的 `SET search_path TO 'public'` —— 它原来在
+`SECURITY DEFINER` 函数里用不限定名的 `orders`，调用者可以靠改 `search_path` 指到别的表。
+
+**前端配套**：`utils/api.js` 新增 `pickText(result, field)` 统一取 `[{"字段":"值"}]` 里的字符串；
+`pages/order/detail.js` 把 `getOrderRelation` 单独 `.catch` 掉 —— 身份判定只决定「显示哪些按钮」，
+它单点失败不该让整页白屏。
+
+**验证**（真库，切 `authenticated` 角色 + 设 `request.jwt.claim.sub` 跑）：
+同一张单 115，`asOwner=owner` / `asRunner=runner` / `asStranger=none`；
+`mark_all_messages_read=read`、`admin_set_perm=granted`、`restore_my_order=restored`。
+
+**教训（写进踩坑库）**：**RPC 的返回类型必须是结构化类型**（`TABLE` / `SETOF` / `json`），
+不能是裸 `text`。判断标准很简单 —— 前端能不能 `JSON.parse` 出对象。
+以后新增只回状态词的接口，一律 `RETURNS TABLE(result text)`，宁可多包一层。
+
+---
+
 ## 3. 数据库演进总览
 
 ### 数据表（23 张，全量 RLS）

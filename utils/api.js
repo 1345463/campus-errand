@@ -41,6 +41,25 @@ function getErrorMessage(error) {
   return '操作失败，请稍后重试'
 }
 
+// 只返回一个字符串的 RPC 统一改成了 RETURNS TABLE(...)，
+// 响应体变成 [{"result":"deleted"}] 这种能被 JSON.parse 的形态。
+//
+// 为什么必须改库、而不是在前端兼容：SDK 的 processResponse 对响应体做 JSON.parse，
+// 解析失败就把**响应体原文**塞进 error.message。RETURNS text 的函数返回的是裸字符串
+// （`runner`，不是 `"runner"`），必然解析失败 → 前端拿到的不是 data 而是 error，
+// 文案还正好是那个值本身（订单详情页那条红条显示 owner / runner 就是这么来的）。
+// 所以前端没法「兜底」，只能让服务端返回结构化结果。
+function pickText(result, field) {
+  const rows = result && Array.isArray(result.data) ? result.data : []
+  if (!rows.length) return ''
+  const row = rows[0]
+  if (row && typeof row === 'object') {
+    const value = row[field]
+    return value === null || value === undefined ? '' : String(value)
+  }
+  return row === null || row === undefined ? '' : String(row)
+}
+
 function pad(value) {
   return value < 10 ? '0' + value : '' + value
 }
@@ -414,7 +433,8 @@ async function searchMyOrders(keyword, limit) {
 async function getOrderRelation(id) {
   const result = await cloud.database.rpc('order_relation', { p_order_id: id })
   if (result.error) throw new Error(getErrorMessage(result.error))
-  return String((result.data === null || result.data === undefined ? 'none' : result.data))
+  const relation = pickText(result, 'relation')
+  return relation || 'none'
 }
 
 // 只取「非敏感」的展示字段。
@@ -746,7 +766,7 @@ async function adminSetPerm(userId, permKey, enabled) {
     p_enabled: !!enabled,
   })
   if (result.error) throw new Error(getErrorMessage(result.error))
-  return result.data
+  return pickText(result, 'result')
 }
 
 // ---- 首页轮播 ----
@@ -795,7 +815,7 @@ async function adminUpdateBanner(id, patch) {
 async function adminDeleteBanner(id) {
   const result = await cloud.database.rpc('admin_delete_banner', { p_id: id })
   if (result.error) throw new Error(getErrorMessage(result.error))
-  return result.data
+  return pickText(result, 'result')
 }
 
 // ---- 消息中心 ----
@@ -818,13 +838,13 @@ async function unreadMessageCount() {
 async function markMessageRead(id) {
   const result = await cloud.database.rpc('mark_message_read', { p_id: id })
   if (result.error) throw new Error(getErrorMessage(result.error))
-  return result.data
+  return pickText(result, 'result')
 }
 
 async function markAllMessagesRead() {
   const result = await cloud.database.rpc('mark_all_messages_read', {})
   if (result.error) throw new Error(getErrorMessage(result.error))
-  return result.data
+  return pickText(result, 'result')
 }
 
 // ---- 评价 ----
@@ -1125,14 +1145,14 @@ async function reviewApplication(id, approve, note) {
 async function hideMyOrder(orderId) {
   const result = await cloud.database.rpc('hide_my_order', { p_order_id: orderId })
   if (result.error) throw new Error(getErrorMessage(result.error))
-  return result.data
+  return pickText(result, 'result')
 }
 
 // 误删退路：把隐藏记录去掉，订单重新出现在列表里
 async function restoreMyOrder(orderId) {
   const result = await cloud.database.rpc('restore_my_order', { p_order_id: orderId })
   if (result.error) throw new Error(getErrorMessage(result.error))
-  return result.data
+  return pickText(result, 'result')
 }
 
 // 该单是否已进入删除状态（任一方删除即整单隐藏，双方列表都不再显示）

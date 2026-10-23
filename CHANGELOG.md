@@ -595,3 +595,22 @@ _提交时间：2026-10-23 16:50:00_
   迁移工具全限定名 + DO 块包、前后端 RPC 对照。
 - 附「合并外部 AI 改动的 SOP」7 步与一句话总结表。
 - 顺带修正第 7 章过期描述：AI 配额已从本地 storage 改为服务端记账。
+
+## R43 · 修「text 返回的 RPC 被整类误判为报错」（10-24 01:40）
+
+- **用户报的现象**：任务详情页整页错误态，红条写着 `runner`（发布者账号则写 `owner`）。
+  这不是角色文案，是错误信息本身。
+- **根因**：SDK 对响应体做 `JSON.parse`，失败时把**响应体原文**塞进 `error.message`；
+  而 `RETURNS text` 的函数返回裸字符串 `runner`（不是 `"runner"`），必然解析失败。
+  于是 `getOrderRelation` 拿到 error → throw → 整页进错误态，文案恰好是那个关系值。
+- **同类中招 7 个函数**：order_relation / hide_my_order / restore_my_order /
+  mark_message_read / mark_all_messages_read / admin_set_perm / admin_delete_banner，
+  表现为弹 `granted` / `read` / `deleted` 这类看似失败的提示（其实已经执行成功）。
+- **修法**：`sql/fix-text-rpc-returns.sql` 全部改 `RETURNS TABLE(result text)`
+  （order_relation 用 `TABLE(relation text)`）；改返回类型走 DROP → CREATE → 重跑 GRANT。
+  顺带补 order_relation 缺失的 `SET search_path TO 'public'`（原来用不限定名 orders）。
+- **前端**：api.js 新增 `pickText(result, field)`；detail.js 给 getOrderRelation 单独 catch
+  （身份判定失败不该让整页白屏）。
+- **真库验证**：单 115 下 asOwner=owner / asRunner=runner / asStranger=none；
+  markAll=read / setPerm=granted / restore=restored。
+- 校验：四件套 + 冒烟全绿；npm test 37 项全过；上传包 1.35 MB / 2.00 MB。

@@ -202,8 +202,14 @@ Page({
           primary: { key: 'login', label: '登录后查看或接单' }, errorText: '', canReport: false })
         return null
       }
+      // 身份判定只决定「显示哪些按钮」，它单点失败不该让整页进错误态
+      // （R43 之前就是这样：order_relation 返回裸字符串被 SDK 判成错误，红条显示 owner/runner）
+      const relationPromise = api.getOrderRelation(id).catch(function (error) {
+        console.error('[detail] order_relation failed', api.getErrorMessage(error))
+        return 'none'
+      })
       return Promise.all([Promise.resolve(session), api.getOrderDetail(id), api.getProfile().catch(function () { return null }),
-      api.isOrderHidden(id), api.getOrderRelation(id)])
+      api.isOrderHidden(id), relationPromise])
     }).then(function (result) {
         if (!result) return null
         const session = result[0]

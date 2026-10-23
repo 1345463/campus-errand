@@ -11,6 +11,8 @@
     <text class="err-retry" bindtap="load">重试</text>
   </view>
 
+  <view wx:if="{{needLogin}}" class="card hint">登录后可查看任务详情、联系方式并接单。</view>
+  <block wx:if="{{order.id}}">
   <view class="card">
     <view class="task-row">
       <text class="task-title">{{order.title}}</text>
@@ -222,9 +224,24 @@
     </view>
   </view>
 
+  <view class="card" wx:if="{{canAbandon}}">
+    <view class="hint">无法继续履约时请先联系发布方。放弃后任务会重新开放接单。</view>
+    <view class="btn-danger top-gap" bindtap="abandon">{{armKey === 'abandon' ? armLabel : '放弃接单'}}</view>
+  </view>
+  <view class="card" wx:if="{{deliverPreviews.length && order.status === 'accepted'}}">
+    <view class="hint">请核对送达照片，确认提交后将通知发布方。</view>
+    <view class="delivery-drafts">
+      <view wx:for="{{deliverPreviews}}" wx:for-item="photo" wx:key="index">
+        <image class="delivery-thumb" src="{{photo}}" mode="aspectFill" data-index="{{index}}" bindtap="previewDeliverDraft" />
+        <view data-index="{{index}}" bindtap="removeDeliverPhoto">删除这张</view>
+      </view>
+    </view>
+    <view class="btn-ghost" bindtap="chooseDeliverPhotos">重新选择照片</view>
+  </view>
+  </block>
   <view class="footer-bar" wx:if="{{primary}}">
     <view class="btn-primary {{busy ? 'disabled' : ''}} {{armKey ? 'btn-armed' : ''}}" bindtap="onPrimary">
-      {{armKey ? armLabel : primary.label}}
+      {{armKey && armKey !== 'abandon' ? armLabel : primary.label}}
     </view>
     <view class="hint" wx:if="{{armKey === 'cancel'}}">再点一次立即取消，4 秒内不点会自动撤销</view>
     <view class="hint" wx:if="{{armKey === 'complete'}}">再点一次即提交完成，赏金要等发布方确认</view>

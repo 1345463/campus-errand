@@ -1,5 +1,6 @@
 const ui = require('./ui')
 const api = require('./api')
+const loginReturn = require('./login-return')
 
 function confirmGoLogin() {
   return ui
@@ -10,7 +11,7 @@ function confirmGoLogin() {
       cancelText: '再看看',
     })
     .then(function (ok) {
-      if (ok) wx.switchTab({ url: '/pages/mine/index' })
+      if (ok) loginReturn.goLogin()
       return false
     })
 }
@@ -27,7 +28,7 @@ function ensureLogin() {
       console.error('[guard] session check failed', api.getErrorMessage(error))
       // 查询会话失败不等于未登录：提示并放行到登录页，不再静默吞掉
       ui.toast({ title: '登录状态校验失败，请到「我的」页重试', icon: 'none', duration: 2200 })
-      wx.switchTab({ url: '/pages/mine/index' })
+      loginReturn.goLogin()
       return false
     })
 }

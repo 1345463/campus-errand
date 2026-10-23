@@ -25,12 +25,9 @@ module.exports = {
   // 小程序代码包可以被反编译，写进来等于把口令公开。
   minReward: 1,
   maxReward: 200,
-  // ============ 调试期开关（上线前必须处理） ============
-  // 1. 记住登录凭证并在下次打开时自动重登，省去反复输入
-  rememberPassword: true,
-  autoLogin: true,
-  // 2. 预置账号：填上后首次打开就直接自动登录。留空表示不使用。
-  //    上线前必须清空这里，并把 rememberPassword / autoLogin 都改成 false。
+  // 发布配置门禁会强制这两个开关为 false，预置账号必须为空。
+  // 不再存储明文密码；SDK 负责已登录会话的恢复。
+  rememberPassword: false,
+  autoLogin: false,
   presetAccount: { phone: '', password: '' },
-  // ============ 调试期开关结束 ============
 }

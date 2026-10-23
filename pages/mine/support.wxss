@@ -261,3 +261,7 @@
   background: var(--line);
   color: var(--t3);
 }
+
+.sup-tools { display: flex; justify-content: space-between; padding: 16rpx 24rpx; color: var(--brand); font-size: 24rpx; }
+.sup-actions { display: flex; gap: 24rpx; margin-top: 10rpx; color: var(--brand); font-size: 22rpx; }
+.sup-warning { color: var(--warn); font-size: 22rpx; padding-top: 8rpx; }

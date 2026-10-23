@@ -18,7 +18,7 @@
   </view>
 
   <view class="card">
-    <block wx:for="{{renderFields}}" wx:key="key">
+    <block wx:for="{{renderFields}}" wx:for-item="item" wx:key="key">
       <view class="field">
         <view class="field-label">
           <text wx:if="{{item.required}}" class="field-star">* </text>{{item.label}}
@@ -32,6 +32,10 @@
           data-key="{{item.key}}"
           bind:change="onRoomChange"
         />
+
+        <picker wx:elif="{{item.key === 'expect_time'}}" mode="selector" range="{{['越快越好','30 分钟内','1 小时内','2 小时内','今天内']}}" bindchange="pickExpectTime">
+          <view class="field-input">{{form.expect_time || '选择期望送达时间'}}</view>
+        </picker>
 
         <input
           wx:elif="{{item.type === 'text' || item.type === 'address'}}"
@@ -87,8 +91,9 @@
           />
           <view class="tags">
             <view
-              class="tag"
+              class="tag {{form.reward == item ? 'active' : ''}}"
               wx:for="{{quickRewards}}"
+              wx:for-item="item"
               wx:key="*this"
               data-value="{{item}}"
               bindtap="setReward"

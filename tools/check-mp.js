@@ -13,6 +13,7 @@ const path = require('path')
 const vm = require('vm')
 
 const ROOT = process.argv[2] || '.'
+require('./release-config').assertReleaseConfig(ROOT)
 const SKIP_DIRS = new Set(['node_modules', 'miniprogram_npm', '.git', 'sql', 'tests'])
 
 const problems = []

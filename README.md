@@ -85,26 +85,18 @@ pending ──accept──> accepted ──complete──> waiting_confirm ─�
 ## 五、本地校验（每次改完必跑）
 
 ```bash
-# 1. 全量语法检查
-for f in $(find . -name "*.js" -not -path "./node_modules/*" -not -path "./miniprogram_npm/*"); do node --check "$f"; done
-
-# 2. 页面注册 / 四件套 / 事件绑定校验（放工作区根目录，别放进包内）
-node verify-mp.js
-
-# 3. 微信上传预检 + 真实包体积（必须 ESM 解析，才能抓出重复声明）
-node --experimental-vm-modules check-mp.js campus-errand
-
-# 4. WXSS / WXML 样式预检（通配符 / 兄弟选择器 / {{ }} 配对 / CSS 变量是否已定义）
-node campus-errand/tools/style-lint.js campus-errand
+npm ci --ignore-scripts
+npm test
+npm run check
 ```
 
-`check-mp.js` 的七项检查：ESM 严格解析 / JSON 可解析 / WXML 标签配对 + id 唯一 /
-页面文件齐全 / `usingComponents` 指向存在 / 按 `packOptions.ignore` 算真实上传体积 /
-裸包名能在 `miniprogram_npm` 解析。
+`npm run check` 包含安全配置门禁、全量 JS 语法、页面和事件检查、ESM 上传预检、
+真实包体积、WXML/WXSS 样式检查与回归测试。测试与构建工具均被排除在小程序上传包之外。
+GitHub Actions 使用相同命令。默认禁止密码缓存、密码自动登录和预置账号。
 
-> ⚠️ `node --check` 抓不到「同名函数重复声明」：非严格 Script 里顶层函数声明是 var 作用域，
-> 重复声明合法；微信 CI 按 ES Module 解析会直接编译失败。只有 `vm.SourceTextModule` 能抓到，
-> 这正是 R12 那个「上传失败」的真因。
+订单与智能客服的修复范围、数据库迁移安装顺序、测试边界和真机清单见
+[`docs/FIX-REPORT-2026-10-23.md`](docs/FIX-REPORT-2026-10-23.md)。
+新版必须先在目标库执行 `sql/fix-order-support-workflows.sql`，再发布小程序。
 
 ## 六、关于 Git 历史（务必知情）
 
@@ -142,7 +134,7 @@ git push -u origin main && git push --tags
 - 管理员口令硬编码（`activate_admin`），本质是调试后门，正式运营需替换。
 - 未接支付，钱包不可提现（页面已如实说明）。
 - 旧对象存储的证件照不可读，需用户重新提交。
-- `utils/config.js` 的 `rememberPassword / autoLogin / presetAccount` 为联调调试态，上线前必须关。
+- AI 配额已按账号在服务端记账，但模型客户端直连仍可绕过计数；严格成本防刷需要可信服务端网关。
 
 ---
 

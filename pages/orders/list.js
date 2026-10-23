@@ -78,7 +78,7 @@ Page({
     if (options && options.mode === 'accept') patch.mode = 'accept'
     this.setData(patch)
     const page = this
-    flags.ensure().then(function () {
+    page._flagsReady = flags.ensure().then(function () {
       page.setData({
         pagingOn: flags.on('order_paging'),
         searchOn: flags.on('order_search'),
@@ -117,8 +117,7 @@ Page({
   },
 
   onReachBottom: function () {
-    // 搜索态不做上拉加载：服务端 search_my_orders 只返回前 N 条，翻页没有意义
-    if (!this.data.pagingOn || this.data.searching) return
+    if (this.data.loading) return
     if (!this.data.hasMore || this.data.loadingMore) return
     this.loadMore()
   },
@@ -135,30 +134,34 @@ Page({
       ui.removeStorage('orderListMode')
       this.setData({ mode: mode })
     }
-    this.checkAndLoad()
+    this.checkAndLoad(true)
   },
 
-  checkAndLoad: function () {
+  checkAndLoad: function (silent) {
     const page = this
-    return api
-      .getSession()
+    return Promise.resolve(page._flagsReady).then(function () { return api.getSession() })
       .then(function (session) {
         if (!session) {
-          page.setData({ needLogin: true, list: [], loading: false, isAdmin: false })
+          page._request = (page._request || 0) + 1
+          page._loadedFilter = null
+          page.setData({ needLogin: true, list: [], loading: false, isAdmin: false, hasMore: false })
           return
         }
+        page._sessionKey = session.user ? String(session.user.id) : ''
+        if (page._lastSession && page._lastSession !== page._sessionKey) page.setData({ list: [], hiddenList: [] })
+        page._lastSession = page._sessionKey
         return api
           .getProfile()
           .then(function (profile) {
             const isAdmin = !!(profile && profile.is_admin)
-            // 不是管理员却选了管理模式，退回「我发布的」，避免拉到空列表以为是故障
+            // 管理员入口在 WXML 单独渲染，服务端仍会验证权限
             if (!isAdmin && page.data.mode === 'admin') page.setData({ mode: 'publish' })
             page.setData({ needLogin: false, isAdmin: isAdmin })
-            return page.load()
+            return page.load(silent)
           })
           .catch(function () {
             page.setData({ needLogin: false, isAdmin: false })
-            return page.load()
+            return page.load(silent)
           })
       })
       .catch(function () {
@@ -168,20 +171,13 @@ Page({
 
   // 拉一页原始订单。offset 由调用方决定（首次 0，上拉用当前已加载条数）
   fetchPage: function (offset) {
-    const page = this
-    // 管理员可以拉全部订单，方便联调时看到所有人的单
-    if (page.data.mode === 'admin') {
-      return api.listAllOrders(PAGE_SIZE, offset)
-    }
-    return api.listMyOrders(page.data.mode, PAGE_SIZE, offset)
+    return api.listMyOrders(this.data.mode, PAGE_SIZE, offset, this.data.status,
+      this.data.searching ? this.data.keyword : '')
   },
 
   mapRows: function (rows) {
     const page = this
     return (rows || [])
-      .filter(function (item) {
-        return page.data.status === 'all' || item.status === page.data.status
-      })
       .map(function (item) {
         const route = []
         if (item.pickup_addr) route.push(item.pickup_addr)
@@ -202,48 +198,57 @@ Page({
       })
   },
 
-  load: function () {
+  load: function (silent) {
     const page = this
-    page.setData({ loading: true, errorText: '', list: [] })
-    return page
-      .fetchPage(0)
-      .then(function (rows) {
-        // 阶梯入场：每一项带自己的 --d 延迟，列表是一条条「长」出来的
-        const list = motion.stagger(page.mapRows(rows))
-        page.setData({
-          list: list,
-          loading: false,
-          // 服务端这一页没填满就认为到底了；状态筛选是前端做的，
-          // 所以这里只是保守估计，不影响正确性
-          hasMore: page.data.pagingOn && (rows || []).length >= PAGE_SIZE,
-        })
+    const request = page._request = (page._request || 0) + 1
+    const sessionKey = page._sessionKey || ''
+    const filter = [sessionKey, page.data.mode, page.data.status, page.data.searching ? page.data.keyword : ''].join('|')
+    const keep = !!(silent && page._loadedFilter === filter)
+    const target = keep ? Math.max(page._offset || PAGE_SIZE, PAGE_SIZE) : PAGE_SIZE
+    page.setData({ loading: !keep, loadingMore: false, errorText: '' })
+    const rows = []
+    function fetchNext() {
+      return page.fetchPage(rows.length).then(function (batch) {
+        if (request !== page._request) return null
+        batch = batch || []
+        Array.prototype.push.apply(rows, batch)
+        if (batch.length === PAGE_SIZE && rows.length < target) return fetchNext()
+        page._offset = rows.length
+        page._loadedFilter = filter
+        page.setData({ list: motion.stagger(page.mapRows(rows)), loading: false,
+          hasMore: batch.length === PAGE_SIZE })
         return null
       })
-      .catch(function (error) {
-        page.setData({ loading: false, hasMore: false })
-        guard.toastError(error)
-      })
+    }
+    return fetchNext().catch(function (error) {
+      if (request !== page._request) return
+      page.setData({ loading: false, errorText: api.getErrorMessage(error) })
+      guard.toastError(error)
+    })
   },
 
   loadMore: function () {
     const page = this
+    if (page.data.loading || page.data.loadingMore || !page.data.hasMore) return Promise.resolve()
+    const request = page._request
+    const offset = page._offset || 0
     page.setData({ loadingMore: true })
-    return page
-      .fetchPage(page.data.list.length)
-      .then(function (rows) {
-        // 追加的第二页从第 0ms 开始，不要接着第一页的延迟往下排
-        const more = motion.stagger(page.mapRows(rows))
-        page.setData({
-          list: page.data.list.concat(more),
-          loadingMore: false,
-          hasMore: (rows || []).length >= PAGE_SIZE,
-        })
-        return null
+    return page.fetchPage(offset).then(function (rows) {
+      if (request !== page._request) return
+      rows = rows || []
+      page._offset = offset + rows.length
+      const ids = {}
+      const list = page.data.list.concat(motion.stagger(page.mapRows(rows))).filter(function (row) {
+        if (ids[row.id]) return false
+        ids[row.id] = true
+        return true
       })
-      .catch(function (error) {
-        page.setData({ loadingMore: false })
-        guard.toastError(error)
-      })
+      page.setData({ list: list, loadingMore: false, hasMore: rows.length === PAGE_SIZE })
+    }).catch(function (error) {
+      if (request !== page._request) return
+      page.setData({ loadingMore: false })
+      guard.toastError(error)
+    })
   },
 
   // ---- 订单搜索（灰度 order_search）----
@@ -259,28 +264,8 @@ Page({
   },
 
   doSearch: function () {
-    const page = this
-    const keyword = (page.data.keyword || '').trim()
-    if (!keyword) {
-      page.setData({ searching: false })
-      return page.load()
-    }
-    page.setData({ loading: true, errorText: '' })
-    return api
-      .searchMyOrders(keyword, 30)
-      .then(function (rows) {
-        page.setData({
-          list: motion.stagger(page.mapRows(rows)),
-          searching: true,
-          loading: false,
-          hasMore: false,
-        })
-        return null
-      })
-      .catch(function (error) {
-        page.setData({ loading: false })
-        guard.toastError(error)
-      })
+    this.setData({ searching: !!String(this.data.keyword || '').trim() })
+    return this.load()
   },
 
   clearSearch: function () {

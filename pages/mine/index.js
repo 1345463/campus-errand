@@ -128,7 +128,7 @@ Page({
     this.refresh()
   },
 
-  // 记住过凭证就直接静默重登，测试期每次进来不用再输一遍
+  // 清理旧版明文密码；已登录会话通过 SDK 恢复。
   tryAutoLogin: function () {
     const page = this
     // 用户主动退出过就不再自动登回去，否则没法切换到另一个账号
@@ -136,40 +136,15 @@ Page({
       page.refresh()
       return
     }
-    const saved = ui.getStorage('savedAccount')
-    const preset = config.presetAccount || {}
-    const account =
-      config.autoLogin && preset.phone && preset.password
-        ? preset
-        : saved && saved.phone && saved.password
-          ? saved
-          : null
-    if (!account) {
-      page.refresh()
-      return
-    }
-    page.setData({ phone: account.phone, password: account.password })
-    api
-      .loginWithPassword(account.phone, account.password)
-      .then(function (result) {
-        page.applyProfile(result.session, result.profile)
-        return page.refresh()
-      })
-      .catch(function () {
-        // 静默失败不打扰用户，落到正常登录界面
-        page.refresh()
-      })
+    ui.removeStorage('savedAccount')
+    page.refresh()
   },
 
-  remember: function (phone, password) {
-    if (!config.rememberPassword) return
-    try {
-      ui.setStorage('savedAccount', { phone: phone, password: password })
-      // 主动登录过就解除"退出后不再自动登录"的限制
-      ui.removeStorage('manualLogout')
-    } catch (e) {
-      /* 存储不可用时忽略 */
-    }
+  // 密码只用于本次认证；认证 SDK 负责会话恢复。
+  remember: function () {
+    ui.removeStorage('savedAccount')
+    ui.removeStorage('manualLogout')
+    this.setData({ password: '' })
   },
 
   refresh: function () {
@@ -216,6 +191,9 @@ Page({
     // 微信一键登录不会带用户名，老账号也可能一直是空的。
     // 名字是硬需求（接单员真名、评价、消息里都要显示），没有就当场逼着填一个。
     this.maybeForceNickname(profile)
+    if (session && profile && profile.nickname && profile.agreed_version === agreement.VERSION) {
+      require('../../utils/login-return').resume()
+    }
   },
 
   // 没有用户名 → 直接进资料页补全，填完才放回来（见 pages/mine/profile 的 force 模式）

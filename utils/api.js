@@ -360,12 +360,14 @@ async function adminListDispatchOrders(limit) {
 }
 
 // 本人的订单同样走服务端函数定位，避免客户端拿 owner_id / runner_id 做等值过滤。
-async function listMyOrders(mode, limit, offset) {
+async function listMyOrders(mode, limit, offset, status, keyword) {
   await requireSession()
-  const result = await cloud.database.rpc('list_my_orders', {
-    p_mode: mode === 'accept' ? 'accept' : 'publish',
+  const result = await cloud.database.rpc('list_my_orders_v2', {
+    p_mode: mode === 'admin' ? 'admin' : mode === 'accept' ? 'accept' : 'publish',
     p_limit: limit || 20,
     p_offset: offset || 0,
+    p_status: status || 'all',
+    p_keyword: String(keyword || '').trim(),
   })
   if (result.error) throw new Error(getErrorMessage(result.error))
   return Array.isArray(result.data) ? result.data : []
@@ -427,9 +429,8 @@ function acceptOrder(id) {
 
 // 接单员标记送达：必须带佐证照片（服务端会校验至少 1 张），只改状态不结算
 function completeOrder(id, images) {
-  if (!images || !images.length) {
-    return Promise.reject(new Error('请先上传送达佐证照片'))
-  }
+  // 是否强制照片由服务端 deliver_photo 开关判定。
+  images = images || []
   return cloud.database
     .rpc('complete_order', { p_order_id: id, p_images: images })
     .then(function (result) {
@@ -442,6 +443,10 @@ function completeOrder(id, images) {
       }
       return rows[0]
     })
+}
+
+function abandonOrder(id) {
+  return callOrderRpc('abandon_order', id)
 }
 
 function cancelOrder(id) {
@@ -1485,6 +1490,19 @@ async function llmChat(modelId, messages, onDelta, options) {
   return answer
 }
 
+async function supportRpc(name, args) {
+  await requireSession()
+  const result = await cloud.database.rpc(name, args || {})
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  return Array.isArray(result.data) ? result.data[0] : result.data
+}
+function beginSupportAi() { return supportRpc('begin_support_ai') }
+function finishSupportAi(id, success) { return supportRpc('finish_support_ai', { p_request_id: id, p_success: success }) }
+function getSupportUsage() { return supportRpc('support_ai_usage') }
+function rateSupportAnswer(id, faqId, helpful) {
+  return supportRpc('rate_support_answer', { p_request_id: id, p_faq_id: faqId, p_helpful: helpful })
+}
+
 module.exports = {
   getErrorMessage: getErrorMessage,
   formatTime: formatTime,
@@ -1497,6 +1515,10 @@ module.exports = {
   adminUpdateFaqSettings: adminUpdateFaqSettings,
   llmModels: llmModels,
   llmChat: llmChat,
+  beginSupportAi: beginSupportAi,
+  finishSupportAi: finishSupportAi,
+  getSupportUsage: getSupportUsage,
+  rateSupportAnswer: rateSupportAnswer,
   getSession: getSession,
   requireSession: requireSession,
   login: login,
@@ -1573,6 +1595,7 @@ module.exports = {
   completeOrder: completeOrder,
   confirmOrderDone: confirmOrderDone,
   cancelOrder: cancelOrder,
+  abandonOrder: abandonOrder,
   submitSettleFeedback: submitSettleFeedback,
   adminListFeedbacks: adminListFeedbacks,
   adminResolveFeedback: adminResolveFeedback,

@@ -576,3 +576,13 @@ _提交时间：2026-10-23 16:50:00_
   buildTitle 不再拿 description 当标题（避免取餐码公开到大厅）；大厅 quickAccept 加并发锁；
   FAQ 排序留空按 100。
 - 校验：四件套 + 冒烟全绿；npm test 37 项全过。
+
+## R42 · 仓库清理：移除第三方文件、重写历史（10-24 00:35）
+
+- 删除 `.agents/`（209 文件 2.2MB）、`skills-lock.json`、`tools/web-preview/`、
+  4 份第三方文档（FIX-REPORT / WEB-TEST / WECHAT-TEST / ADMIN-ACCESS）。
+- 保留 tests/（37 项回归）、tools 校验脚本、CI、package.json —— 这些是发布闸门。
+- 历史：R39 的三个第三方提交从 main 摘除，R39–R41 压成一条整合提交；
+  改写前后文件树 hash 一致（4d86e16…），代码零改动。R1–R38 历史与 5 个 tag 未受影响。
+- 同步清理 README 的 5 处死链、package.json 的 preview:web、project.config.json 的忽略项。
+- 校验：四件套 + 冒烟全绿；npm test 37 项全过。

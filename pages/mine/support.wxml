@@ -18,8 +18,8 @@
 
   <!-- 会话区自己在导航条下方起算：top 用行内样式给，机型不同状态栏高度不同 -->
   <view wx:else class="sup-body" style="top:{{navTotal}}px">
-    <!-- 临时：显示消息条数与滚动锚点状态，确认完删除 -->
-    <view class="sup-debug">消息 {{messages.length}} 条 · {{toView ? '已滚到锚点' : '未滚动'}}</view>
+    <!-- 临时：显示条数 / 每条高度 / 视口高度，定位完删除 -->
+    <view class="sup-debug">{{debugInfo || '测量中…'}}</view>
     <!-- 热门问题：第一次进来最容易发生的就是"不知道该问什么" -->
     <view wx:if="{{hot.length > 0}}" class="sup-hot">
       <view class="sup-hot-head" bindtap="toggleHot">

@@ -72,9 +72,13 @@
 }
 
 /* ---------- 会话区 ---------- */
+/* height: 0 是 scroll-view 在 flex 布局里的关键写法：
+   它默认 height: auto，会被内容撑开，flex-grow 就管不住它了 ——
+   高度算错，滚动位置跟着错，内容就会被滚出视野（这个坑踩了两轮）。
+   显式给 0 之后再靠 flex-grow 分配剩余空间，高度才由容器决定。 */
 .sup-scroll {
   flex: 1;
-  flex-basis: 0;
+  height: 0;
   min-height: 0;
   box-sizing: border-box;
   /* 内边距挪到内容层：滚动条贴边，量出来的高度就是内容真实高度 */

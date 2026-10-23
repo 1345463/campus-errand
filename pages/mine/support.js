@@ -198,6 +198,8 @@ Page({
     // 滚动锚点：滚到它 = 滚到底。值反复在「空串 ↔ chat-bottom」之间切，
     // 是因为 scroll-into-view 只在值变化时才触发一次滚动。
     toView: '',
+    // 临时调试信息：条数 / 每条高度 / 视口高度，定位完一并删掉
+    debugInfo: '',
 
     // 热门问题（点一下直接问）
     hot: [],
@@ -228,19 +230,28 @@ Page({
   },
 
   // 量一下会话区可视高度，用来判断「用户此刻是否贴在底部」。
-  // 拿不到就退回一个经验值，最多是自动滚动的判定不够准，不影响显示。
+  // 同时把每条消息的高度也抓出来 —— 排查「只显示一条消息」时，
+  // 光看条数没用，得看每条到底占了多高、有没有被挤出可视区。
   measureViewport: function () {
     const page = this
     if (typeof wx.createSelectorQuery !== 'function') return
     try {
-      const query = wx.createSelectorQuery()
-      query
-        .in(page)
-        .select('.sup-scroll')
-        .boundingClientRect(function (rect) {
-          if (rect && rect.height) page._viewport = rect.height
+      const query = wx.createSelectorQuery().in(page)
+      query.selectAll('.msg-row').boundingClientRect()
+      query.select('.sup-scroll').boundingClientRect()
+      query.exec(function (res) {
+        const rows = (res && res[0]) || []
+        const box = (res && res[1]) || {}
+        if (box.height) page._viewport = box.height
+        const heights = []
+        rows.forEach(function (row) {
+          heights.push(Math.round(row.height || 0))
         })
-        .exec()
+        page.setData({
+          debugInfo:
+            '条数 ' + rows.length + ' · 各条高[' + heights.join(',') + '] · 视口 ' + Math.round(box.height || 0),
+        })
+      })
     } catch (e) {
       /* 查询失败不用管 */
     }
@@ -407,6 +418,8 @@ Page({
     if (page.data.toView) page.setData({ toView: '' })
     setTimeout(function () {
       page.setData({ toView: 'chat-bottom' })
+      // 滚完再量一次：把每条消息的真实高度打到调试条上
+      page.measureViewport()
     }, 50)
   },
 

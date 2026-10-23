@@ -16,10 +16,12 @@
     <view class="btn-primary top-gap" bindtap="goBack">返回</view>
   </view>
 
-  <!-- 会话区自己在导航条下方起算：top 用行内样式给，机型不同状态栏高度不同 -->
-  <view wx:else class="sup-body" style="top:{{navTotal}}px">
-    <!-- 临时：显示条数 / 每条高度 / 视口高度，定位完删除 -->
-    <view class="sup-debug">{{debugInfo || '测量中…'}}</view>
+  <!-- 会话区：整页滚动，不再套 scroll-view（见 sup-body 的注释）。
+       底部留白用 JS 量出来的输入区高度给，避免最后一条消息被输入区压住。 -->
+  <view wx:else class="sup-body" style="padding-bottom:{{bodyPad}}px">
+    <!-- 临时：显示条数 / 每条高度 / 可滚距离，定位完删除。
+         固定住并让开导航条：放在文档流里一滚就看不见了，那还截什么图。 -->
+    <view class="sup-debug" style="top:{{navTotal}}px">{{debugInfo || '测量中…'}}</view>
     <!-- 热门问题：第一次进来最容易发生的就是"不知道该问什么" -->
     <view wx:if="{{hot.length > 0}}" class="sup-hot">
       <view class="sup-hot-head" bindtap="toggleHot">
@@ -42,40 +44,28 @@
       </scroll-view>
     </view>
 
-    <!-- 滚到底的做法：内容末尾放一个固定 id 的锚点，滚到它 == 滚到底。
-         之前试过 scroll-into-view 指向消息节点（节点还没渲染完就指，滚空）、
-         试过 scroll-top 塞大数（基础库会真的把内容顶上去，留一片空白），
-         都不如这个稳 —— 锚点永远存在、位置永远在最后。
+    <!-- 会话列表就是普通 view，滚动交给页面本身。
          消息行不加入场动画：每条蹦一下会让人觉得"晚出现"。 -->
-    <scroll-view
-      class="sup-scroll"
-      scroll-y="{{true}}"
-      scroll-into-view="{{toView}}"
-      scroll-with-animation="{{false}}"
-      bindscroll="onScroll"
-    >
-      <view class="sup-chat">
-        <view
-          wx:for="{{messages}}"
-          wx:for-item="msg"
-          wx:key="id"
-          class="msg-row {{msg.role === 'me' ? 'mine' : 'peer'}}"
-        >
-          <view class="msg-bubble {{msg.pending ? 'pending' : ''}}">{{msg.text}}</view>
-          <!-- 发送方与时间挤在同一行的小字里，少一行 = 少一道视觉分隔 -->
-          <view class="msg-tag {{msg.failed ? 'warn' : ''}}">
-            <text wx:if="{{msg.role === 'me'}}">我 · {{msg.timeText}}</text>
-            <text wx:elif="{{msg.kind === 'faq'}}">常见问题 · {{msg.timeText}} · 来自后台配置的固定回答</text>
-            <text wx:elif="{{msg.kind === 'tip'}}">助手 · {{msg.timeText}}</text>
-            <text wx:else>AI 助手 · {{msg.timeText}}</text>
-          </view>
+    <view class="sup-chat">
+      <view
+        wx:for="{{messages}}"
+        wx:for-item="msg"
+        wx:key="id"
+        class="msg-row {{msg.role === 'me' ? 'mine' : 'peer'}}"
+      >
+        <view class="msg-bubble {{msg.pending ? 'pending' : ''}}">{{msg.text}}</view>
+        <!-- 发送方与时间挤在同一行的小字里，少一行 = 少一道视觉分隔 -->
+        <view class="msg-tag {{msg.failed ? 'warn' : ''}}">
+          <text wx:if="{{msg.role === 'me'}}">我 · {{msg.timeText}}</text>
+          <text wx:elif="{{msg.kind === 'faq'}}">常见问题 · {{msg.timeText}} · 来自后台配置的固定回答</text>
+          <text wx:elif="{{msg.kind === 'tip'}}">助手 · {{msg.timeText}}</text>
+          <text wx:else>AI 助手 · {{msg.timeText}}</text>
         </view>
       </view>
-      <!-- 滚动锚点：高度给 1rpx，保证它有布局盒；id 固定，滚到它就等于滚到底 -->
-      <view id="chat-bottom" class="chat-bottom"></view>
-    </scroll-view>
+    </view>
 
-    <!-- 输入区：AI 可用时把今天剩几次写在旁边，用完了用户能自己看懂为什么没反应 -->
+    <!-- 输入区固定在底部：跟随整页滚动的输入框会在历史消息里上下跑。
+         AI 可用时把今天剩几次写在旁边，用完了用户能自己看懂为什么没反应。 -->
     <view class="sup-input">
       <view wx:if="{{aiReady}}" class="sup-quota">今日 AI 提问剩余 {{aiLeftText}} / {{aiLimit}} 次</view>
       <view wx:else class="sup-quota dim">AI 未开启，只回答后台配置的常见问题</view>
@@ -86,7 +76,9 @@
           placeholder="描述你的问题，尽量具体一点"
           value="{{input}}"
           bindinput="onInput"
+          bindfocus="onFocus"
           maxlength="{{200}}"
+          cursor-spacing="{{16}}"
           fixed="{{true}}"
           show-confirm-bar="{{false}}"
           auto-height="{{true}}"

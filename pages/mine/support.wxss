@@ -1,27 +1,25 @@
-/* 智能客服页：自定义导航 + 上会话下输入，整页不滚动，只有会话区滚动 */
+/* 智能客服页：自定义导航 + 会话区在文档流里、输入区固定在底部。
+   滚动交给页面本身（wx.pageScrollTo），不再用 scroll-view ——
+   scroll-view 在这个页面上踩了四轮坑：scroll-into-view 滚空、
+   scroll-top 塞大数会把内容顶上去留一片空白、flex 子项高度各基础库不一致、
+   height:auto 被内容撑开导致 flex-grow 失效。页面滚动没有这些问题，
+   而且超过最大可滚距离时框架会自己夹取，不会出现「滚过头」的空白。 */
 
 .support-page {
   position: relative;
-  height: 100vh;
-  overflow: hidden;
+  /* 用 min-height：内容少时铺满一屏，内容多时自然撑高，页面才能滚起来 */
+  min-height: 100vh;
   box-sizing: border-box;
-  /* .page 默认给了 60rpx 底部留白，这里整页撑满，留白交给会话区自己 */
+  /* .page 默认给了底部留白，这里由会话区自己算（要避开固定输入区） */
   padding-bottom: 0;
   background: var(--bg);
 }
 
-/* 会话区用绝对定位而不是 flex 撑高：
-   scroll-view 作为 flex 子项时，各基础库给出的高度并不一致，
-   量错高度 = 内容排不满 / 新气泡被排在可视区外。
-   绝对定位 + 明确的 top/bottom，高度永远等于「导航条以下到屏幕底部」。 */
+/* 会话区正常文档流，底部留白由 JS 按输入区实测高度填（见 support.js 的 bodyPad），
+   少了最后一条会被压住，多了又是用户眼里的一片空白 —— 所以必须量。 */
 .sup-body {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  box-sizing: border-box;
 }
 
 /* ---------- 热门问题 ---------- */
@@ -72,34 +70,23 @@
 }
 
 /* ---------- 会话区 ---------- */
-/* height: 0 是 scroll-view 在 flex 布局里的关键写法：
-   它默认 height: auto，会被内容撑开，flex-grow 就管不住它了 ——
-   高度算错，滚动位置跟着错，内容就会被滚出视野（这个坑踩了两轮）。
-   显式给 0 之后再靠 flex-grow 分配剩余空间，高度才由容器决定。 */
-.sup-scroll {
-  flex: 1;
-  height: 0;
-  min-height: 0;
-  box-sizing: border-box;
-  /* 内边距挪到内容层：滚动条贴边，量出来的高度就是内容真实高度 */
-}
-
-/* 会话内容层：消息从顶部往下排，别给它设 height / min-height / flex。
-   上一版试过 min-height:100% + justify-content:flex-end 想让消息贴底，
-   结果在 scroll-view 里 100% 没有可参照的高度，反而把布局搞乱了。 */
+/* 会话内容层：消息从顶部往下排。
+   别给它设 height / min-height / flex，更别用 justify-content:flex-end
+   想把消息顶到底部 —— 那需要容器有确定高度，页面滚动时没有这个参照，
+   结果就是消息被推到可视区外、上面留一大片空白。 */
 .sup-chat {
   padding: 20rpx 24rpx 24rpx;
   box-sizing: border-box;
 }
 
-/* 滚动锚点：必须有布局盒，否则 scroll-into-view 找不到目标 */
-.chat-bottom {
-  height: 1rpx;
-}
-
-/* 临时调试条，确认完删除 */
+/* 临时调试条，确认完删除。
+   用 fixed 而不是文档流：页面会滚到底，文档流里的调试条一滚就没影了。
+   top 由行内样式给（要避开自定义导航条）。 */
 .sup-debug {
-  flex: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 30;
   padding: 8rpx 24rpx;
   background: #FFF4E5;
   color: #B45309;
@@ -162,8 +149,15 @@
 }
 
 /* ---------- 输入区 ---------- */
+/* 固定在视口底部：放在文档流里会随历史消息一起滚走。
+   z-index 要低于转人工弹层（20），弹层才能盖住它。 */
 .sup-input {
-  flex: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 12;
+  box-sizing: border-box;
   padding: 14rpx 24rpx 24rpx;
   background: #FFFFFF;
   border-top: 1rpx solid var(--fill);

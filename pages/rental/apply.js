@@ -107,6 +107,15 @@ Page({
     api
       .requireSession()
       .then(function () {
+        // 租赁下单也是「找人对接」，先绑手机号（R44）；服务端 rental_requests 触发器兜底
+        return guard.requirePhone()
+      })
+      .then(function (phoneOk) {
+        if (!phoneOk) {
+          ui.hideLoading()
+          page.setData({ submitting: false })
+          return Promise.reject({ quiet: true })
+        }
         return api.submitRentalRequest({
           itemId: data.itemId,
           itemName: data.itemName,
@@ -132,6 +141,7 @@ Page({
       })
       .catch(function (error) {
         ui.hideLoading()
+        if (error && error.quiet) return
         const message = api.getErrorMessage(error)
         page.setData({ submitting: false, errorText: message })
         if (message.indexOf('登录') >= 0) page.setData({ needLogin: true })

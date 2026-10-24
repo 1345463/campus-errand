@@ -155,14 +155,22 @@ Page({
     }
 
     page.setData({ submitting: true })
-    api
-      .submitApplication({
-        real_name: realName,
-        id_no_masked: maskIdNo(idNo),
-        id_card_path: page.data.idCard || null,
-        student_card_path: page.data.studentCard,
-        detected_name: realName,
-        detected_no: maskIdNo(idNo),
+    // 认证是为了接单，接单前必须先有手机号（R44）；服务端 runner_applications 触发器也会拦
+    guard
+      .requirePhone()
+      .then(function (phoneOk) {
+        if (!phoneOk) {
+          page.setData({ submitting: false })
+          return Promise.reject({ quiet: true })
+        }
+        return api.submitApplication({
+          real_name: realName,
+          id_no_masked: maskIdNo(idNo),
+          id_card_path: page.data.idCard || null,
+          student_card_path: page.data.studentCard,
+          detected_name: realName,
+          detected_no: maskIdNo(idNo),
+        })
       })
       .then(function () {
         return api.markCertPending()
@@ -175,6 +183,7 @@ Page({
         }, 900)
       })
       .catch(function (error) {
+        if (error && error.quiet) return
         page.setData({ submitting: false })
         if (error && error.needLogin) {
           guard.ensureLogin()

@@ -628,3 +628,26 @@ _提交时间：2026-10-23 16:50:00_
 - 能力概览改为按角色（发布方 / 接单员 / 管理员 / 所有人）描述。
 - 铁律补一条：RPC 返回类型必须结构化（R43 踩坑）；补 WXSS 全局 class 撞车提醒。
 - 目录结构、数据库、校验、部署、Git 历史同步到最新（26 个迁移脚本 / 22 个开关 / 58 次提交 / 6 个 tag / 1.35 MB）。
+
+## R44 · 手机号闸门 + 账号注销（6 个月保留期）（10-24 22:10）
+
+- **手机号绑定**：新增 `sql/add-phone-and-deletion.sql`
+  - `profile_phones(owner_id PK, phone UNIQUE)`，无 policy，只给 SECURITY DEFINER 函数访问
+  - `bind_my_phone`：格式 `^1[3-9]\d{9}$` + 全站唯一 + 同账号 24 小时只能改一次
+  - `my_phone_state` / `has_phone` / `assert_phone_bound`
+- **服务端闸门**（浏览不拦，发单/接单/认证/租赁/看联系方式才拦）：
+  - 触发器 `orders_assert_phone`（INSERT 订单 / runner_id 由空变非空）
+  - 触发器 `runner_applications_assert_phone` / `rental_requests_assert_phone`
+  - `get_order_detail` 对未绑定者把 `contact` 置空
+  - 豁免：无会话（直连迁移）、`admin_is_any()`（管理员批量发单）
+- **注销**：`profiles.deleted_at` + `account_deletions`（purge_after = 6 个月）
+  - 前置校验：无未完成订单、钱包余额为 0、无后台权限
+  - `my_account_state` / `request_account_deletion` / `restore_my_account`
+  - `purge_account_data`：清除昵称/头像/手机号/证件照/联系方式，订单去标识化
+  - 清理时机：登录时 `purge_my_account_if_due` + 超管工作台 `admin_purge_expired_deletions`
+- **前端**：新增 `pages/mine/bind-phone`（短信验证码）；`guard.requirePhone()` 在发单/接单/
+  认证/租赁/详情接单处引导绑定；设置页新增「手机号」与「注销账号」（后果逐条列清 + 勾选确认）；
+  登录后检测到注销状态弹「是否使用原账号」，选不使用则退出并禁止注册新账号。
+- **协议**：`utils/agreement.js` 版本 `2026.10-v1 → v2`，新增「九、手机号绑定与账号注销（重要）」。
+- **测试**：新增 `tests/phone-deletion.test.js` 11 项；`npm test` 48 项全过；四件套全绿；
+  上传包 1.38 MB / 2.00 MB。

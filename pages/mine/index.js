@@ -194,6 +194,65 @@ Page({
     if (session && profile && profile.nickname && profile.agreed_version === agreement.VERSION) {
       require('../../utils/login-return').resume()
     }
+
+    // R44：登录成功后检查一次账号状态（是否处于「已注销但还在 6 个月保留期」）
+    if (uid && this._accountCheckedFor !== uid) {
+      this._accountCheckedFor = uid
+      this.checkAccountState()
+    }
+  },
+
+  // 注销后 6 个月内重新登录：让用户选「恢复原账号」还是「不使用」。
+  // 选「不使用」必须退出登录 —— 否则用户换个身份重新进来就等于洗白成新账号，
+  // 注销这件事就没有意义了。
+  checkAccountState: function () {
+    const page = this
+    api
+      .purgeMyAccountIfDue()
+      .catch(function () { return false })
+      .then(function () {
+        return api.getAccountState()
+      })
+      .then(function (state) {
+        if (!state || !state.deleted) return null
+        if (!state.canRestore) return null
+        if (page._restorePrompted) return null
+        page._restorePrompted = true
+
+        const until = state.purgeAfter ? api.formatTime(state.purgeAfter) : ''
+        return ui
+          .confirm({
+            title: '是否使用原账号？',
+            content:
+              '这个微信号之前注销过账号。数据会保留到 ' +
+              (until || '6 个月期满') +
+              '，现在恢复可以接着用之前的订单与积分；选择「不使用」则在保留期内不能注册新账号。',
+            confirmText: '恢复原账号',
+            cancelText: '不使用',
+            defaultConfirm: true,
+          })
+          .then(function (ok) {
+            if (ok) {
+              return api.restoreMyAccount().then(function () {
+                page._restorePrompted = false
+                ui.toast({ title: '已恢复原账号', icon: 'success' })
+                page.refresh()
+                return null
+              })
+            }
+            // 不使用：退出登录并阻止自动登录，保留期内不再放行
+            return api.logout().then(function () {
+              page._restorePrompted = false
+              page._accountCheckedFor = ''
+              ui.setStorage('manualLogout', true)
+              page.resetView()
+              ui.toast({ title: '6 个月内不能注册新账号', icon: 'none', duration: 2600 })
+            })
+          })
+      })
+      .catch(function (error) {
+        console.warn('[mine] account state failed', api.getErrorMessage(error))
+      })
   },
 
   // 没有用户名 → 直接进资料页补全，填完才放回来（见 pages/mine/profile 的 force 模式）

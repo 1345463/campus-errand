@@ -4,6 +4,7 @@ const services = require('../../utils/services')
 const campus = require('../../utils/campus')
 const flags = require('../../utils/flags')
 const motion = require('../../utils/motion')
+const guard = require('../../utils/guard')
 
 // 任务大厅：接单员浏览并接单的主战场。
 // 任务列表只在这个页面出现（首页只留入口），避免同一个列表在两处各维护一份。
@@ -448,27 +449,32 @@ Page({
       })
       .then(function (ok) {
         if (!ok) return null
-        page._accepting = true
-        ui.loading('接单中')
-        return api
-          .acceptOrder(id)
-          .then(function () {
-            ui.hideLoading()
-            motion.hapticStrong()
-            ui.toast({ title: '接单成功，快去完成吧', icon: 'success' })
-            return page.loadHall(true)
-          })
-          .catch(function (error) {
-            ui.hideLoading()
-            motion.haptic('error')
-            ui.toast({ title: api.getErrorMessage(error), icon: 'none' })
-            // 状态可能已经变了，顺手刷一下列表
-            return page.loadHall(true)
-          })
-          .then(function (result) {
-            page._accepting = false
-            return result
-          })
+        // 接单前必须有手机号（R44）：没绑定的用户拿不到发布方联系方式，
+        // 接了也做不了事。服务端 accept 时还有触发器兜底。
+        return guard.requirePhone().then(function (phoneOk) {
+          if (!phoneOk) return null
+          page._accepting = true
+          ui.loading('接单中')
+          return api
+            .acceptOrder(id)
+            .then(function () {
+              ui.hideLoading()
+              motion.hapticStrong()
+              ui.toast({ title: '接单成功，快去完成吧', icon: 'success' })
+              return page.loadHall(true)
+            })
+            .catch(function (error) {
+              ui.hideLoading()
+              motion.haptic('error')
+              ui.toast({ title: api.getErrorMessage(error), icon: 'none' })
+              // 状态可能已经变了，顺手刷一下列表
+              return page.loadHall(true)
+            })
+            .then(function (result) {
+              page._accepting = false
+              return result
+            })
+        })
       })
   },
 

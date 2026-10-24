@@ -59,7 +59,8 @@
     <view class="detail-row {{canSeeRunnerName && order.runner_name ? '' : 'last'}}">
       <view class="detail-label">联系方式</view>
       <view class="detail-value">
-        <text wx:if="{{canSeeContact}}">{{order.contact}}</text>
+        <text wx:if="{{canSeeContact && phoneBound}}">{{order.contact}}</text>
+        <view wx:elif="{{canSeeContact}}" class="hidden-tip" bindtap="goBindPhone">绑定手机号后查看</view>
         <text wx:else class="hidden-tip">接单后可见</text>
       </view>
     </view>

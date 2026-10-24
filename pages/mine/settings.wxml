@@ -47,10 +47,24 @@
       <text class="section-title">账号与权限</text>
     </view>
     <view class="menu-list">
-      <view class="menu-item last pressable" hover-class="press" hover-stay-time="100" bindtap="onAdminTap">
+      <view class="menu-item pressable" hover-class="press" hover-stay-time="100" bindtap="goBindPhone">
+        <text class="menu-icon">📱</text>
+        <text class="menu-label">手机号</text>
+        <text class="menu-value">{{phoneBound ? phoneMask : '未绑定'}}</text>
+        <text class="menu-arrow">></text>
+      </view>
+      <view class="menu-item pressable" hover-class="press" hover-stay-time="100" bindtap="onAdminTap">
         <text class="menu-icon">🛡️</text>
         <text class="menu-label">后台密码入口</text>
         <text class="menu-value">{{isAdmin ? '进入工作台' : logged ? '输入密码' : '请先登录'}}</text>
+        <text class="menu-arrow">></text>
+      </view>
+      <view class="menu-item last pressable" hover-class="press" hover-stay-time="100" bindtap="onDeleteTap">
+        <text class="menu-icon">🗑️</text>
+        <view class="menu-main">
+          <text class="menu-label menu-danger">注销账号</text>
+          <text class="menu-sub">6 个月内可恢复，期内不删除数据</text>
+        </view>
         <text class="menu-arrow">></text>
       </view>
     </view>
@@ -97,6 +111,42 @@
       <view class="about-meta">{{school}}</view>
       <view class="about-meta">版本 {{appVersion}}</view>
       <view class="about-notice">{{notice}}</view>
+    </view>
+  </view>
+
+  <!-- ===== 销号确认弹窗（重要） ===== -->
+  <view wx:if="{{deleteOpen}}" class="del-mask" catchtap="closeDelete">
+    <view class="del-sheet" catchtap="noop">
+      <view class="del-title">注销账号</view>
+      <view class="del-body">
+        <view class="del-line">· 注销后立即退出登录，账号不能继续使用；</view>
+        <view class="del-line">· 数据保留 <text class="del-strong">6 个月</text> 用于纠纷追溯，期内重新登录可以「恢复原账号」；</view>
+        <view class="del-line">· 6 个月内如选择<text class="del-strong">不恢复</text>，将不能用这个微信注册新账号；</view>
+        <view class="del-line">· 满 6 个月后自动清除昵称、头像、手机号、证件照与联系方式，订单只保留去标识化记录；</view>
+        <view class="del-line">· 注销前需结清钱包余额、处理完未完成订单、并已收回后台权限。</view>
+      </view>
+
+      <view class="del-field">
+        <input
+          class="field-input"
+          placeholder="注销原因（选填，便于我们改进）"
+          value="{{deleteReason}}"
+          bindinput="onDeleteReason"
+          maxlength="100"
+        />
+      </view>
+
+      <view class="del-agree pressable" hover-class="press" bindtap="toggleDeleteAgree">
+        <view class="del-box {{deleteAgreed ? 'on' : ''}}">{{deleteAgreed ? '✓' : ''}}</view>
+        <text class="del-agree-text">我已阅读并理解以上后果，确认注销账号</text>
+      </view>
+
+      <view wx:if="{{deleteError}}" class="del-error">{{deleteError}}</view>
+
+      <view class="del-actions">
+        <view class="del-btn ghost pressable" hover-class="press" bindtap="closeDelete">先不注销</view>
+        <view class="del-btn danger pressable {{(!deleteAgreed || deleting) ? 'disabled' : ''}}" hover-class="press" bindtap="confirmDelete">{{deleting ? '提交中…' : '确认注销'}}</view>
+      </view>
     </view>
   </view>
 </view>

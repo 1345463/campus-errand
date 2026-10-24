@@ -114,6 +114,8 @@ Page({
     isOwner: false,
     isRunner: false,
     canSeeContact: false,
+    // 是否已绑定手机号：联系方式要绑定后才展示（R44）
+    phoneBound: false,
     expectTimeText: '',
     genderText: '',
     tagsText: '',
@@ -208,8 +210,10 @@ Page({
         console.error('[detail] order_relation failed', api.getErrorMessage(error))
         return 'none'
       })
+      // 手机号绑定状态只影响「联系方式」这一块的展示，失败就当未绑定处理
+      const phonePromise = api.getMyPhoneState().catch(function () { return { bound: false } })
       return Promise.all([Promise.resolve(session), api.getOrderDetail(id), api.getProfile().catch(function () { return null }),
-      api.isOrderHidden(id), relationPromise])
+      api.isOrderHidden(id), relationPromise, phonePromise])
     }).then(function (result) {
         if (!result) return null
         const session = result[0]
@@ -230,6 +234,7 @@ Page({
           return null
         }
         const isAdmin = !!(profile && profile.is_admin)
+        page.setData({ phoneBound: !!(result[5] && result[5].bound) })
 
         if (result[3]) {
           page.setData({ hidden: true, order: {}, images: [], primary: null, canReport: false })
@@ -613,11 +618,26 @@ Page({
           ui.toast({ title: '请先完成接单员认证', icon: 'none' })
           return null
         }
-        return page.runRpc('accept')
+        return guard.requirePhone().then(function (phoneOk) {
+          if (!phoneOk) {
+            page.setData({ busy: false })
+            return null
+          }
+          return page.runRpc('accept')
+        })
       })
       .catch(function (error) {
         page.fail(error)
       })
+  },
+
+  goBindPhone: function () {
+    wx.navigateTo({
+      url: '/pages/mine/bind-phone?from=gate',
+      fail: function () {
+        wx.switchTab({ url: '/pages/mine/index' })
+      },
+    })
   },
 
   // 接单员：满 48 小时未确认时申请管理员核查

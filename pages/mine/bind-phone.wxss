@@ -1,0 +1,41 @@
+.bp-state {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+  border-radius: 16rpx;
+  background: #f6f7fb;
+}
+
+.bp-phone {
+  font-size: 34rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+  color: #1f2937;
+}
+
+.bp-intro {
+  margin-bottom: 16rpx;
+}
+
+.bp-code-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.bp-code-input {
+  flex: 1;
+}
+
+.bp-error {
+  margin: 8rpx 0 16rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #d93025;
+}
+
+.bp-foot {
+  margin-top: 20rpx;
+}

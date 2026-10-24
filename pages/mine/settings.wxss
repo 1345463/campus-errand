@@ -89,3 +89,127 @@
   line-height: 1.7;
   color: var(--t3);
 }
+
+/* 注销账号：这一行是破坏性操作，文字用 danger 色，别和普通入口一个观感 */
+.menu-danger {
+  color: var(--danger);
+}
+
+/* ===== 销号确认弹窗：底部抽屉式，必须勾选才可提交 ===== */
+.del-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(17, 24, 39, 0.55);
+}
+
+.del-sheet {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 32rpx 28rpx 40rpx;
+  border-radius: 28rpx 28rpx 0 0;
+  background: var(--card);
+}
+
+.del-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: var(--t1);
+  margin-bottom: 20rpx;
+}
+
+.del-body {
+  padding: 20rpx;
+  border-radius: var(--r);
+  background: var(--fill);
+}
+
+.del-line {
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: var(--t2);
+  margin-bottom: 8rpx;
+}
+
+.del-strong {
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.del-field {
+  margin-top: 20rpx;
+}
+
+.del-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 14rpx;
+  margin-top: 24rpx;
+}
+
+.del-box {
+  width: 34rpx;
+  height: 34rpx;
+  flex: none;
+  margin-top: 4rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid var(--line);
+  background: var(--card);
+  color: #ffffff;
+  font-size: 24rpx;
+  line-height: 30rpx;
+  text-align: center;
+}
+
+.del-box.on {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+.del-agree-text {
+  flex: 1;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: var(--t2);
+}
+
+.del-error {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: var(--danger);
+}
+
+.del-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 28rpx;
+}
+
+.del-btn {
+  flex: 1;
+  height: 88rpx;
+  border-radius: var(--r-pill);
+  font-size: 30rpx;
+  line-height: 88rpx;
+  text-align: center;
+}
+
+.del-btn.ghost {
+  color: var(--t2);
+  background: var(--fill);
+}
+
+.del-btn.danger {
+  color: #ffffff;
+  background: var(--danger);
+}
+
+.del-btn.disabled {
+  opacity: 0.5;
+}

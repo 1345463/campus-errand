@@ -6,6 +6,7 @@
     "pages/order/create",
     "pages/order/detail",
     "pages/mine/address",
+    "pages/mine/bind-phone",
     "pages/mine/apply",
     "pages/mine/points",
     "pages/mine/wallet",

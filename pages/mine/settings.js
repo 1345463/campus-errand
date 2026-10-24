@@ -19,6 +19,14 @@ Page({
     adminCode: '',
     adminSaving: false,
     adminError: '',
+    // 手机号与注销（R44）
+    phoneBound: false,
+    phoneMask: '',
+    deleteOpen: false,
+    deleteAgreed: false,
+    deleteReason: '',
+    deleting: false,
+    deleteError: '',
 
     // 关于
     agreementVersionText: '未签署',
@@ -64,6 +72,15 @@ Page({
             ? '已签署 ' + profile.agreed_version
             : '未签署',
         })
+        return api.getMyPhoneState().catch(function () { return { bound: false } })
+      })
+      .then(function (state) {
+        if (!state) return
+        const value = String(state.phone || '')
+        page.setData({
+          phoneBound: !!state.bound,
+          phoneMask: value ? value.slice(0, 3) + '****' + value.slice(7) : '',
+        })
       })
       .catch(function (error) {
         // 设置页拉不到资料不该把整页卡住，只在控制台留个痕迹，
@@ -97,6 +114,66 @@ Page({
 
   goAgreement: function () {
     this.goPage('/pages/agreement/index')
+  },
+
+  goBindPhone: function () {
+    this.goPage('/pages/mine/bind-phone')
+  },
+
+  // ---- 注销账号（R44）----
+  onDeleteTap: function () {
+    if (!this.data.logged) {
+      ui.toast({ title: '请先登录', icon: 'none' })
+      return
+    }
+    motion.haptic('light')
+    this.setData({ deleteOpen: true, deleteAgreed: false, deleteError: '', deleteReason: '' })
+  },
+
+  // 弹窗内部点击不该冒泡到遮罩，否则点输入框就把弹窗关了
+  noop: function () {},
+
+  closeDelete: function () {
+    if (this.data.deleting) return
+    this.setData({ deleteOpen: false })
+  },
+
+  onDeleteReason: function (event) {
+    this.setData({ deleteReason: event.detail.value })
+  },
+
+  toggleDeleteAgree: function () {
+    motion.haptic('light')
+    this.setData({ deleteAgreed: !this.data.deleteAgreed, deleteError: '' })
+  },
+
+  confirmDelete: function () {
+    const page = this
+    if (page.data.deleting) return
+    if (!page.data.deleteAgreed) {
+      page.setData({ deleteError: '请先勾选「我已阅读并理解以上后果」' })
+      return
+    }
+    page.setData({ deleting: true, deleteError: '' })
+    ui.loading({ title: '注销中', mask: true })
+    api
+      .requestAccountDeletion(page.data.deleteReason)
+      .then(function () {
+        ui.hideLoading()
+        page.setData({ deleting: false, deleteOpen: false })
+        ui.toast({ title: '账号已注销，6 个月内可恢复', icon: 'none', duration: 2600 })
+        // 注销后立刻退出登录，避免停留在「已注销但还能操作」的状态
+        return api.logout()
+      })
+      .then(function () {
+        setTimeout(function () {
+          wx.switchTab({ url: '/pages/mine/index' })
+        }, 900)
+      })
+      .catch(function (error) {
+        ui.hideLoading()
+        page.setData({ deleting: false, deleteError: api.getErrorMessage(error) })
+      })
   },
 
   // 减弱动效：关掉后全站循环动画停掉、入场动画只保留淡入

@@ -500,7 +500,15 @@ Page({
     guard
       .ensureLogin()
       .then(function (ok) {
-        if (!ok) {
+        if (!ok) return 'skip'
+        // 发单前必须有手机号（R44）。服务端 orders 触发器也会拦，
+        // 这里提前拦是为了不让用户填完一整张表单才被拒。
+        return guard.requirePhone().then(function (phoneOk) {
+          return phoneOk ? 'ok' : 'skip'
+        })
+      })
+      .then(function (stage) {
+        if (stage !== 'ok') {
           page.setData({ submitting: false })
           return null
         }

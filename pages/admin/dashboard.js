@@ -155,6 +155,9 @@ Page({
   load: function () {
     const page = this
     page.setData({ loading: true, errorText: '' })
+    // 顺手清理「注销满 6 个月」的账号：本项目没有定时任务，挂在这里兜底。
+    // 非 super 会被服务端拒掉，失败直接忽略，不能因此影响工作台。
+    api.adminPurgeExpiredDeletions().catch(function () {})
     return api
       .adminDashboardStats()
       .then(function (row) {

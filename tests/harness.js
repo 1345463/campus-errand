@@ -10,8 +10,12 @@ function page(file, mocks = {}, globals = {}) {
     setStorage: (key,value) => storage.set(key, JSON.parse(JSON.stringify(value))), removeStorage: key => storage.delete(key) }
   const api = { getErrorMessage: e => e.message || String(e), formatTime: x => x || '',
     getSession: () => Promise.resolve({user:{id:'2110332344891084800'}}), getProfile: () => Promise.resolve({role:'runner'}),
-    getSupportUsage: () => Promise.resolve({used:0,daily_limit:20}), ...mocks.api }
-  const deps = { ui: {...ui,...mocks.ui}, api, guard: {toastError(){}}, flags: {ensure:()=>Promise.resolve(),on:()=>true},
+    getSupportUsage: () => Promise.resolve({used:0,daily_limit:20}),
+    // 默认视为「已绑定手机号」；要测拦截的用例自己覆盖成 {bound:false}
+    getMyPhoneState: () => Promise.resolve({bound:true,phone:'13800138000'}),
+    ...mocks.api }
+  const deps = { ui: {...ui,...mocks.ui}, api, guard: {toastError(){}, requirePhone:()=>Promise.resolve(true),
+      ensureLogin:()=>Promise.resolve(true), ensureNickname:()=>false}, flags: {ensure:()=>Promise.resolve(),on:()=>true},
     services: {SERVICES:[],STATUS_TEXT:{},findService:()=>null}, campus:{BUILDINGS:[],FLOORS:[]},
     motion: {systemInfo:()=>({windowHeight:600,navTotalHeight:64}),stagger:x=>x,rootClass:()=>'',haptic(){}},
     moderation:{normalize:x=>String(x||'').toLowerCase(),scanText:()=>null,load:()=>Promise.resolve()}, ...mocks }

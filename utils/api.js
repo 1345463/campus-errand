@@ -1550,6 +1550,105 @@ function rateSupportAnswer(id, faqId, helpful) {
   return supportRpc('rate_support_answer', { p_request_id: id, p_faq_id: faqId, p_helpful: helpful })
 }
 
+// ---- 手机号绑定（R44）----
+//
+// 产品规则：浏览大厅不拦，但**发单 / 接单 / 查看联系方式**必须先绑手机号。
+// 真正拦截在服务端（orders 触发器 + get_order_detail 脱敏），这里只给页面
+// 一个「要不要先引导去绑定」的判断，避免用户填完表单才被拒。
+
+async function getMyPhoneState() {
+  await requireSession()
+  const result = await cloud.database.rpc('my_phone_state', {})
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  const rows = Array.isArray(result.data) ? result.data : []
+  const row = rows[0] || {}
+  return {
+    bound: row.bound === true,
+    phone: row.phone || '',
+    verifiedAt: row.verified_at || '',
+    cooldownUntil: row.cooldown_until || '',
+  }
+}
+
+// 只验证手机号，**不建档案**。
+// 验证码必须由 auth provider 校验，所以绑定过程会短暂切换成手机号身份；
+// 验完立刻用 wx.login 切回微信身份，因此这里绝不能走 ensureProfile ——
+// 否则会给「手机号身份」凭空建一条空档案，后续一键登录会撞到它。
+async function verifyPhoneOnly(payload) {
+  const completed = await cloud.auth.verifyOtp({
+    phone: payload.phone,
+    verificationId: payload.verificationId,
+    isExistingUser: payload.isExistingUser,
+    token: payload.token,
+    password: payload.isExistingUser ? undefined : payload.password,
+  })
+  if (completed.error) throw new Error(getErrorMessage(completed.error))
+  if (!completed.data) throw new Error('验证码校验失败，请重试')
+  return true
+}
+
+async function bindMyPhone(phone) {
+  const session = await requireSession()
+  const result = await cloud.database.rpc('bind_my_phone', {
+    p_phone: String(phone || '').trim(),
+  })
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  // 绑定完顺手把手机号写进当前订单的联系方式？不做 —— 由用户在地址簿里维护。
+  return { phone: pickText(result, 'phone'), uid: session.user && session.user.id }
+}
+
+// ---- 账号注销（R44，6 个月保留期）----
+
+async function getAccountState() {
+  await requireSession()
+  const result = await cloud.database.rpc('my_account_state', {})
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  const rows = Array.isArray(result.data) ? result.data : []
+  const row = rows[0] || {}
+  return {
+    deleted: row.deleted === true,
+    deletedAt: row.deleted_at || '',
+    purgeAfter: row.purge_after || '',
+    canRestore: row.can_restore === true,
+    purged: row.purged === true,
+  }
+}
+
+// 满 6 个月的账号在登录时顺手清掉 PII。返回 purged=true 说明已经不是「原账号」了。
+async function purgeMyAccountIfDue() {
+  const result = await cloud.database.rpc('purge_my_account_if_due', {})
+  if (result.error) return false
+  const rows = Array.isArray(result.data) ? result.data : []
+  return !!(rows[0] && rows[0].purged === true)
+}
+
+async function requestAccountDeletion(reason) {
+  await requireSession()
+  const result = await cloud.database.rpc('request_account_deletion', {
+    p_reason: String(reason || ''),
+  })
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  const rows = Array.isArray(result.data) ? result.data : []
+  return { deleted: !!(rows[0] && rows[0].deleted), purgeAfter: rows[0] ? rows[0].purge_after : '' }
+}
+
+async function restoreMyAccount() {
+  await requireSession()
+  const result = await cloud.database.rpc('restore_my_account', {})
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  const rows = Array.isArray(result.data) ? result.data : []
+  return !!(rows[0] && rows[0].restored)
+}
+
+// 后台兜底清理：只有 super 能跑。本项目没有定时任务，所以挂在工作台打开时顺手跑一次，
+// 否则「注销满 6 个月」的账号再也没人登录，数据就一直留着。
+async function adminPurgeExpiredDeletions() {
+  const result = await cloud.database.rpc('admin_purge_expired_deletions', {})
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  const rows = Array.isArray(result.data) ? result.data : []
+  return rows[0] ? Number(rows[0].purged_count) || 0 : 0
+}
+
 module.exports = {
   getErrorMessage: getErrorMessage,
   formatTime: formatTime,
@@ -1576,6 +1675,14 @@ module.exports = {
   listAllOrders: listAllOrders,
   logout: logout,
   getProfile: getProfile,
+  getMyPhoneState: getMyPhoneState,
+  verifyPhoneOnly: verifyPhoneOnly,
+  bindMyPhone: bindMyPhone,
+  getAccountState: getAccountState,
+  purgeMyAccountIfDue: purgeMyAccountIfDue,
+  requestAccountDeletion: requestAccountDeletion,
+  restoreMyAccount: restoreMyAccount,
+  adminPurgeExpiredDeletions: adminPurgeExpiredDeletions,
   restoreSession: restoreSession,
   updateProfile: updateProfile,
   updateMyProfile: updateMyProfile,

@@ -58,8 +58,43 @@ function ensureNickname(profile) {
   return true
 }
 
+// 发单 / 接单 / 查看联系方式前必须先绑定手机号（R44）。
+// 服务端有触发器与详情脱敏兜底，这里只负责在用户动手之前拦下来并给出下一步，
+// 避免填完一整张表单才被拒。
+function requirePhone() {
+  return api
+    .getMyPhoneState()
+    .then(function (state) {
+      if (state && state.bound) return true
+      return ui
+        .confirm({
+          title: '需要先绑定手机号',
+          content: '发单、接单和查看联系方式需要绑定手机号，方便对方联系你。只浏览任务不用绑定。',
+          confirmText: '去绑定',
+          cancelText: '再看看',
+        })
+        .then(function (ok) {
+          if (ok) {
+            wx.navigateTo({
+              url: '/pages/mine/bind-phone?from=gate',
+              fail: function () {
+                wx.switchTab({ url: '/pages/mine/index' })
+              },
+            })
+          }
+          return false
+        })
+    })
+    .catch(function (error) {
+      console.error('[guard] phone state failed', api.getErrorMessage(error))
+      ui.toast({ title: '校验手机号状态失败，请稍后重试', icon: 'none' })
+      return false
+    })
+}
+
 module.exports = {
   ensureLogin: ensureLogin,
+  requirePhone: requirePhone,
   toastError: toastError,
   nicknameMissing: nicknameMissing,
   ensureNickname: ensureNickname,

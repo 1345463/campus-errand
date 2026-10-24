@@ -276,3 +276,33 @@ test('FAQ 新增/编辑会打开表单并滚到表单位置', async () => {
   assert.equal(scrolled,120+800-12)
   h.cleanup()
 })
+
+test('工作台待办卡片按三列分行，订单指标单独一行两张宽卡', async () => {
+  const stats = {
+    pending_certs: 0, pending_rentals: 0, pending_reports: 0,
+    pending_settles: 0, pending_feedbacks: 0, today_orders: 1, total_orders: 64,
+    can_review: true, can_rental: true, can_settle: true, can_support: true, can_super: true,
+  }
+  const h = page('pages/admin/dashboard.js', {
+    api: {
+      adminDashboardStats: () => Promise.resolve(stats),
+      adminPurgeExpiredDeletions: () => Promise.resolve(0),
+    },
+    perms: { has: () => true, load: () => Promise.resolve([]), anyAdmin: () => true },
+    flags: { ensure: () => Promise.resolve(), on: () => true },
+  })
+  const p = h.instance
+  await p.load()
+
+  const rows = p.data.cardRows
+  // 五张待办排 3+2，订单指标再单独一行两张 —— 不能出现 [2,1,2,1,1] 这种折行
+  // 页面代码跑在 vm 上下文里，数组原型和测试不同，用字符串比对避免跨 realm 误判
+  assert.equal(rows.map((r) => r.items.length).join(','), '3,2,2')
+  assert.equal(rows[0].wide, false)
+  assert.equal(rows[1].wide, false)
+  assert.equal(rows[2].wide, true)
+  assert.equal(rows[2].items.map((x) => x.label).join(','), '今日订单,累计订单')
+  // 每行最后一张要去掉右外边距，否则右侧会顶出卡片
+  rows.forEach((r) => assert.equal(r.items[r.items.length - 1].isLast, true))
+  h.cleanup()
+})

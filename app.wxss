@@ -636,13 +636,22 @@ page {
 .chip-shortcut.active {
   border-color: var(--brand-100);
 }
-/* 订单卡片底部操作：删除 / 恢复 */
+/* 订单卡片底部操作：删除 / 恢复。
+   两个按钮一左一右，且都不许换行 —— 之前只写了 display:flex，
+   「再点一次确认删除」变长后两个按钮会各自占一行，看着像错位。 */
 .card-actions {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
   margin-top: 18rpx;
   padding-top: 16rpx;
   border-top: 1rpx solid var(--fill);
+}
+.card-actions .link-danger,
+.card-actions .link-ghost {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .link-danger {
   color: var(--brand-600);

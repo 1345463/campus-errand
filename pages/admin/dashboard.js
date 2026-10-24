@@ -48,15 +48,24 @@ function matchPerm(def) {
   return false
 }
 
-// 卡片按每行 3 个分组渲染：app.wxss 的 .quick-row 不换行，
-// 六个 flex:1 挤在一行会被压成一条，分成两行才是网格的样子
+// 卡片分组渲染：.quick-row 不换行，靠子项固定宽度铺成网格。
+// 待办类每行 3 张（五张待办排成 3+2）；「今日/累计订单」是全局数字，
+// 和待办不是一个量纲，单独排一行两张宽卡 —— 否则 7 张按三列排会剩两个空位，
+// 看着像串行（用户反馈「待办概览留空」就是这个）。
+function isWideCard(def) {
+  return def.perm === 'can_super'
+}
+
 function buildCards(stats) {
   const rows = []
   let row = null
   CARD_DEFS.forEach(function (def) {
     if (stats[def.perm] !== true) return
-    if (!row || row.items.length >= 3) {
-      row = { key: 'row' + rows.length, items: [] }
+    const wide = isWideCard(def)
+    // 宽卡与普通卡不混排；普通卡每行 3 张，宽卡每行 2 张
+    const cap = wide ? 2 : 3
+    if (!row || row.wide !== wide || row.items.length >= cap) {
+      row = { key: 'row' + rows.length, wide: wide, items: [] }
       rows.push(row)
     }
     const value = Number(stats[def.key]) || 0
@@ -65,6 +74,7 @@ function buildCards(stats) {
       label: def.label,
       value: value,
       url: def.url,
+      wide: wide,
       // 数字为 0 的置灰，但仍然可以点进去看空列表
       dim: value === 0,
       isLast: false,

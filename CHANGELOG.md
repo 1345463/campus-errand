@@ -664,3 +664,17 @@ _提交时间：2026-10-23 16:50:00_
   安全性不变：越权读图边界仍在 `get_order_asset`（要求图片属于本单参与方）。
 - **测试**：新增 `tests/order-assets.test.js` 5 项；`npm test` 54 项全过。
 - **真库验证**：订单 76 `abandon=ok` / `complete=ok rows=1`（事务回滚，未改数据）。
+
+## R46 · 两处布局错位（10-25 00:10）
+
+- **订单卡片删除确认换行**：`.card-actions` 只写了 `display:flex`，没有对齐与换行策略，
+  「再点一次确认删除」+「取消」各占一行。改为 `space-between` + `nowrap`，
+  子项 `flex: 0 0 auto` + `white-space: nowrap`。
+- **待办概览每行只显示两张、右侧留空**：`.quick-item` 宽度 `calc(33.3333% - 11rpx)`，
+  三张合计 `99.9999% - 1rpx`，余量仅 1rpx，真机取整放不下第三张 →
+  按 3 张分的组渲染成 2+1，7 张卡片变成 5 行。
+  改为 `calc(33.33% - 14rpx)`（余量约 10rpx）。
+- **今日/累计订单单独一行两张宽卡**：它们是全局数字，与待办不同量纲；
+  `buildCards` 增加 `wide` 标记，`.quick-item.wide` 宽 `calc(50% - 10rpx)`，
+  最终 `[3][2][2]` 三行，最后一行刚好铺满。
+- 测试：新增 1 项（cardRows 形状必须 3,2,2）；`npm test` 55 项全过。

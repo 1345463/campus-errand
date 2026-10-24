@@ -34,7 +34,7 @@
       <view wx:else>
         <view class="quick-row" wx:for="{{cardRows}}" wx:for-item="row" wx:key="key">
           <view
-            class="quick-item {{card.isLast ? 'last' : ''}} {{card.dim ? 'disabled' : ''}}"
+            class="quick-item {{card.wide ? 'wide' : ''}} {{card.isLast ? 'last' : ''}} {{card.dim ? 'disabled' : ''}}"
             wx:for="{{row.items}}"
             wx:for-item="card"
             wx:key="key"

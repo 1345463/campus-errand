@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 WorkBuddy Cloud
-> 统计截止：2026-10-25 00:10 ｜ 累计 **46 轮迭代**、**38 个页面**、**31 张表**、**129 个数据库函数**、**7 个触发器**
+> 统计截止：2026-10-24 23:45 ｜ 累计 **46 轮迭代**、**38 个页面**、**31 张表**、**129 个数据库函数**、**7 个触发器**、**28 个迁移脚本**、**55 项回归测试**、主包 **1.40 MB**
 
 ---
 
@@ -1083,6 +1083,11 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 - **更新类 RPC 的 `COALESCE` 语义**：写 `COALESCE(p_x, false)` 意思是「不传 = 关掉」，
   只想改别的字段时会连带把开关清掉（R35 调试时就这么把 AI 开关和模型一起清空过）。
   统一写 `COALESCE(p_x, 原列名)` —— NULL = 不改，传空串照样能清空。
+- **多角色共用一张表时，触发器只能校验「本次改动的列」（R45）**：`orders.images` 属发布方、
+  `deliver_images` 属接单员，整行校验会让接单员**任何一次**更新都因 `NEW.images` 越权而整笔回滚
+  （表现为「放弃接单 / 提交送达都报图片不属于当前账号」）。
+  正确写法：`INSERT` 两列都校验；`UPDATE` 用 `NEW.col IS DISTINCT FROM OLD.col` 只校验变了的那列。
+  推广规则：**写行级约束前先问「这行会不会被另一个角色更新」**，会就不能整行校验；测试必须正反两个方向都写。
 
 ### RLS 自检的正确姿势
 ```sql
@@ -1129,6 +1134,11 @@ END $t$;
 - 滚动/测量**没量到高度时不要下判断**（`if (!doc || !win) return`）：算出来一定是「没贴底」，
   自动跟随滚动会从第一条起就永久停摆。宁可保持「未知」。
 - fixed 容器里的 `textarea` 必须显式给 `fixed="{{true}}"`，否则渲染位置会漂。
+- **网格宽度必须留 ~10rpx 余量（R46）**：三列写 `calc(33.3333% - 11rpx)` 时
+  `3×宽 + 2×间距 = 99.9999% - 1rpx`，余量只剩 1rpx，真机取整直接折成 2+1。
+  用 `calc(33.33% - 14rpx)`（三列）/ `calc(50% - 10rpx)`（两列）。别把百分比贴着 100% 卡。
+- **同一行内字号不同的操作项基线不齐**：加粗 8 字与常规 2 字的 `<text>` 行盒高度不同，
+  只加 `line-height` 不够（`<text>` 有自己的行盒算法）—— 换成 `<view>` 并给子项固定 `line-height: 1.4`。
 
 ### 前端 JS（ES5 页面层的坑）
 - **`setTimeout(this.method, 120)` 会把 `this` 丢掉**，ES5 页面里一调就崩。
@@ -1158,7 +1168,7 @@ END $t$;
 每轮改完必跑**四件套**（R33 起因通配符打回而补的第 4 项）：
 
 ```bash
-# 1. 全量语法检查（58 个 JS）
+# 1. 全量语法检查（56 个 JS：pages + utils + components）
 cd campus-errand
 for f in $(find pages utils components -name '*.js'); do node --check "$f" || echo "FAIL $f"; done
 
@@ -1180,7 +1190,7 @@ node campus-errand/tools/style-lint.js campus-errand
 | `check-mp.js` | **工作区根目录** | ① ESM 严格解析（抓重复声明）② JSON 可解析 ③ WXML 标签配对 + id 唯一 ④ app.json 页面文件齐全 ⑤ usingComponents 指向存在 ⑥ 按 packOptions.ignore 算真实上传体积 ⑦ 裸包名能在 miniprogram_npm 解析 |
 | `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
-**当前状态**：58 个 JS `node --check` 全过，`verify-mp.js` 通过，`check-mp.js` **1.31MB / 2.00MB** 通过，`style-lint.js`（31 wxss / 39 wxml）通过。
+**当前状态**：56 个 JS `node --check` 全过，`verify-mp.js` 通过，`check-mp.js` **1.40MB / 2.00MB**（176 个文件）通过，`style-lint.js`（32 wxss / 40 wxml）通过，`npm test` 55 项全过。
 
 **数据库侧**：每轮用上面的 `DO` 块冒充真实用户做角色化自检，最后主动抛错回滚，收尾一定跑脏数据复核（自测数量应为 0）。
 

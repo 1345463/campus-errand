@@ -656,6 +656,9 @@ page {
 .card-actions .link-ghost {
   flex: 0 0 auto;
   white-space: nowrap;
+  /* 两个按钮一粗一细、一长一短，必须用同一个固定行高，
+     否则行盒高度不同，垂直居中后「取消」会看着比左边高 */
+  line-height: 1.4;
 }
 .link-danger {
   color: var(--brand-600);

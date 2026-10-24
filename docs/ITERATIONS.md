@@ -854,9 +854,15 @@ WHERE ... AND NOT EXISTS (SELECT 1 FROM media_assets ma
 修法（`app.wxss`）：`justify-content: space-between` + `flex-wrap: nowrap`，
 子项 `flex: 0 0 auto` + `white-space: nowrap` —— 左删除右取消，且任何文案都不折行。
 
-并排之后还有一层：左边是加粗的 8 个字、右边是常规 2 个字，`line-height: normal`
-会按各自字体的 ascent/descent 算行盒，高度差几像素，垂直居中后「取消」看着偏高。
-所以又给 `.card-actions` 显式 `line-height: 1.4` 把行盒统一。
+并排之后还有一层：左边是加粗的 8 个字、右边是常规 2 个字，两者行盒高度不同，
+`align-items: center` 之后「取消」看着偏高。
+
+**只加 `line-height` 不管用** —— 小程序 `<text>` 组件有自己的行盒算法，不吃这套。
+最后把这两个操作项从 `<text>` 换成 `<view>`（走标准 flex 盒模型），
+再给子项固定 `line-height: 1.4`，才真正对齐。
+
+**教训**：flex 里要对齐多个文字元素时，别用 `<text>` 当 flex item ——
+它本质是 inline 组件，行盒由组件自己算，`align-items` 对不齐。换成 `<view>` 最省事。
 
 **② 待办概览每行只显示两张，右侧空一大格**
 

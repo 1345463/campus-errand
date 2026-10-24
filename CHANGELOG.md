@@ -678,6 +678,7 @@ _提交时间：2026-10-23 16:50:00_
   `buildCards` 增加 `wide` 标记，`.quick-item.wide` 宽 `calc(50% - 10rpx)`，
   最终 `[3][2][2]` 三行，最后一行刚好铺满。
 - **同一行内基线不齐**：左「再点一次确认删除」加粗 8 字、右「取消」常规 2 字，
-  `line-height: normal` 按各自字体算行盒，两者高度差几像素 → 居中后「取消」偏高。
-  `.card-actions` 显式 `line-height: 1.4` 统一行盒。
+  两者行盒高度不同 → `align-items: center` 也让「取消」看着偏高。
+  只加 `line-height` 不够（`<text>` 组件有自己的行盒算法），
+  把这两个操作项从 `<text>` 换成 `<view>`，并给子项固定 `line-height: 1.4`。
 - 测试：新增 1 项（cardRows 形状必须 3,2,2）；`npm test` 55 项全过。

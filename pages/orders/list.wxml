@@ -146,18 +146,18 @@
       </view>
 
       <view wx:if="{{order.canDelete}}" class="card-actions">
-        <text
+        <view
           wx:if="{{hideArmId !== order.id}}"
           class="link-danger pressable"
           hover-class="press"
           data-id="{{order.id}}"
           catchtap="askHide"
-        >删除订单</text>
+        >删除订单</view>
         <block wx:else>
-          <text class="link-danger strong pressable" hover-class="press" data-id="{{order.id}}" catchtap="askHide">
+          <view class="link-danger strong pressable" hover-class="press" data-id="{{order.id}}" catchtap="askHide">
             再点一次确认删除
-          </text>
-          <text class="link-ghost pressable" hover-class="press" catchtap="cancelHide">取消</text>
+          </view>
+          <view class="link-ghost pressable" hover-class="press" catchtap="cancelHide">取消</view>
         </block>
       </view>
       <view wx:if="{{order.takedown}}" class="task-meta">该订单因违规被管理员下架</view>

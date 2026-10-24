@@ -27,7 +27,7 @@
 | 学校 | 广东邮电职业技术学院 |
 | 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 38 个页面 |
 | 云端 | WorkBuddy Cloud，应用 id `wbapp_yPJnSvicojPmz998PjKfpM` |
-| 数据库 | PostgreSQL 23 张表，全量 RLS，110 个 `SECURITY DEFINER` 函数 |
+| 数据库 | PostgreSQL 31 张表，全量 RLS，129 个 `SECURITY DEFINER` 函数、7 个触发器 |
 | 代码位置 | 工作区 `campus-errand/` |
 | 发布状态 | 试用版已发布成功，有效期至 2026/10/29 |
 
@@ -59,9 +59,10 @@
 - PL/pgSQL 铁律：`RETURNS TABLE` 的 OUT 参数与体内列名冲突会报 `ambiguous`，统一返回 `SETOF <表>` + 列引用带表别名。
 
 ### 权限与灰度
-- `admin_grants` 表存七级权限：`super / support / hr / review / rental / print / settle`；super 隐含全部，只有 super 能授/收 super，服务端硬拦。
+- `admin_grants` 表存**八级**权限：`super / support / hr / review / rental / print / settle / dispatch`（`dispatch` 自 R28 批量发单引入）；super 隐含全部，只有 super 能授/收 super，服务端硬拦。
+- 新增 perm_key 要改三处：`admin_set_perm` 白名单、`admin_my_perms` 返回列表、页面判断 —— 漏一处新权限根本授不出去。
 - 前端判断只是显示用，真正拦截在每个 RPC 里调 `admin_has_perm()`。
-- 新功能一律挂 `feature_flags`（现 17 个开关，payload 默认 false）；总闸页 `pages/admin/flags` 只给 super。
+- 新功能一律挂 `feature_flags`（现 23 个开关，`enabled` 默认 false；2026-10-24 现网 23 个均已打开）；总闸页 `pages/admin/flags` 只给 super。
 - **配置类页面（flags / banners / feedback）不能被自己的开关挡住**，否则关了就再也进不去打开。
 
 ---
@@ -972,7 +973,7 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 - **账号注销（R44）**：`my_account_state` / `request_account_deletion` / `restore_my_account` /
   `purge_account_data` / `purge_my_account_if_due` / `admin_purge_expired_deletions`
 
-### SQL 脚本清单（`campus-errand/sql/`，共 27 个）
+### SQL 脚本清单（`campus-errand/sql/`，共 28 个）
 
 | 文件 | 内容 |
 |---|---|
@@ -990,7 +991,6 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 | `add-paging-search-dashboard.sql` | 分页、搜索、工作台统计 |
 | `add-round4.sql` | 积分归属、实名、评价汇总、积分商城 |
 | `add-round5.sql` | 积分归下单人、信誉分互看、读策略收紧 |
-| `add-feedback-thread.sql` | 客服工单双向对话 |
 | **`add-round6.sql`** | 大厅筛选字段、开价下限、送达佐证、券抵扣、按订单取图 |
 | **`add-round7.sql`** | 优先券次卡化 / 信誉分双轨 / 举报下架扣分 / 批量发单 / 地址回填 |
 | **`add-feedback-thread.sql`** | 工单双向对话（feedback_replies + 已读水位） |
@@ -1038,9 +1038,15 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 | | `admin/banners` | 轮播管理 |
 | | `admin/points` | **积分商城管理**：商品 CRUD / 积分调整 / 兑换核销（三 Tab） |
 | | `admin/faq` | **智能客服配置**（R34）：FAQ 维护 + AI 设置；R35 加「模型 API 配置」与测试连接 |
+| | `admin/dispatch` | **批量发单**（R28）：发单员一次下多单，需 `dispatch` 权限 |
 
-### 工具模块（`utils/`，15 个）
-`api.js`（唯一允许 async 的地方）、`ui.js`（wx API 安全封装）、`upload.js`（二进制上传 + 三条读图通道）、`cloud.js`、`guard.js`（登录/命名统一入口）、`flags.js`、`perms.js`、`moderation.js`、`moderation-words.js`、`services.js`、`campus.js`、`config.js`、`agreement.js`、`motion.js`（R31 新增：动效与触感统一入口）、`workbuddy-cloud-diagnostics.js`
+### 工具模块（`utils/`，16 个）
+
+`api.js`（唯一允许 async 的地方）、`ui.js`（wx API 安全封装）、`upload.js`（二进制上传 + 三条读图通道）、`cloud.js`、
+`guard.js`（登录/命名统一入口；R44 加 `requirePhone()` 手机号闸门引导）、`flags.js`、`perms.js`、`moderation.js`、
+`moderation-words.js`、`services.js`、`campus.js`、`config.js`、`agreement.js`、
+`motion.js`（R31 新增：动效与触感统一入口）、`workbuddy-cloud-diagnostics.js`、
+`login-return.js`（R39–R41 引入：登录跳走的返回归口：走之前先 `saveDraft()` 存草稿、记录受限白名单地址，30 分钟内回来自动 `navigateTo` 回去）
 
 ### 组件（2 个）
 - `components/nav-bar`（自定义导航栏，fixed；高度由 `motion.systemInfo()` 计算）

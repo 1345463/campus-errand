@@ -30,7 +30,7 @@
 | 人 | AI |
 |---|---|
 | 提需求、定优先级、验收真机效果 | 拆需求、读历史、定位根因、写实现 |
-| 判断「这个交互对不对」 | 跑四件套校验、37 项回归测试、执行 SQL 迁移 |
+| 判断「这个交互对不对」 | 跑四件套校验、55 项回归测试、执行 SQL 迁移 |
 | 决定要不要上线 | 更新文档、写踩坑记录、按轮次提交推送 |
 
 ### AI 实际交付了什么
@@ -38,10 +38,10 @@
 | 产物 | 规模 |
 |---|---|
 | 页面 | 38 个（四件套齐全，全部在 `app.json` 注册） |
-| 前端代码 | 16,253 行 JS ／ 4,987 行 WXML ／ 4,837 行 WXSS |
-| 数据库 | 31 张表、129 个函数、7 个触发器、27 个幂等迁移脚本 |
+| 前端代码 | 16,326 行 JS ／ 4,987 行 WXML ／ 4,862 行 WXSS（含 utils / components / app） |
+| 数据库 | 31 张表、129 个函数、7 个触发器、28 个幂等迁移脚本 |
 | 测试 | 55 项回归测试（含真实 PostgreSQL 执行） |
-| 文档 | 1,200+ 行迭代记录 + 踩坑知识库 + 逐轮 CHANGELOG |
+| 文档 | 1,400+ 行迭代记录 + 踩坑知识库 + 逐轮 CHANGELOG |
 
 ### 为什么把过程也写进仓库
 
@@ -50,7 +50,7 @@
 真实原因是 `app.wxss` 里一条全局 `.home, .mine { min-height: 100vh }` 撞了消息行的
 class 名 `mine`——每条自己发的消息都被撑到一屏高。**类名改掉，问题当场消失。**
 
-这类坑 AI 会重复踩，也会重复读。所以文档不是装饰，是这个项目能迭代 43 轮而不失控的原因。
+这类坑 AI 会重复踩，也会重复读。所以文档不是装饰，是这个项目能迭代 46 轮而不失控的原因。
 
 ---
 
@@ -148,7 +148,7 @@ super / support / hr / review / rental / print / settle / dispatch
 | 机制 | 作用 |
 |---|---|
 | 校验四件套 | 语法 / 页面注册 / 上传预检 / WXSS 语法，缺一个就传不上去 |
-| 37 项回归测试 | 含真实 PostgreSQL 执行（PGlite），改完立刻知道有没有打断 |
+| 55 项回归测试 | 含真实 PostgreSQL 执行（PGlite），改完立刻知道有没有打断 |
 | GitHub Actions | 同样的命令跑在 CI，人懒的时候也不会漏 |
 | 迭代记录 + 踩坑库 | 每轮的现象、真因、修法、教训，下次不用重新踩 |
 
@@ -266,7 +266,7 @@ campus-errand/
 ├── components/room-picker/   三级宿舍选择器
 ├── utils/            api / upload / ui / guard / flags / perms / motion /
 │                     moderation / campus / services / config / agreement / cloud
-├── sql/              26 个幂等迁移脚本（可重放）
+├── sql/              28 个幂等迁移脚本（可重放）
 ├── tests/            55 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 ├── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅
@@ -278,7 +278,8 @@ campus-errand/
 - **31 张表，27 张开 RLS**（`profile_phones` / `account_deletions` 不开 policy，只给函数访问；其余 2 张是公开只读的 FAQ 配置）
 - **129 个函数**，命名约定 `p_` 前缀参数
 - **7 个触发器**：订单消息推送、图片归属校验、手机号闸门 ×3 等
-- **27 个迁移脚本**，全部幂等，按文件名顺序执行即可重建
+- **28 个迁移脚本**，全部幂等，按文件名顺序执行即可重建（完整清单见
+  [`docs/ITERATIONS.md` 第 3 章](docs/ITERATIONS.md)）
 
 ### 订单状态机
 
@@ -302,7 +303,7 @@ pending ──accept──> accepted ──complete──> waiting_confirm ─�
 
 ```bash
 npm ci --ignore-scripts
-npm test        # 37 项回归
+npm test        # 55 项回归
 npm run check   # 四件套：语法 / 页面注册 / 上传预检 / WXSS 语法
 ```
 
@@ -313,8 +314,10 @@ GitHub Actions 跑同样的命令。
 ## 九、部署
 
 1. 微信开发者工具打开本目录（`miniprogram_npm` 必须在，`node_modules` 被 `packOptions.ignore` 排除）。
-2. 主包需 ≤ 2 MB，当前 1.35 MB。
-3. 目标库按顺序执行三个迁移（已全部落库，重建环境时需要）：
+2. 主包需 ≤ 2 MB，当前 **1.39 MB / 2.00 MB**（176 个文件，`node_modules` 已由
+   `packOptions.ignore` 排除，不在包内）。
+3. 目标库按顺序执行以下关键迁移（均已落库，重建环境时需要按此顺序重放；
+   完整 28 个脚本见 `docs/ITERATIONS.md` 第 3 章）：
    - `sql/fix-order-support-workflows.sql` —— 订单分页 / 放弃接单 / AI 配额
    - `sql/restore-admin-password.sql` —— 后台密码（盐值哈希 + 15 分钟限频 + 审计）
    - `sql/fix-asset-authorization.sql` —— 图片归属校验 + dispatch 权限
@@ -340,7 +343,7 @@ GitHub Actions 跑同样的命令。
 对应小节 + `docs/ITERATIONS.md`；想看某一轮「引入了哪些文件」，`git show --stat <commit>`。
 R29 之后的所有改动都是真实 diff。
 
-当前 `main` 有 **58 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
+当前 `main` 有 **65 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
 R39 的三个第三方提交曾被摘除并压成一条整合提交，改写前后文件树 hash 完全一致
 （代码零改动，只换了提交边界与作者）。
 

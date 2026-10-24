@@ -25,7 +25,7 @@
 |---|---|
 | 项目 | 仿「韶乐园跑跑」（韶关学院校园跑腿平台）做同类双边校园跑腿小程序 |
 | 学校 | 广东邮电职业技术学院 |
-| 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 37 个页面 |
+| 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 38 个页面 |
 | 云端 | WorkBuddy Cloud，应用 id `wbapp_yPJnSvicojPmz998PjKfpM` |
 | 数据库 | PostgreSQL 23 张表，全量 RLS，110 个 `SECURITY DEFINER` 函数 |
 | 代码位置 | 工作区 `campus-errand/` |
@@ -66,7 +66,7 @@
 
 ---
 
-## 2. 迭代时间线（42 轮）
+## 2. 迭代时间线（46 轮）
 
 ### Day 1 — 2026-10-14：从录屏原型到可用链路
 
@@ -891,7 +891,7 @@ WHERE ... AND NOT EXISTS (SELECT 1 FROM media_assets ma
 
 ## 3. 数据库演进总览
 
-### 数据表（23 张，全量 RLS）
+### 数据表（31 张，全量 RLS）
 
 | 表 | 用途 | 引入轮次 |
 |---|---|---|
@@ -906,8 +906,8 @@ WHERE ... AND NOT EXISTS (SELECT 1 FROM media_assets ma
 | `moderation_words` | 违规词库（黑名单/白名单，后台可维护） | R19 |
 | `media_assets` | 图片二进制（base64 存 text 列，替代对象存储） | R18 |
 | `rental_items` | 相机机型与挂牌价（后台可维护） | R20 |
-| `admin_grants` | 管理员七级权限 | R22 |
-| `feature_flags` | 灰度开关（现 17 个） | R22 |
+| `admin_grants` | 管理员八级权限 | R22 |
+| `feature_flags` | 灰度开关（现 23 个） | R22 |
 | `banners` | 首页轮播 | R22 |
 | `messages` | 站内消息（触发器自动产生） | R22 |
 | `point_records` | 积分流水 | R22 |
@@ -918,6 +918,14 @@ WHERE ... AND NOT EXISTS (SELECT 1 FROM media_assets ma
 | `feedback_replies` | 工单对话 | R27 |
 | `faq_items` | 智能客服 FAQ：分类 / 问题 / 固定回答 / 关键词 / 排序 / 上下架 | R34 |
 | `faq_settings` | 客服设置单行表：AI 开关 / 模型 / 提示词 / 欢迎语 / 上限 + 5 个模型参数 | R34 / R35 |
+| `order_abandonments` | 放弃接单记录（谁在哪一单上放弃过，防反复刷单） | R39 |
+| `support_ai_requests` | AI 提问配额台账（按账号 + 日期，预占 130 秒过期） | R39 |
+| `support_answer_ratings` | 回答有帮助 / 没帮助的评价（AI 与 FAQ 共用） | R39 |
+| `admin_password_settings` | 后台密码（盐值 + 哈希，单行表） | R39 |
+| `admin_password_attempts` | 后台密码失败限流（15 分钟窗口） | R39 |
+| `admin_password_audit` | 后台密码激活审计 | R39 |
+| `profile_phones` | 绑定手机号（全站唯一，无 policy，只给函数访问） | R44 |
+| `account_deletions` | 注销记录（保留期 / 恢复 / 清理审计） | R44 |
 
 ### 关键：orders 表的列演进
 ```
@@ -942,7 +950,7 @@ pending ──accept_order──> accepted ──complete_order(+佐证照片)�
 waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（管理员判定结算）
 ```
 
-### 数据库函数（110 个）
+### 数据库函数（129 个）
 按职能分：
 - **订单**：`create_order`(17参) / `accept_order` / `complete_order` / `cancel_order` / `confirm_order_done` / `get_order_detail` / `order_relation` / `list_my_orders` / `search_my_orders` / `hide_my_order` / `order_hidden` …
 - **图片**：`save_media_asset` / `get_media_asset` / `get_public_asset` / **`get_order_asset`**
@@ -956,8 +964,15 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 - **智能客服**：`list_faq_items` / `get_faq_settings` / `admin_list_faq_items` /
   `admin_upsert_faq_item` / `admin_delete_faq_item` / `admin_get_faq_settings` /
   `admin_update_faq_settings`(10 参数)
+- **订单分页与放弃接单（R39）**：`list_my_orders_v2`(5 参数) / `abandon_order`
+- **AI 配额（R39）**：`support_ai_usage` / `begin_support_ai` / `finish_support_ai` /
+  `rate_support_answer`
+- **后台密码（R39）**：`activate_admin`（盐值哈希 + 15 分钟限频 + 审计）
+- **手机号（R44）**：`my_phone_state` / `has_phone` / `bind_my_phone` / `assert_phone_bound`
+- **账号注销（R44）**：`my_account_state` / `request_account_deletion` / `restore_my_account` /
+  `purge_account_data` / `purge_my_account_if_due` / `admin_purge_expired_deletions`
 
-### SQL 脚本清单（`campus-errand/sql/`，共 22 个）
+### SQL 脚本清单（`campus-errand/sql/`，共 27 个）
 
 | 文件 | 内容 |
 |---|---|
@@ -980,12 +995,18 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 | **`add-round7.sql`** | 优先券次卡化 / 信誉分双轨 / 举报下架扣分 / 批量发单 / 地址回填 |
 | **`add-feedback-thread.sql`** | 工单双向对话（feedback_replies + 已读水位） |
 | **`add-ai-support.sql`** | 智能客服：`faq_items` / `faq_settings` 两张表 + 7 个函数 + 开关 `ai_support` |
+| **`fix-order-support-workflows.sql`** | 订单分页 / 放弃接单 / AI 配额台账（R39） |
+| **`restore-admin-password.sql`** | 后台密码体系：盐值哈希 + 限流 + 审计（R39） |
+| **`fix-asset-authorization.sql`** | 图片归属触发器 + `get_order_asset` 第三道校验 + `can_dispatch`（R40） |
+| **`fix-text-rpc-returns.sql`** | 7 个 text 返回的 RPC 改 `RETURNS TABLE`（R43） |
+| **`add-phone-and-deletion.sql`** | 手机号闸门（3 个触发器）+ 注销 6 个月保留（R44） |
+| **`fix-order-asset-trigger.sql`** | 图片归属触发器只校验改动列（R45） |
 
 ---
 
 ## 4. 前端页面与模块总览
 
-### 页面（37 个，含 3 个 tabBar）
+### 页面（38 个，含 3 个 tabBar）
 
 | 分组 | 页面 | 说明 |
 |---|---|---|
@@ -1004,7 +1025,8 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 | | `mine/credit`、`mine/reviews` | 信誉分、待评价/收到的评价 |
 | | `mine/address` | 我的地址（三级选择 + 常用标记） |
 | | `mine/messages`、`mine/cert`、`mine/feedback` | 站内消息、认证进度（查看已提交的证件）、历史反馈 |
-| | `mine/settings` | **设置**：常用 / 体验 / 账号与权限 / 关于（R33 补） |
+| | `mine/settings` | **设置**：常用 / 体验 / 账号与权限（手机号、后台入口、注销账号）/ 关于（R33 补，R44 加手机号与注销） |
+| | `mine/bind-phone` | **绑定手机号**（R44）：短信验证码绑定/更换，一个号只能绑一个账号 |
 | | `mine/support` | **智能客服**（R34）：热门问题 + 会话 + AI 兜底 + 转人工 |
 | | `feedback/thread` | **工单会话页（用户端与客服端共用）** |
 | | `agreement/index` | 用户协议（强制勾选） |
@@ -1030,7 +1052,7 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 `point_records` / `point_mall` / `user_feedback` / `profile_edit` / `credit_score` /
 `my_reviews` / `hall_building_filter` / `coupon_deduct` / `deliver_photo` / `admin_batch_order` /
 `order_boost` / **`ai_support`**（R34 新增）
-**默认全 false**（新功能一律关着上线），其中 `hall_building_filter`、`coupon_deduct`、`deliver_photo` 当前为 true。
+**默认全 false**（新功能一律关着上线）。2026-10-24 现网 23 个开关均已由超管打开。
 
 ---
 
@@ -1360,7 +1382,8 @@ END $do$;
 2. `sql/restore-admin-password.sql` —— 3 张表 + `activate_admin`
 3. `sql/fix-asset-authorization.sql` —— 触发器 + `get_order_asset` + `can_dispatch`
 
-执行后核对：`public` 有 29 张表 / 117 个函数 / 4 个触发器，
+执行后核对：`public` 有 29 张表 / 117 个函数 / 4 个触发器（R40 当时统计，
+后续 R44 增至 31 表 / 129 函数 / 7 触发器），
 7 个新 RPC 的参数名与前端调用逐一对齐。
 
 **教训**：合入别人的前后端联动改动，**发布前必须列一张「前端 RPC ↔ 数据库函数」对照表**

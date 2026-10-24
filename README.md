@@ -69,7 +69,7 @@ class 名 `mine`——每条自己发的消息都被撑到一屏高。**类名�
 评价页会同时展示对方的分数、评分次数、完成单数、违规次数——**决定要不要和这个人合作之前，
 信息是齐的**。
 
-### 2. 八级权限 + 22 个灰度开关，拦截全在服务端
+### 2. 八级权限 + 23 个灰度开关，拦截全在服务端
 
 ```
 super / support / hr / review / rental / print / settle / dispatch
@@ -79,7 +79,7 @@ super / support / hr / review / rental / print / settle / dispatch
 - 新增权限键要改三处：`admin_set_perm` 白名单、`admin_my_perms` 返回列表、页面判断
 - 前端判断**只决定显示与否**，真正的拦截在每个 RPC 里调 `admin_has_perm()`
 
-22 个灰度开关挂在 `feature_flags`，默认关闭，由 super 在「总闸」页逐个打开；
+23 个灰度开关挂在 `feature_flags`，默认关闭，由 super 在「总闸」页逐个打开；
 配置类页面（总闸 / 轮播 / FAQ）**不受自己的开关约束**，否则关掉就再也打不开。
 
 ### 3. 图片三通道鉴权（这是最容易漏的一块）
@@ -262,12 +262,12 @@ super / support / hr / review / rental / print / settle / dispatch
 ```
 campus-errand/
 ├── app.js / app.json / app.wxss     全局（含 wx.getUpdateManager 热更新检查）
-├── pages/            37 个页面（见「页面地图」）
+├── pages/            38 个页面（见「页面地图」）
 ├── components/room-picker/   三级宿舍选择器
 ├── utils/            api / upload / ui / guard / flags / perms / motion /
 │                     moderation / campus / services / config / agreement / cloud
 ├── sql/              26 个幂等迁移脚本（可重放）
-├── tests/            37 项回归测试（含 PGlite 真实 PostgreSQL）
+├── tests/            55 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 ├── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅
 └── miniprogram_npm/  SDK 构建产物（必须入库，删了跑不起来）

@@ -854,6 +854,10 @@ WHERE ... AND NOT EXISTS (SELECT 1 FROM media_assets ma
 修法（`app.wxss`）：`justify-content: space-between` + `flex-wrap: nowrap`，
 子项 `flex: 0 0 auto` + `white-space: nowrap` —— 左删除右取消，且任何文案都不折行。
 
+并排之后还有一层：左边是加粗的 8 个字、右边是常规 2 个字，`line-height: normal`
+会按各自字体的 ascent/descent 算行盒，高度差几像素，垂直居中后「取消」看着偏高。
+所以又给 `.card-actions` 显式 `line-height: 1.4` 把行盒统一。
+
 **② 待办概览每行只显示两张，右侧空一大格**
 
 `.quick-item` 宽度写的是 `calc(33.3333% - 11rpx)`：

@@ -651,3 +651,16 @@ _提交时间：2026-10-23 16:50:00_
 - **协议**：`utils/agreement.js` 版本 `2026.10-v1 → v2`，新增「九、手机号绑定与账号注销（重要）」。
 - **测试**：新增 `tests/phone-deletion.test.js` 11 项；`npm test` 48 项全过；四件套全绿；
   上传包 1.38 MB / 2.00 MB。
+
+## R45 · 修图片归属触发器误伤接单员（10-24 23:05）
+
+- **现象**：接单员「放弃接单」报「图片不属于当前账号」，用户补充「提交送达时也会」。
+- **真因**：`assert_order_assets_owned` 把整行的 `images`（发布方上传的任务图）与
+  `deliver_images`（接单员上传的佐证）合并校验，要求全部属于 `auth.uid()`。
+  接单员一更新这行，`NEW.images` 仍是发布方的图 → 必然判越权 → 整笔回滚。
+  受影响的不只是放弃接单，**所有接单员侧的订单更新都会失败**。
+- **修法**：`sql/fix-order-asset-trigger.sql` —— INSERT 两列都校验；
+  UPDATE 用 `IS DISTINCT FROM` 只校验**本次真正改动的那一列**。
+  安全性不变：越权读图边界仍在 `get_order_asset`（要求图片属于本单参与方）。
+- **测试**：新增 `tests/order-assets.test.js` 5 项；`npm test` 54 项全过。
+- **真库验证**：订单 76 `abandon=ok` / `complete=ok rows=1`（事务回滚，未改数据）。

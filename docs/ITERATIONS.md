@@ -1168,7 +1168,7 @@ END $t$;
 每轮改完必跑**四件套**（R33 起因通配符打回而补的第 4 项）：
 
 ```bash
-# 1. 全量语法检查（56 个 JS：pages + utils + components）
+# 1. 全量语法检查（56 个业务 JS：pages 38 + utils 16 + components 2）
 cd campus-errand
 for f in $(find pages utils components -name '*.js'); do node --check "$f" || echo "FAIL $f"; done
 
@@ -1190,7 +1190,13 @@ node campus-errand/tools/style-lint.js campus-errand
 | `check-mp.js` | **工作区根目录** | ① ESM 严格解析（抓重复声明）② JSON 可解析 ③ WXML 标签配对 + id 唯一 ④ app.json 页面文件齐全 ⑤ usingComponents 指向存在 ⑥ 按 packOptions.ignore 算真实上传体积 ⑦ 裸包名能在 miniprogram_npm 解析 |
 | `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
-**当前状态**：56 个 JS `node --check` 全过，`verify-mp.js` 通过，`check-mp.js` **1.40MB / 2.00MB**（176 个文件）通过，`style-lint.js`（32 wxss / 40 wxml）通过，`npm test` 55 项全过。
+**当前状态**：56 个业务 JS `node --check` 全过，`verify-mp.js` 通过，`check-mp.js` **1.40MB / 2.00MB**（176 个文件，扫描 JS 62 个）通过，`style-lint.js`（32 wxss / 40 wxml）通过，`npm test` 55 项全过。
+
+> ⚠️ **两个 JS 数字口径不同，别误判成文档漂移**：
+> **56** = 业务代码（`pages` 38 + `utils` 16 + `components` 2），也就是上面第 1 步语法检查的范围；
+> **62** = `check-mp.js` 按 `packOptions.ignore` 算出的**真正会被上传**的 JS，
+> 另外还包含根目录 `app.js` 与 `miniprogram_npm/` 下的 SDK 构建产物。
+> 复核时两个数都对，不要拿 62 去改 56。
 
 **数据库侧**：每轮用上面的 `DO` 块冒充真实用户做角色化自检，最后主动抛错回滚，收尾一定跑脏数据复核（自测数量应为 0）。
 

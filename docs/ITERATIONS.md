@@ -1192,11 +1192,12 @@ node campus-errand/tools/style-lint.js campus-errand
 
 **当前状态**：56 个业务 JS `node --check` 全过，`verify-mp.js` 通过，`check-mp.js` **1.40MB / 2.00MB**（176 个文件，扫描 JS 62 个）通过，`style-lint.js`（32 wxss / 40 wxml）通过，`npm test` 55 项全过。
 
-> ⚠️ **两个 JS 数字口径不同，别误判成文档漂移**：
-> **56** = 业务代码（`pages` 38 + `utils` 16 + `components` 2），也就是上面第 1 步语法检查的范围；
-> **62** = `check-mp.js` 按 `packOptions.ignore` 算出的**真正会被上传**的 JS，
-> 另外还包含根目录 `app.js` 与 `miniprogram_npm/` 下的 SDK 构建产物。
-> 复核时两个数都对，不要拿 62 去改 56。
+> ⚠️ **三个 JS 数字口径不同，别误判成文档漂移**（复核时三个都对，不要互相覆盖）：
+> **56** = 业务代码：`pages` 38 + `utils` 16 + `components` 2（上面第 1 步 `find` 的范围）；
+> **62** = `check-mp.js` 按 `packOptions.ignore` 算出的**真正会被上传**的 JS
+> （含 `app.js` 与 `miniprogram_npm/` SDK 产物，排除 `tests/` `tools/`）；
+> **68** = `scripts/sync_github.py` 四件套第 1 项实际检查的数量
+> （`os.walk` 全扫，只排除 `node_modules` / `miniprogram_npm` / `.git`，**含** `tests/` 与 `tools/`）。
 
 **数据库侧**：每轮用上面的 `DO` 块冒充真实用户做角色化自检，最后主动抛错回滚，收尾一定跑脏数据复核（自测数量应为 0）。
 

@@ -748,8 +748,12 @@ _提交时间：2026-10-23 16:50:00_
 - `pg_trigger` 直接 `count(*)` 得 **11**，比文档的 7 多 4 —— 多出来的是 `storage` schema 下
   4 个系统自带触发器，业务触发器仍在 `public` 下的 **7** 个。已在下面按 schema 记明，
   下次复核别被 11 误导去改文档。
-- ITERATIONS 第 6 章补口径说明：**56 = 业务 JS**（pages 38 + utils 16 + components 2），
+- ITERATIONS 第 6 章补口径说明，**实际有三个 JS 数字，三个都对**：
+  **56 = 业务 JS**（pages 38 + utils 16 + components 2）；
   **62 = `check-mp.js` 按 `packOptions.ignore` 算出的上传 JS**（另含 `app.js` 与
-  `miniprogram_npm` SDK 产物）。两个数都对，勿互相覆盖。
+  `miniprogram_npm` SDK 产物，排除 tests/tools）；
+  **68 = `scripts/sync_github.py` 四件套第 1 项实际检查数**（只排除 node_modules /
+  miniprogram_npm / .git，**含** tests 与 tools）—— 门禁打印的就是这个数。
+  此前只有「56 vs 62」两条，看到门禁打出 68 仍会误判，故补全为三条。
 - README 提交数 67 → **68 次**（按提交后计数）。
 - 根目录副本 `校园跑腿-迭代全记录.md` 已同步。

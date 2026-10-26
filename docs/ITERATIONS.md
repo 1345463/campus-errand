@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 WorkBuddy Cloud
-> 统计截止：2026-10-24 23:45 ｜ 累计 **46 轮迭代**、**38 个页面**、**31 张表**、**129 个数据库函数**、**7 个触发器**、**28 个迁移脚本**、**55 项回归测试**、主包 **1.40 MB**
+> 统计截止：**2026-10-26 23:30**（自动任务复核）｜ 累计 **46 轮迭代**、**38 个页面**、**31 张表**、**129 个数据库函数**、**7 个触发器**、**28 个迁移脚本**、**55 项回归测试**、主包 **1.40 MB**
 
 ---
 
@@ -29,7 +29,7 @@
 | 云端 | WorkBuddy Cloud，应用 id `wbapp_yPJnSvicojPmz998PjKfpM` |
 | 数据库 | PostgreSQL 31 张表，全量 RLS，129 个 `SECURITY DEFINER` 函数、7 个触发器 |
 | 代码位置 | 工作区 `campus-errand/` |
-| 发布状态 | 试用版已发布成功，有效期至 2026/10/29 |
+| 发布状态 | 试用版已发布成功，有效期至 2026/10/29（2026-10-26 复核：**仅剩 3 天**，不能转正式版，需尽快绑定自有小程序账号并提交审核） |
 
 **业务模型**：学生发布任务并支付赏金 / 认证接单员接单赚赏金。
 每服务一套独立下单表单（取快递、代排队、打印、租赁、搬运等 10 个宫格）。
@@ -95,7 +95,7 @@
 - 「我的地址」改用三级选择，拆成 `building="楼栋 · 楼层"` + `room="宿舍号"` 入库；列表项加「设为常用」，写入 `pickedAddress` 缓存。
 - **账号登录**：`loginWithPassword / sendPhoneCode / registerWithPhone`（signInWithPassword + sendOtp + verifyOtp）。密码登录不依赖 `wx.login`，**预览环境可用**。
 - **不能凭空建号**：验证过 `signUp` 无 verificationToken 会被拒，管理员账号必须由用户自己在界面注册一次。
-- **管理员**：`profiles.is_admin` 列 + `activate_admin(code)`（口令 `GDYZPT2026`）+ `list_all_orders(limit)`。
+- **管理员**：`profiles.is_admin` 列 + `activate_admin(code)`（R3 时为明文口令 `GDYZPT2026`；**R39 起改为服务端盐值 + SHA-256 哈希比对，客户端不再存任何明文**，见 `sql/restore-admin-password.sql`）+ `list_all_orders(limit)`。
 
 #### R4 · 预览环境兼容性（关键教训）
 - H5 预览容器不完整模拟原生能力，报 `wx.showLoading is not a function`；同一原因导致 `picker-view` 三列渲染错乱（点开直接是第三级房号）。
@@ -1208,16 +1208,27 @@ node campus-errand/tools/style-lint.js campus-errand
 ### 🔴 待用户操作
 1. **`DROP POLICY orders_write_own` 已执行，但仍在观察窗口内**。按原计划应等「新版正式发布 + 48 小时」。触发条件是旧版客户端还能直接 UPDATE 自己的订单（可绕过 accept/complete 改状态）—— 这是**已知残留风险**。一旦有用户反馈立刻回滚策略（回滚语句在 `sql/drop-orders-write-own.sql` 末尾注释里），`add-order-write-guard.sql` 的 INSERT 守卫可独立留着继续兜底。
 
-### 🟡 已知但未处理（2026-10-22 更新）
+### 🟡 已知但未处理（2026-10-26 复核更新）
 2. **旧对象存储的证件照永久不可读**：`runner_applications` 里 id=12/13 存的是旧路径，需让相应用户重新提交。管理员点开时会收到明确提示。
-3. **`utils/config.js` 的 `rememberPassword / autoLogin / presetAccount` 仍为调试态**（注释自己写了「上线前必须改」）—— 用户还在双号联调，擅自关会打断测试，**未动**。
-4. **管理员口令硬编码**（`GDYZPT2026`）：拿到口令的人都能自己开管理员（可见全部订单 + 直接获得接单资格）。正式运营需要换掉这套机制。
-5. **签名链接接口（`createSignedUrl`）为什么报错仍是未知** —— 已绕开不影响流程，但如果以后要恢复对象存储通道需要再查。
+3. ~~**`utils/config.js` 的 `rememberPassword / autoLogin / presetAccount` 仍为调试态**~~
+   ✅ **R39 起已解决**（2026-10-26 复核确认）：现值 `rememberPassword: false`、`autoLogin: false`、
+   `presetAccount: { phone:'', password:'' }`，且注释明确「发布配置门禁会强制这两个开关为 false、
+   预置账号必须为空、不再存储明文密码」。客户端已不含任何调试凭据。
+4. ~~**管理员口令硬编码**（`GDYZPT2026`）~~ ✅ **R39 起已解决**（2026-10-26 复核确认）：
+   `activate_admin` 改为与 `admin_password_settings` 里的**盐值 + SHA-256 哈希**比对，
+   客户端不再出现明文口令（全仓 `grep GDYZPT` 只剩文档这行历史记录），
+   并带 **15 分钟 5 次失败限流** + `admin_password_audit` 激活审计。
+   残留风险降级为：口令本身的分发方式仍是「知道口令即可自助开 super」，正式运营需换更严格的开通流程。
+5. **签名链接接口（`createSignedUrl`）为什么报错仍是未知** —— 已绕开不影响流程。
+   2026-10-26 复核：业务代码（`pages/` `utils/`）**已无任何调用点**，仅 SDK 自带注释里出现，
+   媒体读取统一走 `media_assets` + 三条读图通道。故此项实际已不再阻塞，仅在未来要恢复对象存储通道时才需再查。
 6. **钱包未接支付**：暂不可提现，页面已如实说明。
-7. **试用版 2026/10/29 到期**，且不能转正式版。长期运营必须绑定自有小程序账号并提交审核（UGH 类目还需服务内容声明）。
-8. **客服页顶部还留着临时调试条**（`support.js` 的 `debugInfo` / `measureLayout` 写回、
-   `support.wxml` 的 `.sup-debug`、`support.wxss` 的 `.sup-debug`）—— R36 定位滚动问题时加的，
-   等用户确认「不再出现大片空白」后立刻删掉这三处。
+7. 🔴 **试用版 2026/10/29 到期**（复核日 10-26，仅剩 3 天），且不能转正式版。
+   长期运营必须绑定自有小程序账号并提交审核（UGH 类目还需服务内容声明）。**到期后现网不可访问，需尽快处理。**
+8. ~~**客服页顶部还留着临时调试条**（`support.js` 的 `debugInfo` / `measureLayout`、
+   `support.wxml` / `support.wxss` 的 `.sup-debug`）~~ ✅ **R38 已随整页重写清除**
+   （2026-10-26 复核：全仓 `grep sup-debug` / `debugInfo` / `measureLayout` 均为空），
+   滚动空白问题当时已由「弃用 scroll-view、改整页滚动 + 固定输入区」根治，无需再等确认。
 
 ### 🟢 设计取舍（不是 bug）
 - **抵扣券只记在订单上，接单员仍拿全额赏金**，差价由平台承担。

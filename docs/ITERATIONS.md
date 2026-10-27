@@ -1293,7 +1293,7 @@ END $t$;
 - **`cloudfunctions/` 必须加进 `packOptions.ignore`** —— 本项目 `miniprogramRoot` 是 `./`，
   云函数目录落在小程序根内，`check-mp.js` 会把它当小程序代码扫，报
   「npm 依赖 `crypto` / `https` / `wx-server-sdk` 在 `miniprogram_npm` 中不存在」，
-  四件套第 3 项直接红、门禁拒绝提交。加上 ignore 后体积回到 176 文件 / 1.40MB。
+  四件套第 3 项直接红、门禁拒绝提交。加上 ignore 后体积回到 176 文件（1.41MB，含文档）。
 - **云函数可以独立于前端 SDK 部署与测试**：`wx.cloud` 是微信原生能力，与 WorkBuddy SDK 并存。
   别把「前端还没换 SDK」当成「云函数还不能动」的前提。
 - **密钥只走 `process.env`**：商户私钥 / 证书序列号 / APIv3 密钥一律不进代码、不进 git、

@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 WorkBuddy Cloud
-> 统计截止：**2026-10-27 23:30**（自动任务复核）｜ 累计 **49 轮迭代**、**38 个页面**、**31 张表**、**129 个数据库函数**、**7 个触发器**、**28 个迁移脚本**、**56 项回归测试**、主包 **1.40 MB**
+> 统计截止：**2026-10-27 23:30**（自动任务复核）｜ 累计 **49 轮迭代**、**38 个页面**、**31 张表**、**129 个数据库函数**、**7 个触发器**、**28 个迁移脚本**、**56 项回归测试**、主包 **1.41 MB**
 >
 > 📌 **数据库双库期（2026-10-27 起）**：运行库仍是 WorkBuddy Cloud（31 表 / 129 函数 / 7 触发器，本次经 MCP 复核）；
 > 迁库目标 **CloudBase `ceshi-d2g37cbg7c8f7ee48`** 已完成全量迁移（验收 32 表 / 131 函数 / 9 触发器 / 23 开关全开，
@@ -1355,7 +1355,7 @@ node campus-errand/tools/style-lint.js campus-errand
 | `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
 **当前状态（2026-10-27 23:30 复核）**：56 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
-`check-mp.js` **1.40MB / 2.00MB**（176 个文件，扫描 JS 62 个）通过，`style-lint.js`（32 wxss / 40 wxml）通过，
+`check-mp.js` **1.41MB / 2.00MB**（176 个文件，扫描 JS 63 个）通过，`style-lint.js`（32 wxss / 40 wxml）通过，
 `npm test` **56 项**全过。
 
 > **云函数不算业务 JS、也不进包**：`cloudfunctions/pay-create/index.js` 走 Node CommonJS
@@ -1366,7 +1366,7 @@ node campus-errand/tools/style-lint.js campus-errand
 > **56** = 业务代码：`pages` 38 + `utils` 16 + `components` 2（上面第 1 步 `find` 的范围）；
 > **62** = `check-mp.js` 按 `packOptions.ignore` 算出的**真正会被上传**的 JS
 > （含 `app.js` 与 `miniprogram_npm/` SDK 产物，排除 `tests/` `tools/`）；
-> **68** = `scripts/sync_github.py` 四件套第 1 项实际检查的数量
+> **69** = `scripts/sync_github.py` 四件套第 1 项实际检查的数量
 > （`os.walk` 全扫，只排除 `node_modules` / `miniprogram_npm` / `.git`，**含** `tests/` 与 `tools/`）。
 
 **数据库侧**：每轮用上面的 `DO` 块冒充真实用户做角色化自检，最后主动抛错回滚，收尾一定跑脏数据复核（自测数量应为 0）。

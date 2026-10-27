@@ -1,7 +1,11 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 WorkBuddy Cloud
-> 统计截止：**2026-10-26 23:30**（自动任务复核）｜ 累计 **46 轮迭代**、**38 个页面**、**31 张表**、**129 个数据库函数**、**7 个触发器**、**28 个迁移脚本**、**55 项回归测试**、主包 **1.40 MB**
+> 统计截止：**2026-10-27 23:30**（自动任务复核）｜ 累计 **49 轮迭代**、**38 个页面**、**31 张表**、**129 个数据库函数**、**7 个触发器**、**28 个迁移脚本**、**56 项回归测试**、主包 **1.40 MB**
+>
+> 📌 **数据库双库期（2026-10-27 起）**：运行库仍是 WorkBuddy Cloud（31 表 / 129 函数 / 7 触发器，本次经 MCP 复核）；
+> 迁库目标 **CloudBase `ceshi-d2g37cbg7c8f7ee48`** 已完成全量迁移（验收 32 表 / 131 函数 / 9 触发器 / 23 开关全开，
+> 前端 99 个 RPC 零缺失），**只剩前端换 SDK**。R49 起的支付表与云函数只落地在新库。
 
 ---
 
@@ -9,7 +13,7 @@
 
 - [0. 项目概况](#0-项目概况)
 - [1. 技术基线（不可动摇的约定）](#1-技术基线不可动摇的约定)
-- [2. 迭代时间线（46 轮）](#2-迭代时间线46-轮)
+- [2. 迭代时间线（49 轮）](#2-迭代时间线49-轮)
 - [3. 数据库演进总览](#3-数据库演进总览)
 - [4. 前端页面与模块总览](#4-前端页面与模块总览)
 - [5. 踩坑知识库](#5-踩坑知识库)
@@ -26,8 +30,8 @@
 | 项目 | 仿「韶乐园跑跑」（韶关学院校园跑腿平台）做同类双边校园跑腿小程序 |
 | 学校 | 广东邮电职业技术学院 |
 | 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 38 个页面 |
-| 云端 | WorkBuddy Cloud，应用 id `wbapp_yPJnSvicojPmz998PjKfpM` |
-| 数据库 | PostgreSQL 31 张表，全量 RLS，129 个 `SECURITY DEFINER` 函数、7 个触发器 |
+| 云端 | WorkBuddy Cloud，应用 id `wbapp_yPJnSvicojPmz998PjKfpM`；**R48 起并行迁往 CloudBase `ceshi-d2g37cbg7c8f7ee48`**（数据库已迁完，待切前端 SDK） |
+| 数据库 | PostgreSQL 31 张表，全量 RLS，129 个 `SECURITY DEFINER` 函数、7 个触发器（CloudBase 新库 32 表 / 131 函数 / 9 触发器） |
 | 代码位置 | 工作区 `campus-errand/` |
 | 发布状态 | **企业主体小程序已绑定，微信审核中（2026-10-27）**。此前经 WorkBuddy 试用版（微信「试用小程序」，14 天 / 15 人 / 不能转正式版）完成真机验证，试用期已结束；审核通过后发布正式版。 |
 
@@ -67,7 +71,7 @@
 
 ---
 
-## 2. 迭代时间线（46 轮）
+## 2. 迭代时间线（49 轮）
 
 ### Day 1 — 2026-10-14：从录屏原型到可用链路
 
@@ -890,6 +894,115 @@ WHERE ... AND NOT EXISTS (SELECT 1 FROM media_assets ma
 
 ---
 
+### Day 10 — 2026-10-27：企业主体发版准备 / 迁库 CloudBase / 在线支付开工
+
+#### R47 · 默认昵称「同学」绕过强制补全 + AppID 切到企业主体
+
+**① 12 个用户里 9 个叫「同学」**
+
+备份数据时发现：订单卡片清一色显示「发布 同学 · 接单 同学」，交易双方根本分不清是谁。
+
+**真因**：`guard.nicknameMissing()` 只判空串 ——
+
+```js
+return !String(profile.nickname || '').trim()
+```
+
+而 `ensureProfile` 建号时写的默认昵称就是「同学」。**非空 ⇒ 永不命中 ⇒ 强制补全形同虚设。**
+这是典型的「校验写了、默认值把校验架空了」：`nicknameMissing` 的语义是「 nick 不可用」，
+不是「 nick 为空」，默认值和空串一样不可用。
+
+修法（`utils/guard.js`）：引入 `DEFAULT_NICKNAMES = ['同学']`，空串、全空格、默认值**都算缺失**。
+
+**教训**：任何「强制用户补全资料」的校验，**必须把建号时写的默认值一起判为缺失**，
+否则默认值一写进去，这条校验就永远不再触发。以后加默认值，同步问一句「它会被当缺失吗」。
+
+**② AppID 换成企业主体小程序**
+
+`project.config.json` 的 `appid` 由 `wxf73d4e1b04e62d79`（试用小程序时期）
+改为 **`wxaab192c68e403292`（i邮跑，企业主体）**。全仓只有这一处引用 AppID。
+
+**校验**：新增 `tests/workflows.test.js` 1 项（用 `node:vm` 加载 `guard.js` 做纯函数级回归：
+空串 / 全空格 / 「同学」都要补全，真实昵称不打断，null 不打断）；`npm test` **55 → 56 项**。
+
+---
+
+#### R48 · 数据库全量迁至 CloudBase（33 批迁移，结构齐平，待切前端 SDK）
+
+**为什么迁**：全自动在线支付（R49）的支付回调必须由**云函数**处理并直接改订单状态，
+而 WorkBuddy Cloud 没有云函数、也不对外提供写库的服务端凭据。**没有这一步就没有支付。**
+
+**目标环境**：`ceshi-d2g37cbg7c8f7ee48`（ap-shanghai，PG 模式，体验版套餐，SHARED 租户）。
+迁移脚本在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，**不在本仓库内**）。
+
+**最关键的一条结论**：CloudBase PG **自带 `auth.uid()` / `auth.role()` / `auth.jwt()`，
+`auth.uid()` 同样返回 text** —— 129 个函数可以**原样重放、一行不用改写**。
+迁移成本因此从「几周」降到「一天」。
+
+**最终验收（2026-10-27 22:59）**：32 表 / 131 函数 / 9 触发器 / 9 策略 / 23 开关全开 /
+296 条违规词 / 7 条 FAQ；**前端 `api.js` 里全部 99 个 RPC 在新库零缺失**，只读函数冒烟全过。
+
+**四个新坑**（详见第 5 章）：
+
+1. `applyMigration` **必须内联传 SQL**，只给本地路径报 `SQL_REQUIRED`；
+   本地已有同名文件时内容必须逐字符一致，否则 `LOCAL_MIGRATION_FILE_MISMATCH`。
+2. `migrationName` 正则 `^[a-z][a-z_]*$` **不允许数字** —— `round4` 被拒，得写 `round_four`。
+3. 带 `BEGIN/COMMIT` 的脚本不能拼接（事务嵌套）；`CREATE OR REPLACE` 改不了返回类型（42P13）
+   也改不了签名（变重载），这两种都必须先 `DROP FUNCTION`。
+4. **两个脚本必须跳过**：`fix-order-hide-scope.sql` 会建 `list_my_orders` 单参数版，
+   与已建的三参数版并存产生**重载歧义**；`fix-asset-authorization.sql` 里的
+   `assert_order_assets_owned` 是 **R40 整行校验版（有 bug）**，会把 R45 的修正版覆盖回去。
+
+**另有一次误判（值得记）**：中途发现「新库 RLS 策略只剩 1 条」，一度判定为灾难。
+查原库 `pg_policies` + `role_table_grants` 后才知道：原库本来就只给 **5 张表**
+（`profiles` / `addresses` / `orders` / `rental_requests` / `runner_applications`）客户端直连，
+其余 24 张一律 `REVOKE ALL` 只走 RPC —— 漏的是这 5 张的 GRANT + 策略，不是全库。
+→ **判断「权限缺失」前先跑 `pg_policies` + `role_table_grants` 看原库实况，别凭「表开了 RLS 却只有一条策略」下结论。**
+
+---
+
+#### R49 · 在线支付打通第一步：云函数 `pay-create` 部署成功 + 提现 RPC
+
+**先纠正一个错判**：此前一直认为「支付必须等前端换完 SDK」。实际不必 ——
+`wx.cloud` 是微信原生能力，与 WorkBuddy SDK **并存**，云函数可独立部署、独立测试。
+
+**方案（完整版见 `docs/PAYMENT.md`）**：全自动赏金预付款 + 可提现。
+
+```
+付款   用户 → pay-create（云函数签名调 JSAPI 下单）→ wx.requestPayment → pay-notify 回调改 pay_status
+结算   确认完成 → settle 记账到接单员余额（此时钱还在商户号）
+提现   接单员申请 → transfer 调「商家转账到零钱」→ 直接进接单员微信零钱
+```
+
+接单员**不需要商户号**（企业向个人付款的标准能力）。商户号 `1119307371`（普通商户）→
+**不能分账**，但「商家转账到零钱」已开通，提现路径不受影响。
+
+**已做**：
+
+1. 支付 DDL（新库）：`orders` 加 `pay_status` / `pay_txn_id` / `paid_at` /
+   `settle_amount` / `settled_at` + 2 个索引 + CHECK；新建 `withdraw_requests`
+2. 抽佣后台可调：`pay_settings` 单行表（`commission_rate` 0.05 / `min_withdraw` 10 /
+   `withdraw_fee_rate` 0.006 / `enabled` false）+ `get_pay_settings()` /
+   `calc_settle_amount(reward)` / `admin_update_pay_settings(...)`
+   —— **前端必须调 `calc_settle_amount` 而不是自己乘**，四舍五入口径只有一处
+3. 提现 4 个 RPC：`create_withdraw_request`（校验余额/门槛/单笔在途）/ `list_my_withdrawals` /
+   `admin_list_withdrawals` / `admin_finish_withdrawal`（失败自动退款）
+4. 云函数 **`pay-create` 写好并部署成功**（`cloudfunctions/pay-create/`）：
+   零外部依赖，只用内置 `crypto` + `https`，`wx-server-sdk` 仅用于取 openid
+5. 实测调用 **4ms 返回** `{"ok":false,"code":"ENV_MISSING"}` —— 链路通
+
+**卡在用户侧**：`WXPAY_SERIAL_NO`（证书序列号）+ `WXPAY_PRIVATE_KEY`（`apiclient_key.pem` 全文）
+必须用户自己在云函数控制台的环境变量里填，**不能经过对话**。已配 `WXPAY_MCHID` / `WXPAY_APPID`。
+
+**⚠️ 合规（写进 PAYMENT.md 第 4 章）**：平台「先收用户的钱、再转给接单员」在监管口径下
+容易被认定为**二清**。规避靠业务定性而非技术：服务定性为「平台自营」、向接单员支付**劳务报酬**，
+保留接单员协议与报酬明细，提现设门槛（满 10 元、T+1），不做「余额长期沉淀 + 任意提现」。
+正式运营前建议过一遍学校法务/财务。
+
+**待写**：`pay-notify`（回调验签 + 解密）、`transfer`、`transfer-notify`。
+
+---
+
 ## 3. 数据库演进总览
 
 ### 数据表（31 张，全量 RLS）
@@ -1002,6 +1115,23 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 | **`add-phone-and-deletion.sql`** | 手机号闸门（3 个触发器）+ 注销 6 个月保留（R44） |
 | **`fix-order-asset-trigger.sql`** | 图片归属触发器只校验改动列（R45） |
 
+> 上面 28 个脚本面向 **WorkBuddy Cloud 运行库**。R48/R49 的新增结构不在这个目录 ——
+> 33 批迁库脚本与支付 DDL 在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，
+> 不在本仓库内），`cloudbase/MIGRATION.md` 记执行顺序，`cloudbase/HANDOFF.md` 是一页纸交接单。
+
+### 支付相关（R49 · 只落在 CloudBase 新库）
+
+| 对象 | 用途 | 备注 |
+|---|---|---|
+| `pay_settings` | 抽佣配置单行表：`commission_rate` 0.05 / `min_withdraw` 10 / `withdraw_fee_rate` 0.006 / `enabled` false | 后台可调，不写死在前端 |
+| `withdraw_requests` | 提现申请（金额 / 状态 / 微信批次号 / 失败原因） | pending→processing→success/failed |
+| `orders.pay_status` / `pay_txn_id` / `paid_at` / `settle_amount` / `settled_at` | 支付状态与流水（+2 索引 + CHECK） | unpaid / paid / refunded |
+
+- **抽佣与结算**：`get_pay_settings()`（公开读）/ `calc_settle_amount(p_reward)`（统一口径，
+  前端只准调它）/ `admin_update_pay_settings(...)`（带 0–50% 范围校验，`COALESCE` = NULL 不改）
+- **提现**：`create_withdraw_request` / `list_my_withdrawals` / `admin_list_withdrawals` /
+  `admin_finish_withdrawal`（失败自动把钱退回余额）
+
 ---
 
 ## 4. 前端页面与模块总览
@@ -1051,6 +1181,12 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 ### 组件（2 个）
 - `components/nav-bar`（自定义导航栏，fixed；高度由 `motion.systemInfo()` 计算）
 - `components/room-picker`（三个 scroll-view 列 + 自定义输入，非原生 picker-view）
+
+### 云函数（`cloudfunctions/`，R49 起，1 个）
+- `pay-create` —— 微信支付 JSAPI 下单。零外部依赖（只用内置 `crypto` + `https`，
+  `wx-server-sdk` 仅取 openid），密钥全部从 `process.env` 读。
+  ⚠️ **该目录已加进 `project.config.json` 的 `packOptions.ignore`** —— 云函数是服务端代码，
+  不能进小程序包（见第 5 章）。
 
 ### 灰度开关（23 个）
 `home_banner` / `admin_roles` / `staff_search` / `message_center` / `order_paging` / `order_search` /
@@ -1146,6 +1282,34 @@ END $t$;
 - **不要写 `for await ... of`**：小程序「ES6 转 ES5」的 babel 不保证注入 `Symbol.asyncIterator`，
   真机会抛 TypeError 且极难定位。→ 手写 `iterator.next()` 循环（见 `utils/api.js` 的 `llmChat`）。
 
+### 强制补全类校验（R47）
+- **「必须补全」的判据不能只写「为空」** —— 建号时写的**默认值同样要算缺失**。
+  `guard.nicknameMissing()` 原本只判空串，而 `ensureProfile` 写的默认昵称就是「同学」，
+  结果 12 个用户里 9 个叫「同学」，强制补全一次都没触发过。
+  → 维护一份 `DEFAULT_NICKNAMES` 之类的**默认值清单**，与「空」并列判定；
+  新增默认值时同步问一句「它会被当缺失吗」。
+
+### 云函数与小程序包（R49）
+- **`cloudfunctions/` 必须加进 `packOptions.ignore`** —— 本项目 `miniprogramRoot` 是 `./`，
+  云函数目录落在小程序根内，`check-mp.js` 会把它当小程序代码扫，报
+  「npm 依赖 `crypto` / `https` / `wx-server-sdk` 在 `miniprogram_npm` 中不存在」，
+  四件套第 3 项直接红、门禁拒绝提交。加上 ignore 后体积回到 176 文件 / 1.40MB。
+- **云函数可以独立于前端 SDK 部署与测试**：`wx.cloud` 是微信原生能力，与 WorkBuddy SDK 并存。
+  别把「前端还没换 SDK」当成「云函数还不能动」的前提。
+- **密钥只走 `process.env`**：商户私钥 / 证书序列号 / APIv3 密钥一律不进代码、不进 git、
+  不经对话，由用户在云函数控制台填。缺环境变量时函数应返回结构化错误（本项目 `ENV_MISSING`），
+  便于判断「链路通了、只是没配」。
+
+### CloudBase 迁库（R48）
+- **CloudBase PG 自带 `auth.uid()`，且同样返回 text** —— 129 个 `SECURITY DEFINER` 函数可原样重放。
+- `applyMigration` **必须内联传 SQL**（只给路径报 `SQL_REQUIRED`）；本地同名文件内容要逐字符一致
+  （否则 `LOCAL_MIGRATION_FILE_MISMATCH`）；`migrationName` 正则 `^[a-z][a-z_]*$` **不允许数字**。
+- 带 `BEGIN/COMMIT` 的脚本不能拼接（事务嵌套）；改返回类型（42P13）或改签名（变重载）
+  都**不能靠 `CREATE OR REPLACE`**，必须先 `DROP FUNCTION`。
+- **判断权限缺失前先查原库 `pg_policies` + `information_schema.role_table_grants`**：
+  本项目原库本来就只给 5 张表客户端直连、其余一律 `REVOKE ALL`，
+  「表开了 RLS 却只有一条策略」是**正常的**，不是灾难。
+
 ### 文件与图片
 - **WorkBuddy 对象存储在小程序端是单向的（能写不能读）**，是本项目的平台级结论。元数据就在业务库里，直接查 `storage.objects` 看 `version` 是否为空即可判断。
 - **WorkBuddy Cloud SDK 在小程序里做不了任何二进制收发**：`createMiniProgramFetch` 只支持字符串 body。传文件一律绕开 SDK 用 `wx.request` 打 `/.cloud/storage/object/...`（header 抄 `x-wb-webapp-access-key` + `Authorization` + `X-Client-Info`）。**已在真机验证可行。**
@@ -1190,7 +1354,13 @@ node campus-errand/tools/style-lint.js campus-errand
 | `check-mp.js` | **工作区根目录** | ① ESM 严格解析（抓重复声明）② JSON 可解析 ③ WXML 标签配对 + id 唯一 ④ app.json 页面文件齐全 ⑤ usingComponents 指向存在 ⑥ 按 packOptions.ignore 算真实上传体积 ⑦ 裸包名能在 miniprogram_npm 解析 |
 | `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
-**当前状态**：56 个业务 JS `node --check` 全过，`verify-mp.js` 通过，`check-mp.js` **1.40MB / 2.00MB**（176 个文件，扫描 JS 62 个）通过，`style-lint.js`（32 wxss / 40 wxml）通过，`npm test` 55 项全过。
+**当前状态（2026-10-27 23:30 复核）**：56 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
+`check-mp.js` **1.40MB / 2.00MB**（176 个文件，扫描 JS 62 个）通过，`style-lint.js`（32 wxss / 40 wxml）通过，
+`npm test` **56 项**全过。
+
+> **云函数不算业务 JS、也不进包**：`cloudfunctions/pay-create/index.js` 走 Node CommonJS
+> （`require('crypto')`），与页面层的 ES5 约束无关，且已由 `packOptions.ignore` 排除。
+> 它只参与四件套第 1 项的 `node --check`，不参与后三项。
 
 > ⚠️ **三个 JS 数字口径不同，别误判成文档漂移**（复核时三个都对，不要互相覆盖）：
 > **56** = 业务代码：`pages` 38 + `utils` 16 + `components` 2（上面第 1 步 `find` 的范围）；
@@ -1222,7 +1392,9 @@ node campus-errand/tools/style-lint.js campus-errand
 5. **签名链接接口（`createSignedUrl`）为什么报错仍是未知** —— 已绕开不影响流程。
    2026-10-26 复核：业务代码（`pages/` `utils/`）**已无任何调用点**，仅 SDK 自带注释里出现，
    媒体读取统一走 `media_assets` + 三条读图通道。故此项实际已不再阻塞，仅在未来要恢复对象存储通道时才需再查。
-6. **钱包未接支付**：暂不可提现，页面已如实说明。
+6. **钱包未接支付** —— 🟡 **R49 起已开工，链路通了一半**（2026-10-27 更新）：
+   云函数 `pay-create` 已部署并实测返回（4ms），支付 DDL、抽佣配置表、提现 4 个 RPC 已落新库；
+   页面仍如实写着「不可提现」。**完整方案与前置清单见 `docs/PAYMENT.md`**。
 7. ~~**试用版 2026/10/29 到期**~~ ✅ **2026-10-27 已转企业主体小程序，审核中**。
    试用版（微信「试用小程序」）本就是一次性验证通道：14 天、15 人、无后台、无 AppSecret、
    不能转正式版。已按官方路径「解绑 → 绑定已有小程序账号 → 发体验/正式版」处理，
@@ -1232,6 +1404,28 @@ node campus-errand/tools/style-lint.js campus-errand
    `support.wxml` / `support.wxss` 的 `.sup-debug`）~~ ✅ **R38 已随整页重写清除**
    （2026-10-26 复核：全仓 `grep sup-debug` / `debugInfo` / `measureLayout` 均为空），
    滚动空白问题当时已由「弃用 scroll-view、改整页滚动 + 固定输入区」根治，无需再等确认。
+
+### 🔴 新增待用户操作（R49，2026-10-27）
+9. **云函数环境变量缺两项，支付无法真正下单**：`WXPAY_SERIAL_NO`（商户证书序列号）与
+   `WXPAY_PRIVATE_KEY`（`apiclient_key.pem` 全文，换行用 `\n` 转义）必须由用户自己在
+   云函数控制台填 —— 这两项**不能经过对话**，AI 也拿不到。已配好 `WXPAY_MCHID=1119307371`、
+   `WXPAY_APPID=wxaab192c68e403292`。
+10. **抽佣比例待拍板**（影响 `settle` 的结算公式和前端「预计到手」文案）：
+    收款 0.6% + 提现 0.6% = 每单成本 1.2%，**平台抽 0 是亏钱的**。
+    四个备选见 `docs/PAYMENT.md`「二·补充 2」（抽 5% / 抽 2% / 用户承担 / 提现扣），
+    建议抽 2%–5%。**这个数要在写 `settle` 之前定下来**。
+
+### 🟡 已知但未处理（R47–R49 新增）
+11. **⚠️ 二清合规风险（业务定性问题，不是技术问题）**：平台「先收用户的钱、再转给接单员」
+    在监管口径下易被认定为**无证从事支付结算业务**。规避靠定性：服务定性为「平台自营」、
+    向接单员支付**劳务报酬**，保留接单员协议与报酬明细，提现设门槛（满 10 元、T+1），
+    不做「余额长期沉淀 + 任意提现」。**正式运营前建议过一遍学校法务/财务。**
+12. **数据库双库期，前端还没切**：新库（CloudBase）结构已齐平并通过验收，
+    但 `utils/cloud.js` / `config.js` / `api.js`（1784 行）与登录仍指向 WorkBuddy Cloud。
+    **切换前两套库都在跑，任何只改一边的功能都会对不上账。**
+13. **`cloudbase/` 不在 git 仓库内**：33 批迁库脚本在工作区根下 `cloudbase/migrations/`，
+    与 `campus-errand/` 同级，目前**不受版本控制**（工作区根不是 git 仓库）。
+    若要长期留档，需单独入仓库或另建一个库。
 
 ### 🟢 设计取舍（不是 bug）
 - **抵扣券只记在订单上，接单员仍拿全额赏金**，差价由平台承担。

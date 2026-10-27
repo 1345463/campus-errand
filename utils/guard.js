@@ -41,9 +41,17 @@ function toastError(error) {
 // 用户名是硬需求：接单员真名、评价、订单卡片、消息里都要显示。
 // 但微信一键登录拿不到昵称，老账号也可能一直是空的，
 // 所以只要读到 profile 发现没名字，就当场弹到资料页补全（force 模式，不填完不放走）。
+//
+// 默认值「同学」也必须算缺失：ensureProfile 建号时会写这个默认值，
+// 只判空串的话这条强制补全永远不命中 —— 12 个用户里 9 个叫「同学」，
+// 订单卡片全变成「发布 同学 · 接单 同学」，交易双方根本分不清是谁。
+const DEFAULT_NICKNAMES = ['同学']
+
 function nicknameMissing(profile) {
   if (!profile) return false
-  return !String(profile.nickname || '').trim()
+  const name = String(profile.nickname || '').trim()
+  if (!name) return true
+  return DEFAULT_NICKNAMES.indexOf(name) >= 0
 }
 
 function ensureNickname(profile) {

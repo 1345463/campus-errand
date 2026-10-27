@@ -1,0 +1,9 @@
+{
+  "name": "pay-create",
+  "version": "1.0.0",
+  "description": "微信支付 JSAPI 下单（零外部依赖，仅 wx-server-sdk 取 openid）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

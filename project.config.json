@@ -1,7 +1,7 @@
 {
   "miniprogramRoot": "./",
   "compileType": "miniprogram",
-  "appid": "wxf73d4e1b04e62d79",
+  "appid": "wxaab192c68e403292",
   "projectname": "campus-errand",
   "description": "校园跑腿代办小程序",
   "packOptions": {
@@ -29,6 +29,10 @@
       {
         "type": "folder",
         "value": "docs"
+      },
+      {
+        "type": "folder",
+        "value": "cloudfunctions"
       }
     ],
     "include": []

@@ -793,3 +793,45 @@ _提交时间：2026-10-23 16:50:00_
 - README「九、部署」补「发布通道」段与提审前置材料清单（备案 / 隐私指引 / UGC 声明 / 企业类目）。
 - ITERATIONS 第 0 章「发布状态」改写；风险清单第 7 条由 🔴 待处理改为 ✅ 已转企业主体。
 - `docs/RELEASE.md` 重写为「当前通道 + 历史试用版」，保留试用版时期的排障记录作留档。
+
+## R47 · 默认昵称「同学」绕过强制补全 + AppID 切企业主体（10-27 18:45）
+
+- **昵称**：备份数据时发现 12 个用户里 9 个叫「同学」，订单卡片全是「发布 同学 · 接单 同学」。
+  根因是 `guard.nicknameMissing()` 只判空串，而 `ensureProfile` 建号时写的默认昵称就是「同学」——
+  非空 ⇒ 强制补全一次都没触发过。修法：新增 `DEFAULT_NICKNAMES = ['同学']`，
+  空串 / 全空格 / 默认值都算缺失。新增回归测试，`npm test` 55 → **56 项**。
+- **AppID**：`project.config.json` 由 `wxf73d4e1b04e62d79`（试用小程序）改为
+  **`wxaab192c68e403292`**（i邮跑，企业主体），全仓仅此一处引用。
+
+## R48 · 数据库全量迁至 CloudBase（10-27 18:40–22:59）
+
+- **动因**：在线支付的回调必须由云函数处理并直接改订单状态，而 WorkBuddy Cloud 没有云函数、
+  也不对外提供写库凭据。目标环境 `ceshi-d2g37cbg7c8f7ee48`（ap-shanghai，PG 模式）。
+- **关键结论**：CloudBase PG 自带 `auth.uid()` 且同样返回 **text** ——
+  129 个 `SECURITY DEFINER` 函数原样重放、一行不用改，迁移成本从几周降到一天。
+- **验收**：32 表 / 131 函数 / 9 触发器 / 9 策略 / 23 开关全开 / 296 违规词 / 7 FAQ，
+  前端 `api.js` 的 **99 个 RPC 零缺失**；33 批迁移全部 Succeed。
+- **四个新坑**：`applyMigration` 必须内联传 SQL；`migrationName` 不允许数字（`round4` → `round_four`）；
+  `CREATE OR REPLACE` 改不了返回类型（42P13）也改不了签名；两个脚本必须跳过
+  （`fix-order-hide-scope` 会造成重载歧义、`fix-asset-authorization` 会把 R45 修正版覆盖回 R40 有 bug 版）。
+- **一次误判**：中途「新库 RLS 策略只剩 1 条」被当成灾难，查原库后才知道本来就只给 5 张表
+  客户端直连、其余一律 `REVOKE ALL`。判断权限缺失前先看 `pg_policies` + `role_table_grants`。
+- **只剩前端换 SDK**：`cloud.js` / `config.js` / `api.js` 1784 行 + 登录改 CloudBase 微信登录。
+
+## R49 · 在线支付打通第一步（10-27 19:06–23:30）
+
+- **纠正错判**：支付不必等前端换 SDK —— `wx.cloud` 是微信原生能力，与 WorkBuddy SDK 并存，
+  云函数可独立部署独立测试。
+- **已做**：① 支付 DDL（`orders` 加 `pay_status` / `pay_txn_id` / `paid_at` /
+  `settle_amount` / `settled_at` + 2 索引 + CHECK；新建 `withdraw_requests`）
+  ② 抽佣后台可调：`pay_settings` + `get_pay_settings` / `calc_settle_amount` /
+  `admin_update_pay_settings`  ③ 提现 4 个 RPC（`create_withdraw_request` 校验余额与门槛、
+  `admin_finish_withdrawal` 失败自动退款）  ④ 云函数 **`pay-create` 部署成功**
+  （零依赖，只用内置 crypto + https）  ⑤ 实测 4ms 返回 `ENV_MISSING`，链路通。
+- **卡在用户侧**：`WXPAY_SERIAL_NO` 与 `WXPAY_PRIVATE_KEY` 必须用户自己在控制台填，不经对话。
+- **待写**：`pay-notify`（验签 + 解密）、`transfer`（商家转账到零钱）、`transfer-notify`；
+  抽佣比例待用户拍板（收款 0.6% + 提现 0.6%，平台抽 0 每单亏 1.2%）。
+- ⚠️ **合规**：代收再转付易被认定「二清」，需定性为平台自营 + 向接单员付劳务报酬，
+  正式运营前建议过学校法务/财务。完整方案见 `docs/PAYMENT.md`。
+- 工程配套：`cloudfunctions/` 加进 `packOptions.ignore`（云函数是服务端代码，
+  不进小程序包，否则 check-mp.js 会报 npm 依赖缺失并拒绝提交）。

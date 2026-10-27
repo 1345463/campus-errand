@@ -306,3 +306,40 @@ test('工作台待办卡片按三列分行，订单指标单独一行两张宽�
   rows.forEach((r) => assert.equal(r.items[r.items.length - 1].isLast, true))
   h.cleanup()
 })
+
+test('默认昵称「同学」也算缺失，强制用户补全', () => {
+  const vm = require('node:vm')
+  const fs = require('node:fs')
+  const path = require('node:path')
+  const {root} = require('./harness')
+  const mod = {exports: {}}
+  const stub = {
+    confirm: () => Promise.resolve(true),
+    toast: () => {},
+    toastError: () => {},
+    getErrorMessage: (e) => String(e),
+    resume: () => {},
+  }
+  const ctx = vm.createContext({
+    console,
+    module: mod,
+    require: (name) => stub[name.split('/').pop()] && typeof stub[name.split('/').pop()] === 'function'
+      ? stub[name.split('/').pop()]
+      : stub,
+    wx: {navigateTo() {}, switchTab() {}},
+    Promise,
+    setTimeout,
+    clearTimeout,
+  })
+  // guard.js 依赖 ui / api / login-return，这里统一喂一个 stub 对象即可
+  ctx.require = () => stub
+  vm.runInContext(fs.readFileSync(path.join(root, 'utils/guard.js'), 'utf8'), ctx, {filename: 'guard.js'})
+  const g = mod.exports
+
+  assert.equal(g.nicknameMissing({nickname: ''}), true, '空昵称要补全')
+  assert.equal(g.nicknameMissing({nickname: '   '}), true, '全空格要补全')
+  // 关键回归点：ensureProfile 建号时写的就是「同学」，不能因为「非空」就放过去
+  assert.equal(g.nicknameMissing({nickname: '同学'}), true, '默认昵称要补全')
+  assert.equal(g.nicknameMissing({nickname: '包子6688'}), false, '真实昵称不该被打断')
+  assert.equal(g.nicknameMissing(null), false)
+})

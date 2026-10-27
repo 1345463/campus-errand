@@ -7,12 +7,16 @@
 
 | 迭代 | 页面 | 数据表 | 数据库函数 | 回归测试 | 主包 |
 |---|---|---|---|---|---|
-| **46 轮** | **38 个** | **31 张** | **129 个** | **55 项** | **1.40 / 2.00 MB** |
+| **49 轮** | **38 个** | **31 张** | **129 个** | **56 项** | **1.40 / 2.00 MB** |
 
 > **📦 当前发布状态（2026-10-27）**
 > 企业主体小程序账号已绑定，正在走微信审核流程。此前通过 WorkBuddy 的**试用版**通道
 > （微信「试用小程序」：14 天有效、最多 15 人、不能直接转正式版）完成真机验证，试用期已结束。
 > 审核通过后发布**正式版**，不再有 14 天与 15 人限制。
+>
+> **🗄 数据库双库期**：运行库仍是 WorkBuddy Cloud（31 表 / 129 函数 / 7 触发器）；
+> 迁库目标 **CloudBase** 结构已齐平并通过验收（32 表 / 131 函数 / 9 触发器，前端 99 个 RPC 零缺失），
+> **待切换前端 SDK**。R49 起的支付表与云函数只落地在新库。详见 `docs/PAYMENT.md`。
 
 ---
 
@@ -35,7 +39,7 @@
 | 人 | AI |
 |---|---|
 | 提需求、定优先级、验收真机效果 | 拆需求、读历史、定位根因、写实现 |
-| 判断「这个交互对不对」 | 跑四件套校验、55 项回归测试、执行 SQL 迁移 |
+| 判断「这个交互对不对」 | 跑四件套校验、56 项回归测试、执行 SQL 迁移 |
 | 决定要不要上线 | 更新文档、写踩坑记录、按轮次提交推送 |
 
 ### AI 实际交付了什么
@@ -45,7 +49,7 @@
 | 页面 | 38 个（四件套齐全，全部在 `app.json` 注册） |
 | 前端代码 | 16,326 行 JS ／ 4,987 行 WXML ／ 4,862 行 WXSS（含 utils / components / app） |
 | 数据库 | 31 张表、129 个函数、7 个触发器、28 个幂等迁移脚本 |
-| 测试 | 55 项回归测试（含真实 PostgreSQL 执行） |
+| 测试 | 56 项回归测试（含真实 PostgreSQL 执行） |
 | 文档 | 1,400+ 行迭代记录 + 踩坑知识库 + 逐轮 CHANGELOG |
 
 ### 为什么把过程也写进仓库
@@ -55,7 +59,7 @@
 真实原因是 `app.wxss` 里一条全局 `.home, .mine { min-height: 100vh }` 撞了消息行的
 class 名 `mine`——每条自己发的消息都被撑到一屏高。**类名改掉，问题当场消失。**
 
-这类坑 AI 会重复踩，也会重复读。所以文档不是装饰，是这个项目能迭代 46 轮而不失控的原因。
+这类坑 AI 会重复踩，也会重复读。所以文档不是装饰，是这个项目能迭代 49 轮而不失控的原因。
 
 ---
 
@@ -153,7 +157,7 @@ super / support / hr / review / rental / print / settle / dispatch
 | 机制 | 作用 |
 |---|---|
 | 校验四件套 | 语法 / 页面注册 / 上传预检 / WXSS 语法，缺一个就传不上去 |
-| 55 项回归测试 | 含真实 PostgreSQL 执行（PGlite），改完立刻知道有没有打断 |
+| 56 项回归测试 | 含真实 PostgreSQL 执行（PGlite），改完立刻知道有没有打断 |
 | GitHub Actions | 同样的命令跑在 CI，人懒的时候也不会漏 |
 | 迭代记录 + 踩坑库 | 每轮的现象、真因、修法、教训，下次不用重新踩 |
 
@@ -272,7 +276,8 @@ campus-errand/
 ├── utils/            api / upload / ui / guard / flags / perms / motion /
 │                     moderation / campus / services / config / agreement / cloud
 ├── sql/              28 个幂等迁移脚本（可重放）
-├── tests/            55 项回归测试（含 PGlite 真实 PostgreSQL）
+├── cloudfunctions/   微信云函数（pay-create 支付下单；服务端代码，已加 packOptions.ignore）
+├── tests/            56 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 ├── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅
 └── miniprogram_npm/  SDK 构建产物（必须入库，删了跑不起来）
@@ -285,6 +290,10 @@ campus-errand/
 - **7 个触发器**：订单消息推送、图片归属校验、手机号闸门 ×3 等
 - **28 个迁移脚本**，全部幂等，按文件名顺序执行即可重建（完整清单见
   [`docs/ITERATIONS.md` 第 3 章](docs/ITERATIONS.md)）
+- **CloudBase 新库（R48 起）**：32 表 / 131 函数 / 9 触发器，33 批迁库脚本在
+  **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，不在本仓库内）；
+  支付表 `pay_settings` / `withdraw_requests` 与提现 RPC 只落在新库。
+  完整方案见 [`docs/PAYMENT.md`](docs/PAYMENT.md)。
 
 ### 订单状态机
 
@@ -308,7 +317,7 @@ pending ──accept──> accepted ──complete──> waiting_confirm ─�
 
 ```bash
 npm ci --ignore-scripts
-npm test        # 55 项回归
+npm test        # 56 项回归
 npm run check   # 四件套：语法 / 页面注册 / 上传预检 / WXSS 语法
 ```
 
@@ -338,6 +347,10 @@ UGC 信息安全声明，服务类目需企业主体（跑腿类目个人主体�
 5. 后台密码入口在「我的 → 设置 → 后台密码入口」。
 6. 环境选型与发布细节见 [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md)、
    [`docs/RELEASE.md`](docs/RELEASE.md)、[`docs/VERIFY.md`](docs/VERIFY.md)。
+7. **云函数（R49 起）**：`cloudfunctions/pay-create` 已部署。云函数属服务端代码，
+   已加进 `packOptions.ignore`，**不进小程序包**；密钥（`WXPAY_SERIAL_NO` /
+   `WXPAY_PRIVATE_KEY` 等）只在云函数控制台的环境变量里配，不进代码与仓库。
+   支付完整方案见 [`docs/PAYMENT.md`](docs/PAYMENT.md)。
 
 ## 十、关于 Git 历史（务必知情）
 
@@ -353,14 +366,20 @@ UGC 信息安全声明，服务类目需企业主体（跑腿类目个人主体�
 对应小节 + `docs/ITERATIONS.md`；想看某一轮「引入了哪些文件」，`git show --stat <commit>`。
 R29 之后的所有改动都是真实 diff。
 
-当前 `main` 有 **70 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
+当前 `main` 有 **72 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
 R39 的三个第三方提交曾被摘除并压成一条整合提交，改写前后文件树 hash 完全一致
 （代码零改动，只换了提交边界与作者）。
 
 ## 十一、已知风险
 
 - 后台入口使用加盐摘要 + 失败限流 + 审计；共享管理员口令仍应定期轮换。
-- 未接支付，钱包不可提现（页面已如实说明）。
+- **支付链路只通了一半**：云函数 `pay-create` 已部署并可调用，但商户证书序列号与私钥
+  需用户自己在控制台配置（不能经对话），`pay-notify` / `transfer` 待写；钱包暂仍不可提现
+  （页面已如实说明）。方案与前置清单见 `docs/PAYMENT.md`。
+- **二清合规风险（业务定性，非技术）**：平台代收再转付接单员，需定性为「平台自营 +
+  向接单员支付劳务报酬」，并保留协议与报酬明细；正式运营前建议过一遍学校法务/财务。
+- **数据库处于双库期**：CloudBase 新库结构已就绪，但前端仍连 WorkBuddy Cloud，
+  切换前两边都要同步维护。`cloudbase/migrations/` 目前不在 git 版本控制内。
 - 旧对象存储的证件照不可读，需用户重新提交。
 - AI 配额按账号在服务端记账，但模型仍由客户端直连，**绕过端上代码仍可直接调 `llmChat`**；
   严格成本防刷需要可信服务端网关。

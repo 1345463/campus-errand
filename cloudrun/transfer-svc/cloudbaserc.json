@@ -1,0 +1,6 @@
+{
+  "envId": "ceshi-d2g37cbg7c8f7ee48",
+  "cloudrun": {
+    "name": "transfer-svc"
+  }
+}

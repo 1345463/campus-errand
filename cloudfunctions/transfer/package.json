@@ -1,0 +1,7 @@
+{
+  "name": "transfer",
+  "version": "1.0.0",
+  "description": "商家转账到零钱（提现执行），零外部依赖",
+  "main": "index.js",
+  "dependencies": {}
+}

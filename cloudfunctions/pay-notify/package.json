@@ -1,0 +1,7 @@
+{
+  "name": "pay-notify",
+  "version": "1.0.0",
+  "description": "微信支付结果回调（HTTP）：验签 + 解密 + 落库，零外部依赖",
+  "main": "index.js",
+  "dependencies": {}
+}

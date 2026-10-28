@@ -1,0 +1,7 @@
+{
+  "name": "transfer-notify",
+  "version": "1.0.0",
+  "description": "商家转账结果回调：验签+解密+更新提现状态，零外部依赖",
+  "main": "index.js",
+  "dependencies": {}
+}

@@ -1,0 +1,7 @@
+{
+  "name": "tcb-proxy",
+  "version": "1.0.0",
+  "description": "网关转发：部署在小程序自己的微信云开发环境，用于免域名访问 CloudBase 网关",
+  "main": "index.js",
+  "dependencies": {}
+}

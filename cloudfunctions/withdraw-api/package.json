@@ -1,0 +1,7 @@
+{
+  "name": "withdraw-api",
+  "version": "1.0.0",
+  "description": "提现管理 API（小程序管理后台通过网关调用）",
+  "main": "index.js",
+  "dependencies": {}
+}

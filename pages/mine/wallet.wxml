@@ -46,8 +46,78 @@
     </view>
 
     <view class="card">
-      <view class="btn-disabled" bindtap="comingSoon">提现（暂未开通）</view>
-      <view class="hint">提现要求小程序主体为企业并开通微信支付商户号，个人主体无法使用</view>
+      <view class="section-head">
+        <text class="section-title">提现</text>
+        <text class="section-more" bindtap="loadWithdraw">刷新</text>
+      </view>
+
+      <view wx:if="{{wdErr}}" class="err-bar">
+        <text class="err-text">{{wdErr}}</text>
+        <text class="err-retry" bindtap="loadWithdraw">重试</text>
+      </view>
+
+      <view wx:elif="{{wdLoading}}" class="hint">加载中…</view>
+
+      <view wx:else>
+        <view wx:if="{{wdClaim}}" class="note-box">
+          <view class="detail-label">有一笔转账待你确认收款</view>
+          <view class="detail-value">¥{{wdClaim.amountText}}</view>
+          <view class="hint">点下面按钮确认后才会到微信零钱；24 小时不确认会自动退回</view>
+          <view class="btn-primary top-gap" bindtap="claimTransfer">确认收款</view>
+        </view>
+
+        <view class="detail-row">
+          <view class="detail-label">可提现余额</view>
+          <view class="detail-value">¥{{wdBalanceText}}</view>
+        </view>
+        <view class="detail-row">
+          <view class="detail-label">最低提现</view>
+          <view class="detail-value">¥{{wdMinText}}</view>
+        </view>
+
+        <view class="note-box">
+          <input
+            class="note-input"
+            placeholder-class="field-ph"
+            placeholder="输入提现金额"
+            type="digit"
+            value="{{wdAmount}}"
+            bindinput="onAmountInput"
+          />
+          <view class="btn-row">
+            <view class="btn-ghost half" bindtap="useAll">全部提现</view>
+            <view
+              class="btn-primary half {{wdSubmitting ? 'disabled' : ''}}"
+              bindtap="submitWithdraw"
+            >{{wdSubmitting ? '提交中…' : '申请提现'}}</view>
+          </view>
+        </view>
+
+        <view wx:if="{{wdRecords.length > 0}}">
+          <view class="section-head">
+            <text class="section-title">提现记录</text>
+          </view>
+          <view
+            class="detail-row"
+            wx:for="{{wdRecords}}"
+            wx:for-item="wr"
+            wx:key="id"
+          >
+            <view class="detail-label">
+              <text class="flow-time">{{wr.timeText}}</text>
+              <text wx:if="{{wr.failReason}}" class="flow-time">{{wr.failReason}}</text>
+            </view>
+            <view class="detail-value">
+              ¥{{wr.amountText}}
+              <text class="flow-time"> {{wr.statusText}}</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="hint top-gap">
+          提现由管理员人工审核转账，到账后在「我的」页会收到通知
+        </view>
+      </view>
     </view>
   </view>
 </view>

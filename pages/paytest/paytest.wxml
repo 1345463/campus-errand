@@ -1,0 +1,16 @@
+<view class="pt-page">
+  <view class="pt-card">
+    <view class="pt-title">微信支付联调</view>
+    <view class="pt-meta">测试订单 #{{orderId}} · 金额 ¥{{amount}}</view>
+    <button class="pt-btn" bindtap="pay" loading="{{paying}}" disabled="{{paying}}">
+      支付 ¥{{amount}}
+    </button>
+    <view class="pt-hint">真实扣款，用于验证回调链路</view>
+  </view>
+
+  <view class="pt-card">
+    <view class="pt-title">执行日志</view>
+    <view class="pt-log" wx:for="{{log}}" wx:key="*this" wx:for-item="line">{{line}}</view>
+    <view class="pt-empty" wx:if="{{!log.length}}">暂无日志</view>
+  </view>
+</view>

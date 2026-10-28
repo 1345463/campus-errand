@@ -15,6 +15,7 @@
     "pages/agreement/index",
     "pages/admin/review",
     "pages/admin/settle",
+    "pages/admin/withdraw",
     "pages/admin/reports",
     "pages/admin/items",
     "pages/admin/rental",

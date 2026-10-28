@@ -1,0 +1,11 @@
+{
+  "functionsRoot": "./src",
+  "functions": [
+    {
+      "name": "transfer",
+      "directory": "transfer",
+      "source": "index.js",
+      "triggerPath": "/transfer"
+    }
+  ]
+}

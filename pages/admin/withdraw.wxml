@@ -1,0 +1,85 @@
+<view class="page">
+  <view class="err-bar" wx:if="{{errorText}}">
+    <text class="err-text">{{errorText}}</text>
+    <text class="err-retry" bindtap="load">重试</text>
+  </view>
+
+  <view class="tool-row">
+    <view class="doc-btn" bindtap="load">刷新列表</view>
+    <view class="hint">点「自动转账」会直接打款到用户微信零钱，需用户在小程序里确认收款</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="empty">加载中…</view>
+  <view wx:elif="{{list.length === 0 && !errorText}}" class="empty">
+    <view>还没有提现申请</view>
+    <view class="hint top-gap">用户在钱包页提交提现后会出现在这里</view>
+  </view>
+
+  <view
+    class="card apply-card"
+    wx:for="{{list}}"
+    wx:for-item="wd"
+    wx:key="id"
+  >
+    <view class="apply-head">
+      <text class="apply-name">{{wd.nickname}}</text>
+      <text class="status-text {{wd.statusClass}}">{{wd.statusText}}</text>
+    </view>
+
+    <view class="detail-row">
+      <view class="detail-label">金额</view>
+      <view class="detail-value">¥{{wd.amountText}}</view>
+    </view>
+    <view class="detail-row">
+      <view class="detail-label">申请时间</view>
+      <view class="detail-value">{{wd.createdText}}</view>
+    </view>
+    <view class="detail-row" wx:if="{{wd.batchId}}">
+      <view class="detail-label">微信批次号</view>
+      <view class="detail-value">{{wd.batchId}}</view>
+    </view>
+    <view class="detail-row" wx:if="{{wd.finishedText}}">
+      <view class="detail-label">完成时间</view>
+      <view class="detail-value">{{wd.finishedText}}</view>
+    </view>
+    <view class="detail-row last" wx:if="{{wd.failReason}}">
+      <view class="detail-label">失败原因</view>
+      <view class="detail-value">{{wd.failReason}}</view>
+    </view>
+
+    <block wx:if="{{wd.status === 'pending' || wd.status === 'processing'}}">
+      <view wx:if="{{noteId === wd.id}}" class="note-box">
+        <textarea
+          class="note-input"
+          placeholder-class="field-ph"
+          placeholder="失败原因（会展示给用户）"
+          value="{{note}}"
+          bindinput="onNoteInput"
+          maxlength="100"
+          auto-height="{{true}}"
+        />
+        <view class="btn-row">
+          <view class="btn-ghost half" bindtap="cancelNote">取消</view>
+          <view
+            class="btn-danger half {{actingId === wd.id ? 'disabled' : ''}}"
+            data-id="{{wd.id}}"
+            bindtap="reject"
+          >确认失败并退款</view>
+        </view>
+      </view>
+      <view wx:else class="btn-row">
+        <view
+          class="btn-ghost half"
+          wx:if="{{actingId !== wd.id}}"
+          data-id="{{wd.id}}"
+          bindtap="openNote"
+        >转账失败</view>
+        <view
+          class="btn-primary half {{actingId === wd.id ? 'disabled' : ''}} {{armId === wd.id ? 'btn-armed' : ''}}"
+          data-id="{{wd.id}}"
+          bindtap="autoTransfer"
+        >{{armId === wd.id ? '再点一次确认' : (actingId === wd.id ? '处理中…' : '自动转账')}}</view>
+      </view>
+    </block>
+  </view>
+</view>

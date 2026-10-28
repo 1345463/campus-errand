@@ -1,0 +1,10 @@
+{
+  "name": "transfer-svc",
+  "version": "1.0.0",
+  "description": "商家转账服务（跑在云托管上，使用环境固定出口 IP）",
+  "main": "index.js",
+  "license": "ISC",
+  "devDependencies": {
+    "@cloudbase/functions-framework": "^1.3.0"
+  }
+}

@@ -7,6 +7,14 @@ App({
 
   onLaunch() {
     const app = this
+    // 微信云开发初始化：env 必须是「小程序自己的云开发环境」。
+    // 这里用 baozi（在小程序后台开通的），wx.cloud 只认这类环境；
+    // 数据库所在的腾讯云 CloudBase 环境 ceshi-xxx 是另一回事，由云函数侧访问。
+    if (wx.cloud) {
+      wx.cloud.init({ env: 'baozi-d2gbl784gd773f8b6', traceUser: true })
+    } else {
+      console.warn('[cloud] 基础库低于 2.2.3，wx.cloud 不可用，支付功能将无法使用')
+    }
     const api = require('./utils/api')
     require('./utils/ui').removeStorage('savedAccount')
     app.checkUpdate()

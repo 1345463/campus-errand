@@ -22,6 +22,53 @@ const SERIAL_NO = process.env.WXPAY_SERIAL_NO || ''
 const PRIVATE_KEY = (process.env.WXPAY_PRIVATE_KEY || '').replace(/\\n/g, '\n')
 const NOTIFY_URL = process.env.WXPAY_NOTIFY_URL || ''
 const APP_SECRET = process.env.WX_APP_SECRET || ''
+const TCB_ENV = process.env.TCB_ENV_ID || ''
+const TCB_KEY = process.env.TCB_PUBLISHABLE_KEY || ''
+
+/**
+ * 读 pay_settings.enabled —— 在线支付总闸，超管在后台随时开关。
+ *
+ * 失败一律按「开」处理（fail-open）：这是个业务开关，不是安全控制。
+ * 因为一次监控读超时就停掉所有收款，比「总闸没关成」代价大得多。
+ * 但配置缺失（没给 DB 凭据）时同样只放行并留 no-creds 标记，便于排查。
+ */
+function payGateOpen() {
+  if (!TCB_ENV || !TCB_KEY) return Promise.resolve({ open: true, reason: 'no-creds' })
+  const body = '{}'
+  return new Promise((resolve) => {
+    const req = https.request(
+      {
+        hostname: TCB_ENV + '.api.tcloudbasegateway.com',
+        path: '/v1/rdb/rest/rpc/get_pay_settings',
+        method: 'POST',
+        timeout: 6000,
+        headers: {
+          Authorization: 'Bearer ' + TCB_KEY,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let d = ''
+        res.on('data', (c) => { d += c })
+        res.on('end', () => {
+          try {
+            const rows = JSON.parse(d)
+            const row = Array.isArray(rows) ? rows[0] : rows
+            // 查不到行也放行：宁可收钱，别把用户挡在外面
+            resolve({ open: !row || row.enabled !== false, reason: 'db' })
+          } catch (e) {
+            resolve({ open: true, reason: 'parse' })
+          }
+        })
+      }
+    )
+    req.on('timeout', () => { req.destroy(); resolve({ open: true, reason: 'timeout' }) })
+    req.on('error', () => resolve({ open: true, reason: 'error' }))
+    req.write(body)
+    req.end()
+  })
+}
 
 function missingEnv() {
   const miss = []
@@ -118,6 +165,12 @@ exports.main = async (event) => {
     const miss = missingEnv()
     if (miss.length) {
       return done({ ok: false, code: 'ENV_MISSING', error: '云函数环境变量缺失：' + miss.join(', ') })
+    }
+
+    // 在线支付总闸（pay_settings.enabled）。放在最前面：关闸时连微信接口都不碰。
+    const gate = await payGateOpen()
+    if (!gate.open) {
+      return done({ ok: false, code: 'PAY_DISABLED', error: '在线支付暂未开放，请稍后再试或联系客服' })
     }
 
     // ---- 取 openid，三条路按优先级 ----

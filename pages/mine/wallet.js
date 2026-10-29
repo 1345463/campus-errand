@@ -4,8 +4,9 @@ const guard = require('../../utils/guard')
 
 const PAGE_SIZE = 20
 
-// 提现在新库 CloudBase，前端目前还连旧库，所以走 utils/tcb.js
-// 等前端换完 SDK 之后改回 api.rpc('create_withdraw_request')
+// 提现走 utils/tcb.js 的 /api/withdraw 网关（云函数 withdraw-api）：
+// 打款需要 service_role 权限 + 云托管的固定出口 IP，客户端既不能直连表、
+// 也不能自己发起转账。申请提交后由服务端自动打款，前端只负责展示状态与「确认收款」。
 
 // kind → 中文说明
 const KIND_TEXT = {
@@ -257,9 +258,19 @@ Page({
     page.setData({ wdSubmitting: true })
     ui.loading('提交中')
     page.callWithdraw({ action: 'create', amount: amount }).then(
-      function () {
+      function (data) {
         ui.hideLoading()
-        ui.toast({ title: '提现申请已提交' })
+        const auto = data && data.auto
+        if (auto && auto.ok) {
+          ui.toast({
+            title: auto.state === 'WAIT_USER_CONFIRM' ? '已自动转账，请点上方确认收款' : '已自动转账',
+            icon: 'none',
+          })
+        } else if (auto && auto.error) {
+          ui.toast({ title: '申请已提交，自动转账未成功，可在后台重试', icon: 'none' })
+        } else {
+          ui.toast({ title: '提现申请已提交' })
+        }
         page.setData({ wdSubmitting: false, wdAmount: '' })
         page.loadWithdraw()
         return null

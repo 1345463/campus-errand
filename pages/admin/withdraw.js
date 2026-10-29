@@ -1,12 +1,12 @@
 /**
- * 提现管理（人工转账模式）
+ * 提现管理（后台兜底）
  *
- * 数据在新库 CloudBase，而前端目前还连 WorkBuddy 旧库，直接 rpc 会「函数不存在」，
- * 所以走 utils/tcb.js：wx.login 拿 code → tcb-proxy → /api/withdraw → 云函数用 service_role 访问新库。
- * 等前端换完 SDK 之后，可以改回 api.rpc('admin_list_withdrawals') 直连。
+ * 数据在新库 CloudBase，直连表与打款都不对客户端开放，所以走 utils/tcb.js：
+ * wx.login 拿 code → /api/withdraw → 云函数用 service_role 访问新库。
  *
- * 转账是全自动的：点「自动转账」→ 云托管（固定出口 IP）调微信商家转账。
- * 点「转账失败」会自动把金额退回用户钱包并写流水。
+ * R54 起用户提交申请后由服务端自动打款（小额全自动，大额留在这里人工确认），
+ * 所以本页的日常职责只剩两件：① 自动转账失败时点「自动转账」重试；
+ * ② 判定不能打款时点「转账失败」，金额会自动退回用户钱包并写流水。
  */
 const ui = require('../../utils/ui')
 

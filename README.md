@@ -18,7 +18,7 @@
 | 灰度开关 | **23** 个（默认关，可按功能逐条放开） |
 | 违规词库 | **292** 条违规词（`utils/moderation-words.js` 的 `WORDS`）+ 4 条白名单，**13** 大类 |
 | 图片鉴权 | **3** 条独立通道（本人 / 订单参与方 / 公开） |
-| 小程序包体积 | **0.95 MB** / 上限 2 MB |
+| 小程序包体积 | **0.96 MB** / 上限 2 MB |
 
 ---
 
@@ -207,6 +207,7 @@ orders.pay_status = 'paid'
 | **R51** | **提现打通**（云托管固定 IP + 商家转账 + 用户确认收款 + 失败自动退款 + 对账兜底） |
 | **R52** | **前端整体切到 CloudBase**（云函数代持身份 `svc_rpc`，95 处 RPC 换通道，SDK 与 `miniprogram_npm` 一并删除）；**发单接入支付**（未付不进大厅），主包 1.44 → **0.95 MB** |
 | **R53** | **图片分片上传**（绕开 `wx.cloud.callFunction` 1MB 入参上限）：阶梯压缩 + `begin/push/finish` 三片式上传，修掉接单员传身份证弹 `EXCEED_MAX_PAYLOAD_SIZE` |
+| **R54** | **提现改服务端自动转账**：申请提交即打款，不再需要管理员点那一下；顺带查出云函数缺 `PAY_WEBHOOK_SECRET` 会让转账被云托管拒掉，改为运行时从库里读同一份密钥 |
 
 其中最有价值的几次「翻车与纠正」：
 
@@ -279,13 +280,15 @@ orders.pay_status = 'paid'
 |---|---|---|
 | 1. 申请 | 钱包页 → `svc_create_withdraw` | 绑手机号 / 余额 `FOR UPDATE` / 单笔在途 / 门槛校验 |
 | 2. 扣款 | 同上 | 扣余额 + 写 `wallet_records` 流水 |
-| 3. 审核 | 后台「提现管理」 | 列表 / 标记成功 / 标记失败 |
-| 4. **自动转账** | `withdraw-api` → 云托管 `transfer-svc` | **固定 IP** + 场景 1005 报备 |
-| 5. 用户确认 | 钱包页「确认收款」 | `wx.requestMerchantTransfer` |
-| 6. 到账 | 微信零钱 | 实测 0.1 元 |
-| 7. 状态回写 | 回调 + `sync` 兜底 | 回调不通也能对账 |
+| 3. **自动转账** | `withdraw-api` → 云托管 `transfer-svc` | **提交即打款**，不用人工点；固定 IP + 场景 1005 报备 |
+| 4. 用户确认 | 钱包页「确认收款」 | `wx.requestMerchantTransfer` |
+| 5. 到账 | 微信零钱 | 实测 0.1 元 |
+| 6. 状态回写 | 回调 + `sync` 兜底 | 回调不通也能对账 |
 
-失败自动退款：任何一步失败都会调 `admin_finish_withdrawal(false)`，把余额退回并写退款流水，不会出现「扣了钱没转出去」。
+**两道人工闸门**：`AUTO_TRANSFER=0` 可整体退回人工审核；单笔超过 `AUTO_TRANSFER_MAX`
+（默认 200 元）的不自动打款，留给后台确认。**打款失败不会丢钱** —— 后台可重试，
+或标记失败由 `admin_finish_withdrawal(false)` 退回余额并写退款流水；
+上一版遗留在 `pending` 的旧单，会在下次打开钱包页时自动补转。
 
 ---
 
@@ -308,7 +311,7 @@ orders.pay_status = 'paid'
 | 人 | AI |
 |---|---|
 | 提需求、定优先级、验收真机效果 | 拆需求、读历史、定位根因、写实现 |
-| 判断「这个交互对不对」 | 跑四件套校验、63 项回归测试、执行 SQL 迁移 |
+| 判断「这个交互对不对」 | 跑四件套校验、69 项回归测试、执行 SQL 迁移 |
 | 决定要不要上线 | 更新文档、写踩坑记录、按轮次提交推送 |
 
 ### AI 实际交付了什么
@@ -318,7 +321,7 @@ orders.pay_status = 'paid'
 | 页面 | 39 个（四件套齐全，全部在 `app.json` 注册） |
 | 前端代码 | 16,326 行 JS ／ 4,987 行 WXML ／ 4,862 行 WXSS（含 utils / components / app） |
 | 数据库 | 36 张表、154 个函数、9 个触发器、56 个幂等迁移脚本 |
-| 测试 | 63 项回归测试（含真实 PostgreSQL 执行） |
+| 测试 | 69 项回归测试（含真实 PostgreSQL 执行） |
 | 文档 | 1,400+ 行迭代记录 + 踩坑知识库 + 逐轮 CHANGELOG |
 
 ### 为什么把过程也写进仓库
@@ -452,7 +455,7 @@ campus-errand/
 ├── cloudfunctions/   7 个（app-api / pay-create / pay-notify / tcb-proxy /
 │                     transfer / transfer-notify / withdraw-api）
 ├── cloudrun/         云托管函数型服务 transfer-svc（固定出口 IP，对接商家转账；已加 packOptions.ignore）
-├── tests/            63 项回归测试（含 PGlite 真实 PostgreSQL）
+├── tests/            69 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 └── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅 / 支付方案
 ```
@@ -510,7 +513,7 @@ GitHub Actions 跑同样的命令。
 UGC 信息安全声明，服务类目需企业主体（跑腿类目个人主体不可选）。
 
 1. 微信开发者工具打开本目录（`miniprogram_npm` 必须在，`node_modules` 被 `packOptions.ignore` 排除）。
-2. 主包需 ≤ 2 MB，当前 **0.95 MB / 2.00 MB**（183 个文件，`node_modules` 已由
+2. 主包需 ≤ 2 MB，当前 **0.96 MB / 2.00 MB**（183 个文件，`node_modules` 已由
    `packOptions.ignore` 排除，不在包内）。
 3. 目标库按顺序执行以下关键迁移（均已落库，重建环境时需要按此顺序重放；
    完整 28 个脚本见 `docs/ITERATIONS.md` 第 3 章）：
@@ -560,7 +563,7 @@ UGC 信息安全声明，服务类目需企业主体（跑腿类目个人主体�
 对应小节 + `docs/ITERATIONS.md`；想看某一轮「引入了哪些文件」，`git show --stat <commit>`。
 R29 之后的所有改动都是真实 diff。
 
-当前 `main` 有 **86 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
+当前 `main` 有 **87 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
 R39 的三个第三方提交曾被摘除并压成一条整合提交，改写前后文件树 hash 完全一致
 （代码零改动，只换了提交边界与作者）。
 

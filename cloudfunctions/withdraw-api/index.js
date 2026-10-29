@@ -1,13 +1,21 @@
 /**
- * 提现管理 API（供小程序管理后台调用）
+ * 提现管理 API（供小程序端 + 管理后台调用）
  *
- * 为什么走网关而不是 rpc：前端目前仍连 WorkBuddy 旧库，而提现数据在新库 CloudBase，
- * 直接 rpc 会「函数不存在」。云函数用 service_role 访问新库，前端通过 HTTPS 网关调用。
- * 等前端换完 SDK 之后，可以直接 rpc，本函数可退役。
+ * 为什么走网关而不是 rpc：提现要写 withdraw_requests 并触发真实打款，
+ * 打款依赖只给 service_role 的 svc_* 函数与云托管的固定出口 IP，
+ * 客户端一律不许直连表，所以统一走本函数 + HTTPS 网关。
  *
  * action:
+ *   summary —— 我的可提现余额 + 门槛 + 提现记录（登录即可）
+ *   create  —— 提交提现申请（登录即可；成功后自动转账）
  *   list    —— 提现列表（需 settle/super 权限）
- *   finish  —— 标记成功 / 失败（需 settle/super 权限；失败自动退款）
+ *   transfer—— 对某笔提现单执行转账（需 settle/super 权限）
+ *   finish  —— 标记失败并退款（需 settle/super 权限）
+ *
+ * 自动转账（R54）：create 成功后直接调云托管转账，不再需要管理员点那一下；
+ * 环境变量 AUTO_TRANSFER=0 可关掉退回人工模式，AUTO_TRANSFER_MAX 是自动转账的
+ * 单笔上限（默认 200 元），超过的仍留给后台人工确认。
+ * summary 也会补转一次「停留在 pending 的历史单」，避免旧单永远没人点。
  *
  * 身份：小程序端 wx.login 拿 code，云函数用 AppSecret 换 openid，再查 admin_grants。
  */
@@ -20,6 +28,9 @@ const APPSECRET = process.env.WX_APP_SECRET || ''
 const SECRET = process.env.PAY_WEBHOOK_SECRET || ''
 // 转账要走云托管服务：它用环境级的固定出口 IP（微信支付白名单只认这个）
 const SVC_HOST = process.env.TRANSFER_SVC_HOST || ''
+// 自动转账开关与单笔上限（上限用于风控：小额全自动，大额留人工）
+const AUTO_TRANSFER = process.env.AUTO_TRANSFER !== '0'
+const AUTO_MAX = Number(process.env.AUTO_TRANSFER_MAX || 200)
 
 function httpsJson(hostname, path, method, bodyStr, headers) {
   return new Promise((resolve, reject) => {
@@ -83,6 +94,56 @@ async function resolveUid(openid) {
   return 'wx:' + openid
 }
 
+// 转账要用的共享密钥。优先用环境变量，没配就从库里现读 ——
+// pay_settings.webhook_secret 就是当初发给云托管的那个值，两边必须一致，
+// 由云函数运行时自己取，密钥不用在控制台之间搬来搬去。
+async function getSecret() {
+  if (SECRET) return SECRET
+  try {
+    const r = await rest('GET', '/v1/rdb/rest/pay_settings?select=webhook_secret&id=eq.1&limit=1')
+    const row = Array.isArray(r.body) && r.body.length ? r.body[0] : null
+    return (row && row.webhook_secret) || ''
+  } catch (e) {
+    return ''
+  }
+}
+
+// 调用云托管执行转账。网络层异常吞成结构化结果，调用方决定要不要上报。
+// 幂等：transfer_prepare 会把单锁成 processing，重复调用只会拿到同一笔，不会重复打款。
+async function doTransfer(id) {
+  if (!SVC_HOST) return { ok: false, code: 'ENV_MISSING', error: '未配置 TRANSFER_SVC_HOST' }
+  const secret = await getSecret()
+  if (!secret) return { ok: false, code: 'ENV_MISSING', error: '拿不到转账密钥（PAY_WEBHOOK_SECRET / pay_settings.webhook_secret）' }
+  try {
+    const r = await httpsJson(SVC_HOST, '/transfer', 'POST',
+      JSON.stringify({ action: 'transfer', secret: secret, withdrawId: id }), {
+        'Content-Type': 'application/json',
+      })
+    const body = (r && r.body) || {}
+    if (!body.ok) {
+      return {
+        ok: false,
+        code: body.code || 'TRANSFER_FAILED',
+        error: body.error || '转账失败',
+        detail: body.detail || null,
+      }
+    }
+    return {
+      ok: true,
+      state: body.state || '',
+      transferBillNo: body.transferBillNo || '',
+      packageInfo: body.packageInfo || '',
+    }
+  } catch (e) {
+    return { ok: false, code: 'NETWORK', error: '调用转账服务失败：' + ((e && e.message) || e) }
+  }
+}
+
+// 自动转账的准入判断：开关开着 + 金额没超上限
+function canAuto(amount) {
+  return AUTO_TRANSFER && Number(amount || 0) <= AUTO_MAX
+}
+
 async function loadNicknames(uids) {
   const map = {}
   const list = uids.filter(Boolean)
@@ -143,10 +204,11 @@ exports.main = async (event) => {
   // 我的可提现余额 + 门槛 + 最近提现记录
   if (action === 'summary') {
     // 同上：先兜底同步一次真实状态（用户确认收款后要能立刻看到变化）
-    if (SVC_HOST && SECRET) {
+    const sec = await getSecret()
+    if (SVC_HOST && sec) {
       try {
         await httpsJson(SVC_HOST, '/transfer', 'POST',
-          JSON.stringify({ action: 'sync', secret: SECRET }), { 'Content-Type': 'application/json' })
+          JSON.stringify({ action: 'sync', secret: sec }), { 'Content-Type': 'application/json' })
       } catch (e) {
         // 忽略
       }
@@ -160,15 +222,32 @@ exports.main = async (event) => {
     }
     const sr = await rest('GET', '/v1/rdb/rest/pay_settings?select=min_withdraw,commission_rate&id=eq.1&limit=1')
     const set = Array.isArray(sr.body) && sr.body.length ? sr.body[0] : {}
-    const wr = await rest('GET',
-      `/v1/rdb/rest/withdraw_requests?select=id,amount,status,fail_reason,created_at,package_info&owner_id=eq.${encodeURIComponent(uid)}&order=created_at.desc&limit=20`)
+    const wpath = `/v1/rdb/rest/withdraw_requests?select=id,amount,status,fail_reason,created_at,package_info&owner_id=eq.${encodeURIComponent(uid)}&order=created_at.desc&limit=20`
+    const wr = await rest('GET', wpath)
+    let records = Array.isArray(wr.body) ? wr.body : []
+
+    // 兜底：补转「还停在 pending」的单（自动转账上线前申请的、或当时云托管抖了没转成的）。
+    // 只挑最新的一笔，转完重查一次，让前端立刻看到 processing / 确认收款卡片。
+    let auto = null
+    if (SVC_HOST) {
+      const stuck = records.filter(function (x) {
+        return x.status === 'pending' && canAuto(x.amount)
+      })
+      if (stuck.length) {
+        auto = await doTransfer(Number(stuck[0].id))
+        const wr2 = await rest('GET', wpath)
+        if (Array.isArray(wr2.body)) records = wr2.body
+      }
+    }
+
     return done({
       ok: true,
       uid: uid,
       nickname: prof.nickname || '',
       balance: Number(prof.balance || 0),
       minWithdraw: Number(set.min_withdraw || 10),
-      records: Array.isArray(wr.body) ? wr.body : [],
+      records: records,
+      auto: auto,
     })
   }
 
@@ -186,17 +265,23 @@ exports.main = async (event) => {
         error: (r.body && (r.body.message || r.body.hint || r.body.details)) || '提现申请失败',
       })
     }
-    return done({ ok: true, result: row || {} })
+    // 自动转账：申请一成功就打款，不用等管理员点。失败不影响申请本身，
+    // 后台仍可重试（action=transfer）或标记失败退款。
+    const wdId = Number((row && (row.request_id || row.id)) || 0)
+    let auto = null
+    if (wdId && SVC_HOST && canAuto(amount)) auto = await doTransfer(wdId)
+    return done({ ok: true, result: row || {}, auto: auto })
   }
 
   // 列出提现申请
   if (action === 'list') {
     // 先让云托管按真实状态同步一遍（微信回调可能没到，这是兜底）。
     // 同步失败不影响列表返回。
-    if (SVC_HOST && SECRET) {
+    const sec = await getSecret()
+    if (SVC_HOST && sec) {
       try {
         await httpsJson(SVC_HOST, '/transfer', 'POST',
-          JSON.stringify({ action: 'sync', secret: SECRET }), { 'Content-Type': 'application/json' })
+          JSON.stringify({ action: 'sync', secret: sec }), { 'Content-Type': 'application/json' })
       } catch (e) {
         // 忽略：同步失败不影响查看
       }
@@ -216,27 +301,18 @@ exports.main = async (event) => {
     })
   }
 
-  // 自动转账：转发给云托管服务（固定出口 IP）
+  // 手动触发转账（后台重试 / 关闭自动转账时的主入口）
   if (action === 'transfer') {
-    if (!SVC_HOST) {
-      return done({ ok: false, code: 'ENV_MISSING', error: '未配置 TRANSFER_SVC_HOST' })
-    }
     const id = Number(payload.id || 0)
     if (!id) return done({ ok: false, code: 'BAD_PARAM', error: '缺少提现单号 id' })
-    const r = await httpsJson(SVC_HOST, '/transfer', 'POST',
-      JSON.stringify({ action: 'transfer', secret: SECRET, withdrawId: id }), {
-        'Content-Type': 'application/json',
-      })
-    const body = (r && r.body) || {}
-    if (!body.ok) {
-      return done({
-        ok: false,
-        code: body.code || 'TRANSFER_FAILED',
-        error: body.error || '转账失败',
-        detail: body.detail || null,
-      })
-    }
-    return done({ ok: true, state: body.state || '', transferBillNo: body.transferBillNo || '', packageInfo: body.packageInfo || '' })
+    const r = await doTransfer(id)
+    if (!r.ok) return done(r)
+    return done({
+      ok: true,
+      state: r.state || '',
+      transferBillNo: r.transferBillNo || '',
+      packageInfo: r.packageInfo || '',
+    })
   }
 
   // 标记成功 / 失败

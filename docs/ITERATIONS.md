@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-10-29 23:55** ｜ 累计 **54 轮迭代**、**39 个页面**、**36 张表**、**154 个数据库函数**、**9 个触发器**、**56 个迁移脚本**、**69 项回归测试**、主包 **0.96 MB**
+> 统计截止：**2026-10-30 00:15** ｜ 累计 **54 轮迭代**、**39 个页面**、**36 张表**、**154 个数据库函数**、**9 个触发器**、**56 个迁移脚本**、**73 项回归测试**、主包 **0.97 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -1150,9 +1150,24 @@ return !String(profile.nickname || '').trim()
 「已自动转账，请点上方确认收款」，失败时如实说「自动转账未成功，可在后台重试」，
 不再一律只说"申请已提交"。
 
-**校验**：新增 `tests/withdraw-auto.test.js` 6 条（默认开关、上限边界、create 自动打款、
-summary 补转、手动与自动共用一份实现、前端提示）。全量 **69 项测试通过**；
-四件套全绿，主包 0.96 MB。`withdraw-api` 已重新部署到 `ceshi`。
+**同轮追加的钱包页三处 UI 问题**（用户截图反馈）：
+1. **余额明细文字重叠** —— 根因是 `kind` 的中文映射漏了 `withdraw_refund`，
+   兜底又把英文原值直接显示出来，长串英文压在右侧金额上。
+   修法两层：① `KIND_TEXT` 补 `withdraw_refund: '提现退回'`，
+   **未映射的一律兜底成「其他」**（不再有任何英文原值泄漏到界面）；
+   ② 布局上 `.detail-label` 全局是固定 `180rpx`、长文本必然溢出，
+   钱包页改用专属 `wd-row / wd-label / wd-value`：左侧 `flex:1; min-width:0` 可收缩、
+   类型名单行省略，右侧金额 `flex:none` 不参与压缩。
+2. **申请提现后页面被刷到顶部** —— `loadWithdraw` 每次都把 `wdLoading` 置 true，
+   整个提现区被替换成「加载中…」，页面高度骤减 → 滚动位置被顶回顶部。
+   改成**静默刷新**：骨架已就绪时只换数据不动结构（`wdLoading && !wdReady` 才显示占位），
+   并单独加 `refreshWithdraw()`（wxml 的 `bindtap` 会把事件对象当参数传进去）。
+3. **确认收款改成弹窗** —— 转账发起后直接 `wx.showModal`（主按钮「确认收款」、
+   次按钮「稍后」），确认即 `wx.requestMerchantTransfer`，不用等页面刷完再去找入口。
+
+**校验**：新增 `tests/withdraw-auto.test.js` 10 条（默认开关、上限边界、create 自动打款、
+summary 补转、手动与自动共用一份实现、前端提示、kind 映射、明细行布局、静默刷新、弹窗确认）。
+全量 **73 项测试通过**；四件套全绿，主包 0.97 MB。`withdraw-api` 已重新部署到 `ceshi`。
 
 **踩坑**：
 - `updateFunctionCode` 传 `envVariables` 不会落到函数配置上（事后查详情里没有），
@@ -1540,9 +1555,9 @@ node campus-errand/tools/style-lint.js campus-errand
 | `check-mp.js` | **工作区根目录** | ① ESM 严格解析（抓重复声明）② JSON 可解析 ③ WXML 标签配对 + id 唯一 ④ app.json 页面文件齐全 ⑤ usingComponents 指向存在 ⑥ 按 packOptions.ignore 算真实上传体积 ⑦ 裸包名能在 miniprogram_npm 解析 |
 | `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
-**当前状态（2026-10-29 23:55 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
-`check-mp.js` **0.96MB / 2.00MB**（183 个文件，扫描 JS 72 个）通过，`style-lint.js`（33 wxss / 42 wxml）通过，
-`npm test` **69 项**全过。
+**当前状态（2026-10-30 00:15 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
+`check-mp.js` **0.97MB / 2.00MB**（183 个文件，扫描 JS 72 个）通过，`style-lint.js`（33 wxss / 42 wxml）通过，
+`npm test` **73 项**全过。
 
 > 主包从 1.41MB 降到 **0.95MB**，是 R52 删掉 WorkBuddy Cloud SDK 与 `miniprogram_npm/` 的结果。
 

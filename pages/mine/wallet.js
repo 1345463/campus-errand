@@ -4,14 +4,21 @@ const guard = require('../../utils/guard')
 
 const PAGE_SIZE = 20
 
+// 商家转账确认收款要用的商户号 / AppID（与后台转账是同一个商户）
+const MCH_ID = '1119307371'
+const APP_ID = 'wxaab192c68e403292'
+
 // 提现走 utils/tcb.js 的 /api/withdraw 网关（云函数 withdraw-api）：
 // 打款需要 service_role 权限 + 云托管的固定出口 IP，客户端既不能直连表、
 // 也不能自己发起转账。申请提交后由服务端自动打款，前端只负责展示状态与「确认收款」。
 
-// kind → 中文说明
+// kind → 中文说明。库里真实出现过：withdraw / withdraw_refund
+// 一定要兜底：没映射上的 kind 会直接显示英文原值（如 withdraw_refund），
+// 长串英文会把右侧金额挤到重叠 —— 兜底成「其他」就不会破坏布局。
 const KIND_TEXT = {
   order_reward: '订单赏金',
   withdraw: '提现',
+  withdraw_refund: '提现退回',
   refund: '退款',
   admin_adjust: '管理员调整',
   system: '系统',
@@ -44,6 +51,7 @@ Page({
     wdAmount: '',
     wdRecords: [],
     wdSubmitting: false,
+    wdRefreshing: false,
     wdClaim: null,
   },
 
@@ -130,7 +138,7 @@ Page({
           id: row.id,
           deltaText: (delta > 0 ? '+' : '') + delta.toFixed(2),
           balanceText: Number(row.balance || 0).toFixed(2),
-          kindText: KIND_TEXT[row.kind] || row.kind || '系统',
+          kindText: KIND_TEXT[row.kind] || '其他',
           remark: row.remark || '',
           timeText: api.formatTime(row.created_at),
           positive: delta > 0,
@@ -170,9 +178,16 @@ Page({
     })
   },
 
-  loadWithdraw: function () {
+  // silent=true：只换数据、不动骨架。整块被替换成「加载中…」会让页面高度骤减，
+  // 滚动位置被顶回顶部 —— 提交提现后的「被刷到顶部」就是这个原因。
+  loadWithdraw: function (silent) {
     const page = this
-    page.setData({ wdLoading: true, wdErr: '' })
+    const keepSkeleton = silent === true && page.data.wdReady
+    if (keepSkeleton) {
+      page.setData({ wdRefreshing: true })
+    } else {
+      page.setData({ wdLoading: true, wdErr: '' })
+    }
     return page.callWithdraw({ action: 'summary' }).then(
       function (data) {
         const raw = data.records || []
@@ -198,6 +213,7 @@ Page({
         })
         page.setData({
           wdLoading: false,
+          wdRefreshing: false,
           wdReady: true,
           wdBalanceText: Number(data.balance || 0).toFixed(2),
           wdMinText: Number(data.minWithdraw || 10).toFixed(2),
@@ -207,34 +223,70 @@ Page({
         return null
       },
       function (err) {
-        page.setData({ wdLoading: false, wdErr: err.message || '加载失败' })
+        page.setData({
+          wdLoading: false,
+          wdRefreshing: false,
+          wdErr: err.message || '加载失败',
+        })
         return null
       }
     )
   },
 
+  // 手动刷新（wxml 里 bindtap 会传事件对象，所以单独包一层，别把 event 当参数）
+  refreshWithdraw: function () {
+    return this.loadWithdraw(true)
+  },
+
   // 拉起微信的「确认收款」页。WAIT_USER_CONFIRM 状态的转账必须用户自己确认，
   // 否则 24 小时后会自动退回。
   claimTransfer: function () {
-    const page = this
-    const c = page.data.wdClaim
+    const c = this.data.wdClaim
     if (!c) return
+    this.claimByPackage(c.packageInfo)
+  },
+
+  // 拉起微信的「确认收款」页。WAIT_USER_CONFIRM 状态的转账必须用户自己确认，
+  // 否则 24 小时后会自动退回。
+  claimByPackage: function (packageInfo) {
+    const page = this
+    if (!packageInfo) return
     if (!wx.requestMerchantTransfer) {
       ui.toast({ title: '当前微信版本不支持确认收款，请升级', icon: 'none' })
       return
     }
     wx.requestMerchantTransfer({
-      mchId: '1119307371',
-      appId: 'wxaab192c68e403292',
-      package: c.packageInfo,
+      mchId: MCH_ID,
+      appId: APP_ID,
+      package: packageInfo,
       success: function () {
         ui.toast({ title: '收款成功，请查看零钱' })
         page.setData({ wdClaim: null })
-        page.loadWithdraw()
+        page.loadWithdraw(true)
       },
       fail: function (e) {
         const msg = (e && (e.errMsg || e.err_msg)) || '确认失败'
         ui.toast({ title: msg, icon: 'none' })
+      },
+    })
+  },
+
+  // 转账刚发起时直接弹窗确认收款：不用等页面刷完再去找入口，也不会打断当前浏览位置
+  askClaim: function (amount, packageInfo) {
+    const page = this
+    wx.showModal({
+      title: '提现已发起',
+      content:
+        '¥' + Number(amount || 0).toFixed(2) +
+        ' 已转到你的微信，需要你确认收款后才会进零钱（24 小时未确认会自动退回）',
+      confirmText: '确认收款',
+      cancelText: '稍后',
+      success: function (res) {
+        if (res && res.confirm) {
+          page.claimByPackage(packageInfo)
+          return
+        }
+        page.loadWithdraw(true)
       },
     })
   },
@@ -261,18 +313,20 @@ Page({
       function (data) {
         ui.hideLoading()
         const auto = data && data.auto
+        page.setData({ wdSubmitting: false, wdAmount: '' })
+        if (auto && auto.ok && auto.packageInfo) {
+          // 需要本人确认收款：就地弹窗，不再刷新整页
+          page.askClaim(amount, auto.packageInfo)
+          return null
+        }
         if (auto && auto.ok) {
-          ui.toast({
-            title: auto.state === 'WAIT_USER_CONFIRM' ? '已自动转账，请点上方确认收款' : '已自动转账',
-            icon: 'none',
-          })
+          ui.toast({ title: '已自动转账，请查收零钱', icon: 'none' })
         } else if (auto && auto.error) {
           ui.toast({ title: '申请已提交，自动转账未成功，可在后台重试', icon: 'none' })
         } else {
           ui.toast({ title: '提现申请已提交' })
         }
-        page.setData({ wdSubmitting: false, wdAmount: '' })
-        page.loadWithdraw()
+        page.loadWithdraw(true)
         return null
       },
       function (err) {

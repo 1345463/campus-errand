@@ -18,7 +18,7 @@
 | 灰度开关 | **23** 个（默认关，可按功能逐条放开） |
 | 违规词库 | **292** 条违规词（`utils/moderation-words.js` 的 `WORDS`）+ 4 条白名单，**13** 大类 |
 | 图片鉴权 | **3** 条独立通道（本人 / 订单参与方 / 公开） |
-| 小程序包体积 | **0.96 MB** / 上限 2 MB |
+| 小程序包体积 | **0.97 MB** / 上限 2 MB |
 
 ---
 
@@ -311,7 +311,7 @@ orders.pay_status = 'paid'
 | 人 | AI |
 |---|---|
 | 提需求、定优先级、验收真机效果 | 拆需求、读历史、定位根因、写实现 |
-| 判断「这个交互对不对」 | 跑四件套校验、69 项回归测试、执行 SQL 迁移 |
+| 判断「这个交互对不对」 | 跑四件套校验、73 项回归测试、执行 SQL 迁移 |
 | 决定要不要上线 | 更新文档、写踩坑记录、按轮次提交推送 |
 
 ### AI 实际交付了什么
@@ -321,7 +321,7 @@ orders.pay_status = 'paid'
 | 页面 | 39 个（四件套齐全，全部在 `app.json` 注册） |
 | 前端代码 | 16,326 行 JS ／ 4,987 行 WXML ／ 4,862 行 WXSS（含 utils / components / app） |
 | 数据库 | 36 张表、154 个函数、9 个触发器、56 个幂等迁移脚本 |
-| 测试 | 69 项回归测试（含真实 PostgreSQL 执行） |
+| 测试 | 73 项回归测试（含真实 PostgreSQL 执行） |
 | 文档 | 1,400+ 行迭代记录 + 踩坑知识库 + 逐轮 CHANGELOG |
 
 ### 为什么把过程也写进仓库
@@ -455,7 +455,7 @@ campus-errand/
 ├── cloudfunctions/   7 个（app-api / pay-create / pay-notify / tcb-proxy /
 │                     transfer / transfer-notify / withdraw-api）
 ├── cloudrun/         云托管函数型服务 transfer-svc（固定出口 IP，对接商家转账；已加 packOptions.ignore）
-├── tests/            69 项回归测试（含 PGlite 真实 PostgreSQL）
+├── tests/            73 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 └── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅 / 支付方案
 ```
@@ -513,7 +513,7 @@ GitHub Actions 跑同样的命令。
 UGC 信息安全声明，服务类目需企业主体（跑腿类目个人主体不可选）。
 
 1. 微信开发者工具打开本目录（`miniprogram_npm` 必须在，`node_modules` 被 `packOptions.ignore` 排除）。
-2. 主包需 ≤ 2 MB，当前 **0.96 MB / 2.00 MB**（183 个文件，`node_modules` 已由
+2. 主包需 ≤ 2 MB，当前 **0.97 MB / 2.00 MB**（183 个文件，`node_modules` 已由
    `packOptions.ignore` 排除，不在包内）。
 3. 目标库按顺序执行以下关键迁移（均已落库，重建环境时需要按此顺序重放；
    完整 28 个脚本见 `docs/ITERATIONS.md` 第 3 章）：
@@ -563,7 +563,7 @@ UGC 信息安全声明，服务类目需企业主体（跑腿类目个人主体�
 对应小节 + `docs/ITERATIONS.md`；想看某一轮「引入了哪些文件」，`git show --stat <commit>`。
 R29 之后的所有改动都是真实 diff。
 
-当前 `main` 有 **87 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
+当前 `main` 有 **88 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
 R39 的三个第三方提交曾被摘除并压成一条整合提交，改写前后文件树 hash 完全一致
 （代码零改动，只换了提交边界与作者）。
 

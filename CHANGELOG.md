@@ -920,8 +920,20 @@ _提交时间：2026-10-23 16:50:00_
   后台可重试或标记失败自动退款。
 - **前端**：钱包页按返回的 `auto` 提示「已自动转账，请点上方确认收款」或
   「申请已提交，自动转账未成功，可在后台重试」，不再一律只说"申请已提交"。
-- **校验**：新增 `tests/withdraw-auto.test.js` 6 条，全量 **69 项测试通过**；
-  四件套全绿，主包 **0.96 MB**；`withdraw-api` 已重新部署到 `ceshi`。
+- **同轮追加：钱包页三处 UI 问题**（用户截图反馈）
+  1. **余额明细文字重叠** —— `kind` 的中文映射漏了 `withdraw_refund`，兜底又把英文原值
+     直接显示出来，长串英文压在右侧金额上。补 `withdraw_refund: '提现退回'`，
+     **未映射的一律兜底成「其他」**；布局改用专属 `wd-row / wd-label / wd-value`
+     （左侧 `flex:1; min-width:0` 可收缩 + 类型名单行省略，右侧金额 `flex:none` 不压缩），
+     绕开全局 `.detail-label` 的固定 `180rpx`。
+  2. **申请提现后页面被刷到顶部** —— `loadWithdraw` 每次都把 `wdLoading` 置 true，
+     整个提现区被替换成「加载中…」，页面高度骤减 → 滚动位置被顶回顶部。
+     改为静默刷新（骨架就绪后只换数据、不动结构），新增 `refreshWithdraw()`
+     （`bindtap` 会把事件对象当参数传进去，不能直接指到 `loadWithdraw`）。
+  3. **确认收款改成弹窗** —— 转账发起后直接 `wx.showModal`（「确认收款」/「稍后」），
+     确认即 `wx.requestMerchantTransfer`，不用等页面刷完再去找入口。
+- **校验**：新增 `tests/withdraw-auto.test.js` 10 条，全量 **73 项测试通过**；
+  四件套全绿，主包 **0.97 MB**；`withdraw-api` 已重新部署到 `ceshi`。
 - **踩坑**：`updateFunctionCode` 传 `envVariables` 不会落到函数配置上（查详情里没有），
   改环境变量要走 `updateFunctionConfig`；环境未开日志服务，云函数日志查不到，
   只能用 `withdraw_requests` 的状态变化做端到端验证。

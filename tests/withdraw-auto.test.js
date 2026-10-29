@@ -19,6 +19,9 @@ const vm = require('vm')
 const SRC_PATH = path.join(__dirname, '..', 'cloudfunctions', 'withdraw-api', 'index.js')
 const WALLET_PATH = path.join(__dirname, '..', 'pages', 'mine', 'wallet.js')
 const src = fs.readFileSync(SRC_PATH, 'utf8')
+const walletSrc = fs.readFileSync(WALLET_PATH, 'utf8')
+const wxml = fs.readFileSync(path.join(__dirname, '..', 'pages', 'mine', 'wallet.wxml'), 'utf8')
+const wxss = fs.readFileSync(path.join(__dirname, '..', 'pages', 'mine', 'wallet.wxss'), 'utf8')
 
 // 抽出 canAuto 与其依赖的两个常量，在沙箱里求值
 function makeCanAuto(env) {
@@ -54,9 +57,9 @@ test('create 成功后会自动打款，且失败不影响申请本身', () => {
 })
 
 test('summary 会补转卡在 pending 的旧单', () => {
-  const body = src.slice(src.indexOf("if (action === 'summary')"), src.indexOf("// 提交提现申请"))
+  const body = src.slice(src.indexOf("if (action === 'summary')"), src.indexOf('// 提交提现申请'))
   assert.ok(/status === 'pending'/.test(body), '应筛出 pending 的单')
-  assert.ok(/doTransfer\(Number\(stuck\[0\].id\)\)/.test(body), '应对这批单触发转账')
+  assert.ok(/doTransfer\(Number\(stuck\[0\]\.id\)\)/.test(body), '应对这批单触发转账')
   assert.ok(/rest\('GET', wpath\)/.test(body.slice(body.indexOf('doTransfer(Number'))), '转完应重查一次记录')
 })
 
@@ -67,7 +70,36 @@ test('转账入口复用同一份实现（后台重试与自动打款不两套�
 })
 
 test('钱包页提交后提示自动转账结果', () => {
-  const wallet = fs.readFileSync(WALLET_PATH, 'utf8')
-  assert.ok(/WAIT_USER_CONFIRM/.test(wallet), '前端应区分「已发起、待确认收款」')
-  assert.ok(/自动转账未成功/.test(wallet), '自动转账失败时应如实提示而不是只说提交成功')
+  assert.ok(/已自动转账/.test(walletSrc), '前端要说明已自动转账')
+  assert.ok(/自动转账未成功/.test(walletSrc), '自动转账失败时应如实提示而不是只说提交成功')
+})
+
+// ---- 钱包页 UI 回归（R54 追加）----
+
+test('余额明细的 kind 有中文映射，未知类型不再回显英文', () => {
+  assert.ok(/withdraw_refund:\s*'提现退回'/.test(walletSrc), 'withdraw_refund 要映射成中文')
+  assert.ok(/KIND_TEXT\[row\.kind\] \|\| '其他'/.test(walletSrc), '未映射的 kind 要兜底成中文，不能回显英文原值')
+  assert.ok(!/row\.kind \|\| '系统'/.test(walletSrc), '不能再把英文原值当兜底文案')
+})
+
+test('明细行布局：左侧可收缩、右侧金额不参与压缩', () => {
+  assert.ok(/\.wd-label[\s\S]*?flex:\s*1[\s\S]*?min-width:\s*0/.test(wxss), '左侧要能收缩')
+  assert.ok(/\.wd-value[\s\S]*?flex:\s*none/.test(wxss), '右侧金额不能跟着压缩')
+  assert.ok(/\.wd-kind[\s\S]*?text-overflow:\s*ellipsis/.test(wxss), '过长的类型名要省略而不是溢出')
+  assert.ok(/class="detail-row wd-row"/.test(wxml) && /wd-label/.test(wxml), '明细行要用专属类覆盖全局固定宽度')
+})
+
+test('刷新提现区不换骨架，避免页面被顶回顶部', () => {
+  assert.ok(/wdLoading && !wdReady/.test(wxml), '已渲染过就别再切回「加载中」占位')
+  assert.ok(/loadWithdraw: function \(silent\)/.test(walletSrc), 'loadWithdraw 要支持静默刷新')
+  assert.ok(/silent === true && page\.data\.wdReady/.test(walletSrc), '静默只在骨架已就绪时生效')
+  assert.ok(/refreshWithdraw: function/.test(walletSrc), '刷新入口要单独包一层（bindtap 会传事件对象）')
+  assert.ok(!/bindtap="loadWithdraw"/.test(wxml), 'wxml 不能再把带事件对象的点击直接指到 loadWithdraw')
+})
+
+test('转账发起后就地弹窗确认收款', () => {
+  assert.ok(/wx\.showModal/.test(walletSrc), '要用弹窗确认收款')
+  assert.ok(/confirmText: '确认收款'/.test(walletSrc), '弹窗主按钮是确认收款')
+  assert.ok(/auto\.packageInfo/.test(walletSrc), '拿到 package_info 才弹')
+  assert.ok(/claimByPackage\(packageInfo\)/.test(walletSrc), '确认后直接拉起微信确认页')
 })

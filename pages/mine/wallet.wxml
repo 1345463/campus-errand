@@ -22,15 +22,15 @@
       </view>
       <view wx:if="{{records.length === 0}}" class="hint">还没有余额变动记录</view>
       <view wx:else>
-        <view class="detail-row" wx:for="{{records}}" wx:key="id">
-          <view class="detail-label">
-            <text class="flow-kind">{{item.kindText}}</text>
-            <text class="flow-time">{{item.timeText}}</text>
-            <text wx:if="{{item.remark}}" class="flow-time">{{item.remark}}</text>
+        <view class="detail-row wd-row" wx:for="{{records}}" wx:for-item="rec" wx:key="id">
+          <view class="detail-label wd-label">
+            <text class="wd-kind">{{rec.kindText}}</text>
+            <text class="wd-sub">{{rec.timeText}}</text>
+            <text wx:if="{{rec.remark}}" class="wd-sub wd-remark">{{rec.remark}}</text>
           </view>
-          <view class="detail-value {{item.positive ? 'flow-plus' : 'flow-minus'}}">
-            ¥{{item.deltaText}}
-            <text class="flow-time">（余 {{item.balanceText}}）</text>
+          <view class="detail-value wd-value {{rec.positive ? 'flow-plus' : 'flow-minus'}}">
+            ¥{{rec.deltaText}}
+            <text class="wd-sub">（余 {{rec.balanceText}}）</text>
           </view>
         </view>
         <view wx:if="{{loadingMore}}" class="empty">加载中…</view>
@@ -48,15 +48,15 @@
     <view class="card">
       <view class="section-head">
         <text class="section-title">提现</text>
-        <text class="section-more" bindtap="loadWithdraw">刷新</text>
+        <text class="section-more" bindtap="refreshWithdraw">{{wdRefreshing ? '刷新中…' : '刷新'}}</text>
       </view>
 
       <view wx:if="{{wdErr}}" class="err-bar">
         <text class="err-text">{{wdErr}}</text>
-        <text class="err-retry" bindtap="loadWithdraw">重试</text>
+        <text class="err-retry" bindtap="refreshWithdraw">重试</text>
       </view>
 
-      <view wx:elif="{{wdLoading}}" class="hint">加载中…</view>
+      <view wx:elif="{{wdLoading && !wdReady}}" class="hint">加载中…</view>
 
       <view wx:else>
         <view wx:if="{{wdClaim}}" class="note-box">

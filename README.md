@@ -208,6 +208,7 @@ orders.pay_status = 'paid'
 | **R52** | **前端整体切到 CloudBase**（云函数代持身份 `svc_rpc`，95 处 RPC 换通道，SDK 与 `miniprogram_npm` 一并删除）；**发单接入支付**（未付不进大厅），主包 1.44 → **0.95 MB** |
 | **R53** | **图片分片上传**（绕开 `wx.cloud.callFunction` 1MB 入参上限）：阶梯压缩 + `begin/push/finish` 三片式上传，修掉接单员传身份证弹 `EXCEED_MAX_PAYLOAD_SIZE` |
 | **R54** | **提现改服务端自动转账**：申请提交即打款，不再需要管理员点那一下；顺带查出云函数缺 `PAY_WEBHOOK_SECRET` 会让转账被云托管拒掉，改为运行时从库里读同一份密钥 |
+| **R55** | **手机号验证码的调试通道**：短信（腾讯云 SMS）未开通时，只对超级管理员回显明文验证码并自动填入，让绑定流程能走通；条件直接绑「短信没配好」，配好即自动失效，不留可忘关的开关 |
 
 其中最有价值的几次「翻车与纠正」：
 
@@ -311,7 +312,7 @@ orders.pay_status = 'paid'
 | 人 | AI |
 |---|---|
 | 提需求、定优先级、验收真机效果 | 拆需求、读历史、定位根因、写实现 |
-| 判断「这个交互对不对」 | 跑四件套校验、73 项回归测试、执行 SQL 迁移 |
+| 判断「这个交互对不对」 | 跑四件套校验、79 项回归测试、执行 SQL 迁移 |
 | 决定要不要上线 | 更新文档、写踩坑记录、按轮次提交推送 |
 
 ### AI 实际交付了什么
@@ -321,7 +322,7 @@ orders.pay_status = 'paid'
 | 页面 | 39 个（四件套齐全，全部在 `app.json` 注册） |
 | 前端代码 | 16,326 行 JS ／ 4,987 行 WXML ／ 4,862 行 WXSS（含 utils / components / app） |
 | 数据库 | 36 张表、154 个函数、9 个触发器、56 个幂等迁移脚本 |
-| 测试 | 73 项回归测试（含真实 PostgreSQL 执行） |
+| 测试 | 79 项回归测试（含真实 PostgreSQL 执行） |
 | 文档 | 1,400+ 行迭代记录 + 踩坑知识库 + 逐轮 CHANGELOG |
 
 ### 为什么把过程也写进仓库
@@ -455,7 +456,7 @@ campus-errand/
 ├── cloudfunctions/   7 个（app-api / pay-create / pay-notify / tcb-proxy /
 │                     transfer / transfer-notify / withdraw-api）
 ├── cloudrun/         云托管函数型服务 transfer-svc（固定出口 IP，对接商家转账；已加 packOptions.ignore）
-├── tests/            73 项回归测试（含 PGlite 真实 PostgreSQL）
+├── tests/            79 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 └── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅 / 支付方案
 ```
@@ -563,7 +564,7 @@ UGC 信息安全声明，服务类目需企业主体（跑腿类目个人主体�
 对应小节 + `docs/ITERATIONS.md`；想看某一轮「引入了哪些文件」，`git show --stat <commit>`。
 R29 之后的所有改动都是真实 diff。
 
-当前 `main` 有 **88 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
+当前 `main` 有 **89 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
 R39 的三个第三方提交曾被摘除并压成一条整合提交，改写前后文件树 hash 完全一致
 （代码零改动，只换了提交边界与作者）。
 
@@ -599,9 +600,12 @@ R39 的三个第三方提交曾被摘除并压成一条整合提交，改写前�
   `cloudbase/migrations/` 的 56 条脚本 **不在 git 内**——不是被 `.gitignore` 忽略，
   而是仓库根是 `campus-errand/`、`cloudbase/` 是同级兄弟目录。空库重建目前只能靠这份
   本地目录，建议尽快纳入版本控制或另存一份。
-- **短信验证码尚未开通**：腾讯云 SMS 的 5 个环境变量（`SMS_SECRET_ID` / `SMS_SECRET_KEY` /
-  `SMS_SDK_APP_ID` / `SMS_TEMPLATE_ID` / `SMS_SIGN_NAME`）未配置前，新用户绑不了手机号，
-  也就发不了单（管理员账号已绑，不受影响）。
+- **短信验证码尚未开通**（R55 已降级为「只影响普通用户」）：腾讯云 SMS 的 5 个环境变量
+  （`SMS_SECRET_ID` / `SMS_SECRET_KEY` / `SMS_SDK_APP_ID` / `SMS_TEMPLATE_ID` /
+  `SMS_SIGN_NAME`）未配置前，**普通用户**绑不了手机号，也就发不了单。
+  缓解措施：超级管理员走「明文回显」的调试通道，仍能完成绑定，流程不会全堵死。
+  根治二选一：① 配齐这 5 个变量（代码已就绪，配完即生效，不用改代码）；
+  ② 改用微信「手机号快速验证组件」`getPhoneNumber`（免短信，但要非个人主体 + 已认证）。
 - 旧对象存储的证件照不可读，需用户重新提交。
 - AI 配额按账号在服务端记账，但模型仍由客户端直连（`api.llmChat` →
   `cloud.llm.chat.completions.create`），**绕过端上代码仍可直接调 `llmChat`**；

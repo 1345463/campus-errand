@@ -43,6 +43,7 @@
     </view>
 
     <view wx:if="{{formError}}" class="bp-error">{{formError}}</view>
+    <view wx:if="{{devHint}}" class="bp-dev-hint">{{devHint}}</view>
 
     <view class="btn-primary {{submitting ? 'disabled' : ''}}" bindtap="submit">{{submitting ? '绑定中…' : (bound ? '更换手机号' : '确认绑定')}}</view>
 

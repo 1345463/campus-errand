@@ -20,6 +20,7 @@ Page({
     sending: false,
     submitting: false,
     formError: '',
+    devHint: '',
     bound: false,
     boundPhone: '',
     fromGate: false,
@@ -96,18 +97,30 @@ Page({
     ui.loading({ title: '发送中', mask: true })
     api
       .sendPhoneCode(phone)
-      .then(function () {
+      .then(function (res) {
         ui.hideLoading()
         // 记住发过码的号码：换号就必须重新发，不能用 A 的码绑 B 的号
         page.sentPhone = phone
         page.setData({ sending: false })
         page.startCountdown()
+        // 短信没开通时，超管会拿到服务端回显的明文码（普通用户拿不到，
+        // 会直接被拒在云函数那层）。这种时候把码自动填进去，别让人再去别处找。
+        if (res && res.devEcho && res.devCode) {
+          page.setData({
+            code: res.devCode,
+            formError: '',
+            devHint: '短信通道未开通，当前走管理员调试通道：验证码已自动填入（' + res.devCode + '），10 分钟内有效。',
+          })
+          return null
+        }
+        page.setData({ devHint: '' })
         ui.toast({ title: '验证码已发送', icon: 'none' })
+        return null
       })
       .catch(function (error) {
         ui.hideLoading()
         const message = api.getErrorMessage(error)
-        page.setData({ sending: false, formError: message })
+        page.setData({ sending: false, formError: message, devHint: '' })
         ui.toast({ title: message, icon: 'none' })
       })
   },

@@ -151,6 +151,26 @@ function smsConfigured() {
   return !!(SMS_ID && SMS_KEY && SMS_APP && SMS_TPL && SMS_SIGN)
 }
 
+/**
+ * 是不是超级管理员。
+ *
+ * 只在一个地方用到：短信没开通时，给超管开一条「把验证码直接取出来」的调试通道。
+ * 之所以不做成环境变量开关 —— 开关要人记得关，而这条分支的条件是
+ * 「短信没配好」，短信一配好它自己就失效了，不存在忘记关的问题。
+ */
+async function isSuperAdmin(uid) {
+  try {
+    const rows = await svcRpc(uid, 'admin_my_perms', {})
+    const list = Array.isArray(rows) ? rows : []
+    for (let i = 0; i < list.length; i++) {
+      if (String((list[i] && list[i].perm_key) || '') === 'super') return true
+    }
+  } catch (e) {
+    console.error('[app-api] admin_my_perms failed', e.message)
+  }
+  return false
+}
+
 function sendSms(phone, code) {
   const host = 'sms.tencentcloudapi.com'
   const action = 'SendSms'
@@ -305,15 +325,22 @@ exports.main = async (event) => {
       if (!/^1[3-9]\d{9}$/.test(phone)) {
         return done({ ok: false, code: 'BAD_PHONE', error: '请输入正确的 11 位手机号' })
       }
-      // 没开短信就别发码：发了用户也收不到，还白占一小时的额度
-      if (!smsConfigured()) {
+      // 没开短信就别发码：发了用户也收不到，还白占一小时的额度。
+      // 唯一的例外是超管 —— 短信没配好的这段时间，总得有人能把绑定流程走通，
+      // 所以给他把明文码回显出来（前端直接填进输入框）。普通用户一律拒绝。
+      const smsOn = smsConfigured()
+      if (!smsOn && !(await isSuperAdmin(uid))) {
         return done({ ok: false, code: 'SMS_NOT_CONFIGURED', error: '短信通道未开通，暂时无法绑定手机号，请联系管理员' })
       }
       const rows = await svcRpc(uid, 'issue_phone_code', { p_uid: uid, p_phone: phone })
       const code = Array.isArray(rows) && rows.length ? String(rows[0].code || '') : ''
       if (!code) return done({ ok: false, code: 'NO_CODE', error: '验证码生成失败，请稍后再试' })
-      await sendSms(phone, code)
-      return done({ ok: true })
+      if (smsOn) {
+        await sendSms(phone, code)
+        return done({ ok: true })
+      }
+      // 走到这里必然是「短信没开 + 调用者是超管」：把码回显，前端自动填入
+      return done({ ok: true, devEcho: true, devCode: code })
     }
 
     if (action === 'bindPhone') {

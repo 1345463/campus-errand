@@ -1478,7 +1478,13 @@ async function sendPhoneCode(phone) {
   await requireSession()
   const res = await tcb.callApi('sendPhoneCode', { phone: String(phone || '').trim() })
   if (!res) throw new Error('验证码发送失败，请稍后再试')
-  return true
+  // devEcho 只在「短信没配好 + 调用者是超管」时出现：服务端把明文码回显，
+  // 让这段时间的绑定流程还能走通。短信一配好这个字段就没了，前端无需特判开关。
+  return {
+    sent: true,
+    devEcho: res.devEcho === true,
+    devCode: res.devCode ? String(res.devCode) : '',
+  }
 }
 
 // 验码 + 绑定，服务端一次做完（bind_my_phone_verified）。

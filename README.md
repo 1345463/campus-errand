@@ -12,11 +12,11 @@
 |---|---|
 | 页面 | **39** 页 |
 | 数据库 | **36** 表 / **154** 个函数 / **9** 个触发器 |
-| 云函数 | **6** 个（支付下单 / 支付回调 / 转账回调 / 提现管理 / 网关转发 / 转账执行旧版） |
+| 云函数 | **7** 个（`app-api` 统一入口 / `pay-create` 支付下单 / `pay-notify` 支付回调 / `tcb-proxy` 网关转发 / `transfer` 转账执行 / `transfer-notify` 转账回调 / `withdraw-api` 提现管理） |
 | **云托管** | **1** 个（函数型服务，固定出口 IP，专门对接微信支付商家转账） |
-| 迁移脚本 | **47** 条（全部可重放，`cloudbase/migrations/`） |
+| 迁移脚本 | **56** 条（全部可重放，`cloudbase/migrations/`） |
 | 灰度开关 | **23** 个（默认关，可按功能逐条放开） |
-| 违规词库 | **296** 条（10 大类 + 4 条白名单） |
+| 违规词库 | **292** 条违规词（`utils/moderation-words.js` 的 `WORDS`）+ 4 条白名单，**13** 大类 |
 | 图片鉴权 | **3** 条独立通道（本人 / 订单参与方 / 公开） |
 | 小程序包体积 | **0.95 MB** / 上限 2 MB |
 
@@ -177,7 +177,7 @@ orders.pay_status = 'paid'
 
 - **56 条迁移全部可重放**（`cloudbase/migrations/`），空库能一键建到当前状态
 - **四件套校验**每次改完必跑：语法 → 页面注册 → 上传预检 → 样式语法
-- **296 条违规词**按 10 大类归档，白名单 4 条（「校园跑腿」「代跑腿」等业务词不能被误杀）
+- **292 条违规词**按 13 大类归档，白名单 4 条（「校园跑腿」「代跑腿」等业务词不能被误杀）
 - 文档与代码同步：`docs/ITERATIONS.md` 记录每一轮的决策与踩坑
 
 ### 14. 回调不可靠时的对账兜底
@@ -315,9 +315,9 @@ orders.pay_status = 'paid'
 
 | 产物 | 规模 |
 |---|---|
-| 页面 | 38 个（四件套齐全，全部在 `app.json` 注册） |
+| 页面 | 39 个（四件套齐全，全部在 `app.json` 注册） |
 | 前端代码 | 16,326 行 JS ／ 4,987 行 WXML ／ 4,862 行 WXSS（含 utils / components / app） |
-| 数据库 | 31 张表、129 个函数、7 个触发器、28 个幂等迁移脚本 |
+| 数据库 | 36 张表、154 个函数、9 个触发器、56 个幂等迁移脚本 |
 | 测试 | 63 项回归测试（含真实 PostgreSQL 执行） |
 | 文档 | 1,400+ 行迭代记录 + 踩坑知识库 + 逐轮 CHANGELOG |
 
@@ -380,7 +380,7 @@ class 名 `mine`——每条自己发的消息都被撑到一屏高。**类名�
 | `pages/mine/cert` | 认证状态 | 审核进度与驳回原因 |
 | `pages/mine/credit` | 信誉分 | 双轨分数、评分次数、完成单数、违规次数 |
 | `pages/mine/points` | 我的积分 | 余额与逐笔明细 |
-| `pages/mine/wallet` | 钱包 | 余额与流水（未接支付，不可提现） |
+| `pages/mine/wallet` | 钱包 | 余额与流水（**R52 起已通微信支付，可提现到零钱**） |
 | `pages/mine/mall` | 积分商城 | 兑换抵扣券 / 核销券 / 优先券 |
 | `pages/mine/messages` | 消息中心 | 四类推送、单条已读、全部已读 |
 | `pages/mine/feedback` | 意见反馈 | 提交工单与我提交的列表 |
@@ -443,30 +443,34 @@ class 名 `mine`——每条自己发的消息都被撑到一屏高。**类名�
 ```
 campus-errand/
 ├── app.js / app.json / app.wxss     全局（含 wx.getUpdateManager 热更新检查）
-├── pages/            38 个页面（见「页面地图」）
+├── pages/            39 个页面（见「页面地图」）
 ├── components/room-picker/   三级宿舍选择器
-├── utils/            api / upload / ui / guard / flags / perms / motion /
-│                     moderation / campus / services / config / agreement / cloud
-├── sql/              28 个幂等迁移脚本（可重放）
-├── cloudfunctions/   6 个云函数（支付下单/支付回调/转账回调/提现管理/网关转发/转账旧版）
+├── utils/            16 个：api / tcb / upload / pay / ui / guard / flags / perms /
+│                     motion / moderation / moderation-words / campus / services /
+│                     config / agreement / login-return
+├── sql/              28 个幂等迁移脚本（可重放；旧库 WorkBuddy Cloud 已退役，留作结构参考）
+├── cloudfunctions/   7 个（app-api / pay-create / pay-notify / tcb-proxy /
+│                     transfer / transfer-notify / withdraw-api）
 ├── cloudrun/         云托管函数型服务 transfer-svc（固定出口 IP，对接商家转账；已加 packOptions.ignore）
 ├── tests/            63 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
-├── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅
-└── miniprogram_npm/  SDK 构建产物（必须入库，删了跑不起来）
+└── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅 / 支付方案
 ```
 
 ## 十、数据库
 
-- **31 张表，27 张开 RLS**（`profile_phones` / `account_deletions` 不开 policy，只给函数访问；其余 2 张是公开只读的 FAQ 配置）
-- **129 个函数**，命名约定 `p_` 前缀参数
-- **7 个触发器**：订单消息推送、图片归属校验、手机号闸门 ×3 等
-- **28 个迁移脚本**，全部幂等，按文件名顺序执行即可重建（完整清单见
-  [`docs/ITERATIONS.md` 第 3 章](docs/ITERATIONS.md)）
-- **CloudBase 新库（R48 起）**：36 表 / 154 函数 / 9 触发器，56 条迁移脚本在
-  **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，不在本仓库内）；
-  支付表 `pay_settings` / `withdraw_requests` 与提现 RPC 只落在新库。
-  完整方案见 [`docs/PAYMENT.md`](docs/PAYMENT.md)。
+**现役库只有一套**：CloudBase `ceshi-d2g37cbg7c8f7ee48`（R52 起，WorkBuddy Cloud 已退役）。
+
+- **36 张表**（`pay_settings` / `withdraw_requests` / `phone_codes` / `media_uploads` /
+  `media_upload_parts` 等为 R50–R53 新增；`profile_phones` / `account_deletions` 不开 policy，
+  只给函数访问；FAQ 两张为公开只读）
+- **154 个函数**，命名约定 `p_` 前缀参数
+- **9 个触发器**：订单消息推送、图片归属校验、手机号闸门 ×3 等
+- **56 条迁移脚本**，全部幂等，按文件名顺序执行即可重建 —— 在
+  **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，**不在本仓库内**）。
+  完整清单与引入轮次见 [`docs/ITERATIONS.md` 第 3 章](docs/ITERATIONS.md)。
+- 包内 `sql/` 还有 **28 个**早期迁移脚本，属已退役旧库的结构参考，不再对现役库执行。
+- 支付方案与前置清单见 [`docs/PAYMENT.md`](docs/PAYMENT.md)。
 
 ### 订单状态机
 
@@ -563,13 +567,13 @@ R39 的三个第三方提交曾被摘除并压成一条整合提交，改写前�
 ## 十四、已知风险
 
 - 后台入口使用加盐摘要 + 失败限流 + 审计；共享管理员口令仍应定期轮换。
-- **支付与提现已全链路真金跑通，但处于「跨库桥接态」**：`pay-create` / `pay-notify` /
+- **支付与提现已全链路真金跑通，跨库桥接态已于 R52 结束**：`pay-create` / `pay-notify` /
   `transfer` / `transfer-notify` 四个云函数 + 云托管 `transfer-svc` 全部上线。
   2026-10-28 真钱付了 0.01 元（微信回调写入 `pay_status=paid`，`paid_at` 比前端收到
   success 还早 3 秒，证明是服务端推的）；2026-10-29 真钱提了 0.10 元（微信侧
-  `state=SUCCESS`，`update_time=01:46:36`）。**但支付写的是 CloudBase 新库，业务数据仍在
-  WorkBuddy 旧库**——前端没换 SDK 之前，真实订单上根本没有 `pay_status` 字段，所以现在
-  只有手工造的测试单能付。这是「支付能跑但接不上真实订单」，不是「支付没做」。
+  `state=SUCCESS`，`update_time=01:46:36`）。R52 前端整体切到 CloudBase 后，
+  **支付与业务数据已在同一库**，真实订单带 `pay_status` 字段，不再是「只有测试单能付」。
+  残留运维项：商户 API 证书 5 年有效期到期需轮换。
 - **`pay_settings.commission_rate` 是唯一结算口径**：抽佣、到手金额必须走
   `calc_settle_amount()`，**前端不准自己乘**——四舍五入的口径只存在数据库一处。
   否则会出现「页面显示到手 9.50、实际入账 9.49」的对不上账。
@@ -589,7 +593,7 @@ R39 的三个第三方提交曾被摘除并压成一条整合提交，改写前�
   数据访问统一走「云函数代持身份」的 `svc_rpc`：`wx.cloud` 中转之后调用者身份不能靠客户端
   声明，由云函数先验 HMAC 令牌拿到可信 uid，再在同一事务里 `set_config('request.jwt.claim.sub', uid)`
   后执行业务函数 —— 库里 129 个 `SECURITY DEFINER` 函数一行未改。
-  `cloudbase/migrations/` 的 53 条脚本 **不在 git 内**——不是被 `.gitignore` 忽略，
+  `cloudbase/migrations/` 的 56 条脚本 **不在 git 内**——不是被 `.gitignore` 忽略，
   而是仓库根是 `campus-errand/`、`cloudbase/` 是同级兄弟目录。空库重建目前只能靠这份
   本地目录，建议尽快纳入版本控制或另存一份。
 - **短信验证码尚未开通**：腾讯云 SMS 的 5 个环境变量（`SMS_SECRET_ID` / `SMS_SECRET_KEY` /
@@ -600,10 +604,14 @@ R39 的三个第三方提交曾被摘除并压成一条整合提交，改写前�
   `cloud.llm.chat.completions.create`），**绕过端上代码仍可直接调 `llmChat`**；
   严格成本防刷需要可信服务端网关。云函数已就位，这是下一步最值得搬的一块。
 - `getOrder` 等聚合查询依赖服务端脱敏口径，新增字段时记得同步更新字段白名单。
-- **手机号是「客户端声明 + 短信验证过」的**：OTP 由 auth provider 校验，验证后会话会切成手机号
-  身份，而 SDK 没有绑定接口，只能验完立刻切回微信身份再写 `bind_my_phone`。恶意客户端可跳过
-  发码直接调 `bind_my_phone` 声明号码，当前靠格式 + 全站唯一 + 24 小时防抖把影响限制在
-  「占用一个号码」。云函数已经就位，应尽快改为「服务端换号 + 签名票据」。
+- ~~**手机号是「客户端声明 + 短信验证过」的，可跳过发码直接声明号码**~~ ✅ **R52 已堵死**：
+  不再借道 auth provider，改为**自建服务端验证码** —— `issue_phone_code` 生成 6 位码，
+  `phone_codes` **只存哈希**，明文只回云函数用于发短信；`bind_my_phone_verified` 把验码与写库
+  合并成一次原子调用。**客户端拿不到明文验证码，「跳过发码直接绑号」这条路已不存在**，
+  也不会再出现「绑完跳到另一个账号」。
+  残留项：腾讯云 SMS 的 5 个环境变量（`SMS_SECRET_ID` / `SMS_SECRET_KEY` /
+  `SMS_SDK_APP_ID` / `SMS_TEMPLATE_ID` / `SMS_SIGN_NAME`）未配置前发不了码，
+  新用户绑不了手机号（管理员账号已绑，不受影响）。
 
 ---
 

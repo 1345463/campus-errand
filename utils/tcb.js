@@ -41,7 +41,22 @@ function viaGateway(target, payload) {
       header: { 'content-type': 'application/json' },
       data: payload || {},
       success: function (res) {
-        const data = res.data || {}
+        const raw = res.data
+        // 网关层（HTTP 访问服务）自己的错误**不是** { ok:false, error }，
+        // 而是 { code, message }。最典型的一条：请求体超过 100KB →
+        // HTTP 413 {"code":"EXCEED_MAX_PAYLOAD_SIZE"}。
+        // 这条必须认出来：一来别把英文 code 直接弹给用户，
+        // 二来要打上 payloadTooLarge，让上传逻辑切到分片通道。
+        const code = raw && typeof raw === 'object' ? String(raw.code || '') : ''
+        if (res.statusCode === 413 || /EXCEED_MAX_PAYLOAD_SIZE/i.test(code)) {
+          const err = new Error(
+            '单次传输超过网关上限（100KB）。图片会自动分片重试，若反复出现请换一张小点的图'
+          )
+          err.payloadTooLarge = true
+          reject(err)
+          return
+        }
+        const data = raw || {}
         if (data.ok) {
           data._via = 'gateway'
           resolve(data)

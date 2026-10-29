@@ -32,20 +32,31 @@ const CACHE_CONTROL = 'max-age=3600'
 // 存库后的路径形式
 const ASSET_PREFIX = 'asset:'
 
-// 体积三道线，各管一段，别混着用：
-//   · CHANNEL_BUDGET（原图字节）：**通道**线。走 wx.cloud.callFunction 时单次入参上限约
-//     1MB，而图片是 base64 塞进 args 里的（还会再涨 1/3）。压到 420KB ≈ base64 575KB，
-//     留出余量，正常照片一轮就过，不用分片。
-//   · SINGLE_CALL_B64（base64 字符）：**单次**线。超过就改走分片，不硬塞。
-//   · MAX_UPLOAD_BYTES（原图字节）：**服务端**硬上限。以前是 1.9MB，但那条线是错的 ——
-//     图片**读回来也走同一条 1MB 通道**（云函数返回值上限同样约 1MB），1.9MB 的图
-//     存进去就再也读不出来，变成死图。所以按「读得回」倒推：base64 ≈ 950KB < 1MB，
-//     即原图 ≤ 700KB。存得进去就必须读得出来。
+// 体积三道线，各管一段，别混着用。
+//
+// ⚠️ 关键实测值（2026-10-29 用网关实跑出来的，别再拍脑袋）：
+//   · **请求体上限 100KB（102400 字节）**，超了网关直接回 HTTP 413
+//     {"code":"EXCEED_MAX_PAYLOAD_SIZE"}。之前按「1MB」设计分片，片大小定成 400KB，
+//     结果每一片都必挂 —— 弹的就是这行英文。
+//   · **响应体上限 ≥ 942KB**（700KB 的图 base64 后 955KB 也读得回）。
+//     也就是说读写是**不对称**的：写要切小片，读可以一次拿整张。
+//
+// 三道线：
+//   · CHANNEL_BUDGET（原图字节）：**压缩**线。压到 420KB 以内，减少分片次数。
+//   · CHUNK_B64（base64 字符）：**单片**线。80KB 字符 ≈ 82KB 请求体，
+//     距 100KB 上限留约 18KB 余量（令牌、字段名等开销约 250 字节，已实测）。
+//   · MAX_UPLOAD_BYTES（原图字节）：**服务端**硬上限。由 save_media_asset /
+//     finish_media_upload 的字符上限 950000 反推：950000 × 3/4 ≈ 712KB，
+//     再扣掉 4KB 余量。存得进去就必须读得出来。
 const CHANNEL_BUDGET = 420 * 1024
-const SINGLE_CALL_B64 = 600 * 1024
-const CHUNK_B64 = 400 * 1024
+const WHOLE_CALL_B64 = 64 * 1024
+const CHUNK_B64 = 80 * 1024
 const MAX_CHUNKS = 60
-const MAX_UPLOAD_BYTES = Math.floor(700 * 1024)
+// 服务端 save_media_asset / finish_media_upload 的字符上限是 950000，
+// 折回原图是 950000 × 3/4 = 712500 字节。客户端取 690KB，留约 22KB 余量，
+// 保证「能存进去的图一定读得回来」。改服务端上限时改这一行即可。
+const SERVER_MAX_B64 = 950000
+const MAX_UPLOAD_BYTES = 690 * 1024
 
 const MIME_BY_EXT = {
   jpg: 'image/jpeg',
@@ -390,9 +401,12 @@ async function saveWhole(base64, folder, mime) {
 /**
  * 分片上传：base64 太大就切开送。
  *
- * 为什么必须有这条路：身份证/学生证这类照片压完仍可能过 600KB，
- * 一次调用塞进去就是 EXCEED_MAX_PAYLOAD_SIZE。分片后每片 400KB，
- * 单次永远在安全线内，而且**不用为了塞进通道把证件照压糊** —— 人工核验要看清姓名学号。
+ * 为什么必须有这条路：网关**请求体上限实测 100KB**，一张证件照 base64 之后
+ * 动辄几百 KB，整包发必撞 413 EXCEED_MAX_PAYLOAD_SIZE。切片之后每片 80KB 字符，
+ * 距上限还有约 18KB 余量。
+ *
+ * 另一个好处：**不用为了塞进通道把证件照压糊** —— 人工核验要看清姓名学号，
+ * 压缩档位只用来减少分片次数，不用来把图压到极限。
  *
  * 三步：开任务 → 逐片写（序号重复会覆盖，重试不会拼重）→ 收尾时服务端按序号拼回并入库。
  */
@@ -438,17 +452,24 @@ function progressReporter(done, total) {
   ui.loading({ title: '上传中 ' + done + '/' + total })
 }
 
-/** 存库入口：小图一次搞定，大图自动切成分片（分片时顺手把进度刷到 loading 上）。 */
+/**
+ * 存库入口：只有很小的图才整包发，其余一律分片。
+ *
+ * 为什么阈值压到 64KB：网关请求体上限是 100KB，而 base64 之外还要算上
+ * action / fn / args 这些字段名和 150 字节左右的令牌。64KB 字符 ≈ 66KB 请求体，
+ * 怎么都不会撞线。以前这个阈值是 600KB —— 那是按错的「1MB」算的，等于形同虚设，
+ * 所有真实照片都会先撞一次 413 才想起来分片。
+ */
 async function saveToDatabase(filePath, folder, mime) {
   const base64 = await readFileAsBase64(filePath)
-  if (base64.length > SINGLE_CALL_B64) return saveChunked(base64, folder, mime, progressReporter)
+  if (base64.length > WHOLE_CALL_B64) return saveChunked(base64, folder, mime, progressReporter)
 
   // 体积判断只是估算，通道真拒了就再切小一点重来一次，别把英文报错丢给用户
   try {
     return await saveWhole(base64, folder, mime)
   } catch (error) {
     if (!error || !error.payloadTooLarge) throw error
-    return saveChunked(base64, folder, mime, progressReporter, 200 * 1024)
+    return saveChunked(base64, folder, mime, progressReporter, 48 * 1024)
   }
 }
 
@@ -472,7 +493,7 @@ async function uploadImage(tempFilePath, folder, uid, onProgress) {
     throw new Error(
       '图片约 ' +
         (size / 1024 / 1024).toFixed(1) +
-        'MB，压完仍超过 700KB（再大就读不回来了），请换个角度重拍或选一张更小的'
+        'MB，压完仍超过 690KB（再大就读不回来了），请换个角度重拍或选一张更小的'
     )
   }
 

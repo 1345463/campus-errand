@@ -308,7 +308,7 @@ orders.pay_status = 'paid'
 | 人 | AI |
 |---|---|
 | 提需求、定优先级、验收真机效果 | 拆需求、读历史、定位根因、写实现 |
-| 判断「这个交互对不对」 | 跑四件套校验、62 项回归测试、执行 SQL 迁移 |
+| 判断「这个交互对不对」 | 跑四件套校验、63 项回归测试、执行 SQL 迁移 |
 | 决定要不要上线 | 更新文档、写踩坑记录、按轮次提交推送 |
 
 ### AI 实际交付了什么
@@ -318,7 +318,7 @@ orders.pay_status = 'paid'
 | 页面 | 38 个（四件套齐全，全部在 `app.json` 注册） |
 | 前端代码 | 16,326 行 JS ／ 4,987 行 WXML ／ 4,862 行 WXSS（含 utils / components / app） |
 | 数据库 | 31 张表、129 个函数、7 个触发器、28 个幂等迁移脚本 |
-| 测试 | 62 项回归测试（含真实 PostgreSQL 执行） |
+| 测试 | 63 项回归测试（含真实 PostgreSQL 执行） |
 | 文档 | 1,400+ 行迭代记录 + 踩坑知识库 + 逐轮 CHANGELOG |
 
 ### 为什么把过程也写进仓库
@@ -450,7 +450,7 @@ campus-errand/
 ├── sql/              28 个幂等迁移脚本（可重放）
 ├── cloudfunctions/   6 个云函数（支付下单/支付回调/转账回调/提现管理/网关转发/转账旧版）
 ├── cloudrun/         云托管函数型服务 transfer-svc（固定出口 IP，对接商家转账；已加 packOptions.ignore）
-├── tests/            62 项回归测试（含 PGlite 真实 PostgreSQL）
+├── tests/            63 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 ├── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅
 └── miniprogram_npm/  SDK 构建产物（必须入库，删了跑不起来）
@@ -556,7 +556,7 @@ UGC 信息安全声明，服务类目需企业主体（跑腿类目个人主体�
 对应小节 + `docs/ITERATIONS.md`；想看某一轮「引入了哪些文件」，`git show --stat <commit>`。
 R29 之后的所有改动都是真实 diff。
 
-当前 `main` 有 **83 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
+当前 `main` 有 **84 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
 R39 的三个第三方提交曾被摘除并压成一条整合提交，改写前后文件树 hash 完全一致
 （代码零改动，只换了提交边界与作者）。
 

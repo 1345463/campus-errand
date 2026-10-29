@@ -37,13 +37,15 @@ const ASSET_PREFIX = 'asset:'
 //     1MB，而图片是 base64 塞进 args 里的（还会再涨 1/3）。压到 420KB ≈ base64 575KB，
 //     留出余量，正常照片一轮就过，不用分片。
 //   · SINGLE_CALL_B64（base64 字符）：**单次**线。超过就改走分片，不硬塞。
-//   · MAX_UPLOAD_BYTES（原图字节）：**服务端**硬上限。save_media_asset 收 2.6M 字符
-//     （约 1.9MB 原图），到这里只能报错，压不动了。
+//   · MAX_UPLOAD_BYTES（原图字节）：**服务端**硬上限。以前是 1.9MB，但那条线是错的 ——
+//     图片**读回来也走同一条 1MB 通道**（云函数返回值上限同样约 1MB），1.9MB 的图
+//     存进去就再也读不出来，变成死图。所以按「读得回」倒推：base64 ≈ 950KB < 1MB，
+//     即原图 ≤ 700KB。存得进去就必须读得出来。
 const CHANNEL_BUDGET = 420 * 1024
 const SINGLE_CALL_B64 = 600 * 1024
 const CHUNK_B64 = 400 * 1024
 const MAX_CHUNKS = 60
-const MAX_UPLOAD_BYTES = Math.floor(1900 * 1024)
+const MAX_UPLOAD_BYTES = Math.floor(700 * 1024)
 
 const MIME_BY_EXT = {
   jpg: 'image/jpeg',
@@ -133,36 +135,46 @@ function compressOnce(src, quality) {
 }
 
 /**
- * 手机拍的原图动辄 3-5MB，直接 base64 塞进云函数入参必报
- * EXCEED_MAX_PAYLOAD_SIZE（那一步的上限约 1MB），所以先压到通道线以内。
+ * 压到通道线以内。
  *
- * 两轮：
- *   ① 从**原图**逐级降质量（70 → 55 → 40 → 25），谁先达标就用谁 —— 只压一次，画质最好；
- *   ② 四档都压不下来，就在最小的那档产物上再压一次（画质会再掉一点，但总比传不上去强）。
+ * **不能指望 wx.chooseMedia 的 sizeType:'compressed'**：官方社区反馈它只对部分
+ * 拍照场景生效，从相册选的图基本原样返回（个别机型甚至压完更大）。所以无论哪来的图，
+ * 一律在这里自己压。
  *
- * 压缩接口不可用就原样返回，交给后面的分片通道兜底。
- * 注意：wx.compressImage 只管质量、不改分辨率，所以大图才需要走好几档。
+ * 三轮：
+ *   ① 从**原图**逐级降质量（70 → 55 → 40 → 25 → 15 → 8），谁先达标用谁 —— 只压一次，画质最好；
+ *   ② 压了跟没压一样（接口不可用 / 已是极限）就提前收手，别白转六圈；
+ *   ③ 六档都压不下来，再在最小产物上连压两轮（画质继续掉，但总比传不上去强）。
+ *
+ * 注意：wx.compressImage 只管质量、不改分辨率，所以超大图才需要走这么多档。
  */
 async function fitChannel(filePath) {
-  if (fileSize(filePath) <= CHANNEL_BUDGET) return filePath
+  const originSize = fileSize(filePath)
+  if (originSize <= CHANNEL_BUDGET) return filePath
   if (typeof wx === 'undefined' || typeof wx.compressImage !== 'function') return filePath
 
-  const ladder = [70, 55, 40, 25]
+  const ladder = [70, 55, 40, 25, 15, 8]
   let best = filePath
-  let bestSize = fileSize(filePath)
+  let bestSize = originSize
+  let effective = false // 压缩到底有没有见效
   for (let i = 0; i < ladder.length; i++) {
     const out = await compressOnce(filePath, ladder[i])
     const size = fileSize(out)
     if (size && size < bestSize) {
       best = out
       bestSize = size
+      effective = true
     }
     if (bestSize <= CHANNEL_BUDGET) return best
+    if (!size || size > originSize * 0.99) break
   }
+  // 一次都没压小（接口不可用 / 图已经压到极限），后面的轮次也只是白转
+  if (!effective) return best
 
-  const lower = await compressOnce(best, 30)
-  const lowerSize = fileSize(lower)
-  if (lowerSize && lowerSize < bestSize) {
+  for (let round = 0; round < 2 && bestSize > CHANNEL_BUDGET; round++) {
+    const lower = await compressOnce(best, round === 0 ? 30 : 15)
+    const lowerSize = fileSize(lower)
+    if (!lowerSize || lowerSize >= bestSize) break
     best = lower
     bestSize = lowerSize
   }
@@ -460,7 +472,7 @@ async function uploadImage(tempFilePath, folder, uid, onProgress) {
     throw new Error(
       '图片约 ' +
         (size / 1024 / 1024).toFixed(1) +
-        'MB，压缩后仍超过 1.9MB 上限，请换个角度重拍或选一张更小的'
+        'MB，压完仍超过 700KB（再大就读不回来了），请换个角度重拍或选一张更小的'
     )
   }
 

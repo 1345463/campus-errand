@@ -18,6 +18,7 @@ function loadUpload(options) {
   const opts = options || {}
   const files = opts.files || {}
   const calls = []
+  const compressCalls = []
 
   const wx = {
     env: { USER_DATA_PATH: '/tmp' },
@@ -31,8 +32,18 @@ function loadUpload(options) {
         },
       }
     },
-    // 不真的压缩：产物与源同路径、体积不变，好让分片逻辑按原始体积走
+    // 默认不真的压缩（产物与源同路径、体积不变，好让分片逻辑按原始体积走）；
+    // 要测压缩阶梯时用 opts.shrinkTo 指定「压完的体积」
     compressImage: function (arg) {
+      compressCalls.push(arg.quality)
+      const src = files[arg.src]
+      if (opts.shrinkTo && src && src.size > opts.shrinkTo) {
+        // 模拟「压缩见效」：产物是另一个路径，体积变小，内容沿用
+        const small = arg.src + '@' + arg.quality
+        files[small] = { size: opts.shrinkTo, data: src.data }
+        arg.success({ tempFilePath: small })
+        return
+      }
       arg.success({ tempFilePath: arg.src })
     },
   }
@@ -74,6 +85,7 @@ function loadUpload(options) {
 
   return {
     calls: calls,
+    compressCalls: compressCalls,
     mod: ctx.module.exports,
     upload: function (filePath) {
       return ctx.module.exports.uploadImage(filePath, 'certs', 'wx:oTEST')
@@ -139,5 +151,27 @@ test('压缩后仍超过服务端上限的图直接报错，不硬传', async ()
   const h = loadUpload({
     files: { '/d.jpg': { size: 2.4 * 1024 * 1024, data: 'D'.repeat(30 * 1024) } },
   })
-  await assert.rejects(() => h.upload('/d.jpg'), /超过 1\.9MB 上限/)
+  await assert.rejects(() => h.upload('/d.jpg'), /超过 700KB/)
+})
+
+// 微信的 sizeType:'compressed' 只对部分拍照场景生效，相册选的图基本原样返回，
+// 所以压缩**必须由我们自己无条件做**，不能看来源下菜碟。
+test('相册大图同样走压缩阶梯，压到通道线就停', async () => {
+  const h = loadUpload({
+    shrinkTo: 200 * 1024,
+    files: { '/e.jpg': { size: 3.2 * 1024 * 1024, data: 'E'.repeat(200 * 1024) } },
+  })
+  assert.equal(await h.upload('/e.jpg'), 'asset:42')
+
+  // 第一档 70 就压到 200KB（< 420KB 通道线），到此为止 —— 不会为了压而压
+  assert.deepEqual(h.compressCalls, [70])
+  assert.deepEqual(fns(h.calls), ['save_media_asset'])
+})
+
+test('压了跟没压一样时提前收手，不白转六档', async () => {
+  const h = loadUpload({
+    files: { '/f.jpg': { size: 3.2 * 1024 * 1024, data: 'F'.repeat(300 * 1024) } },
+  })
+  await assert.rejects(() => h.upload('/f.jpg'), /超过 700KB/)
+  assert.deepEqual(h.compressCalls, [70]) // 一档无效就停
 })

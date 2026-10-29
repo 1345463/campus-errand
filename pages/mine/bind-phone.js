@@ -31,6 +31,11 @@ Page({
     bound: false,
     boundPhone: '',
     fromGate: false,
+    // 老账号自带的手机号自动绑定失败时的原因（一般是该号已被别的账号占用）
+    authPhoneError: '',
+    // 老账号（非微信身份）换号时，需要它的登录密码才能切回来
+    needPassword: false,
+    accountPassword: '',
   },
 
   onLoad: function (options) {
@@ -48,7 +53,19 @@ Page({
   load: function () {
     const page = this
     api
-      .getMyPhoneState()
+      .getSession()
+      .then(function (session) {
+        page._uid = (session && session.user && session.user.id) || ''
+        return api.myAuthPhone()
+      })
+      .then(function (phone) {
+        page._authPhone = phone || ''
+        // 老账号（不是微信身份）切走之后只能靠「手机号 + 密码」切回来，
+        // 所以换号时必须先拿到密码。微信身份不需要这一栏。
+        const isWechat = String(page._uid || '').indexOf('wx:') === 0
+        page.setData({ needPassword: !isWechat && !!page._authPhone })
+        return api.getMyPhoneState()
+      })
       .then(function (state) {
         const value = String(state.phone || '')
         page.setData({
@@ -57,10 +74,48 @@ Page({
             ? value.slice(0, 3) + '****' + value.slice(7)
             : '',
         })
+        if (state && state.bound) return false
+        // 还没绑 → 试着用账号自带的手机号直接补上（老账号专用，见 tryAuthPhone）
+        return page.tryAuthPhone()
       })
       .catch(function (error) {
         // 未登录时静默：本页也可能被分享链接直接打开
         console.warn('[bind-phone] state failed', api.getErrorMessage(error))
+      })
+  },
+
+  // 老账号（手机号注册、uid 是数字）在绑定页里其实无路可走：
+  // 它会发短信 → verifyOtp 把会话换成手机号身份 → 而老账号没有微信身份可切回，
+  // 强行切就等于把用户踢到另一个账号上。但这类账号注册时已经用短信验证过号码了，
+  // 登录服务里就存着这个号 —— 直接把它写进 profile_phones 即可，不用再验一次。
+  // 微信身份读不到 auth phone，这里会直接返回，走正常的短信流程。
+  tryAuthPhone: function () {
+    const page = this
+    if (page._authPhoneTried) return Promise.resolve(false)
+    page._authPhoneTried = true
+    return api
+      .myAuthPhone()
+      .then(function (phone) {
+        if (!phone) return false
+        return api
+          .bindMyPhone(phone)
+          .then(function () {
+            page.setData({
+              bound: true,
+              boundPhone: phone.slice(0, 3) + '****' + phone.slice(7),
+              authPhoneError: '',
+            })
+            ui.toast({ title: '已绑定账号注册手机号', icon: 'success' })
+            return true
+          })
+          .catch(function (error) {
+            // 最常见是这个号已经被别的账号绑走了，把服务端原因显示出来
+            page.setData({ authPhoneError: api.getErrorMessage(error) })
+            return false
+          })
+      })
+      .catch(function () {
+        return false
       })
   },
 
@@ -70,6 +125,10 @@ Page({
 
   onCode: function (event) {
     this.setData({ code: event.detail.value, formError: '' })
+  },
+
+  onAccountPassword: function (event) {
+    this.setData({ accountPassword: event.detail.value, formError: '' })
   },
 
   stopCountdown: function () {
@@ -155,6 +214,12 @@ Page({
         if (!uidBefore) {
           throw new Error('登录状态已失效，请回到「我的」重新登录后再绑定')
         }
+        // 老账号（非微信身份）被切走之后没有微信身份可切回，只能靠
+        // 「账号手机号 + 密码」重新登录回来 —— 所以密码在这一步之前必须先拿到。
+        page._isWechat = uidBefore.indexOf('wx:') === 0
+        if (!page._isWechat && !String(page.data.accountPassword || '')) {
+          throw new Error('当前账号不是微信身份，请先填写本账号的登录密码：换号验证后要用它切回原账号')
+        }
         // 写标记：下一步会话会借道到手机号身份，正常流程结束后清除；
         // 万一进程被杀 / 网络断了，app.js 下次启动看到标记会强制切回微信身份。
         ui.setStorage(IDENTITY_PENDING_KEY, { uid: uidBefore, at: Date.now() })
@@ -167,9 +232,23 @@ Page({
         })
       })
       .then(function () {
-        // 此刻会话已经变成手机号身份，必须切回微信身份才能写到自己账号上
+        // 验码后会话可能已经变成手机号身份。先看看是不是「本来就是这个账号」
+        // —— 老账号本身就是手机号身份时，绑自己的号码验完还是同一个 uid，
+        // 这时候再调 api.login() 反而会把用户踢到微信身份上（就是「跳到另一个账号」）。
+        return api.getSession()
+      })
+      .then(function (session) {
+        const uidAfter = (session && session.user && session.user.id) || ''
+        if (uidBefore && uidAfter === uidBefore) {
+          // 验完还是本人（老账号绑自己的号），不用切
+          ui.removeStorage(IDENTITY_PENDING_KEY)
+          return { session: session }
+        }
+        // 确实被换成了别的身份：微信身份用 wx.login 切回；
+        // 老账号用「账号手机号 + 密码」重新登录切回。
         page._switched = true
-        return api.login()
+        if (page._isWechat) return api.login()
+        return api.loginWithPassword(page._authPhone, String(page.data.accountPassword || ''))
       })
       .then(function (result) {
         if (!result || !result.session) {

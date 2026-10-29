@@ -12,6 +12,9 @@
       <text class="hint">发单、接单和查看对方联系方式前需要绑定手机号，用于对方联系你。浏览任务大厅不需要绑定。</text>
     </view>
 
+    <!-- 老账号自带手机号自动绑定失败时，把原因摆出来，别让用户对着表单干瞪眼 -->
+    <view wx:if="{{authPhoneError}}" class="bp-error">{{authPhoneError}}</view>
+
     <view class="field">
       <view class="field-label">手机号</view>
       <input
@@ -40,6 +43,18 @@
           bindtap="sendCode"
         >{{countdown > 0 ? countdown + ' 秒后重发' : (sending ? '发送中…' : '获取验证码')}}</view>
       </view>
+    </view>
+
+    <view wx:if="{{needPassword}}" class="field">
+      <view class="field-label">本账号登录密码</view>
+      <input
+        class="field-input"
+        password="{{true}}"
+        placeholder="换号验证后要用它切回原账号"
+        value="{{accountPassword}}"
+        bindinput="onAccountPassword"
+      />
+      <text class="hint">当前账号不是微信身份，验证新号码时会话会临时切走，需要用密码重新登录回来。</text>
     </view>
 
     <view wx:if="{{formError}}" class="bp-error">{{formError}}</view>

@@ -43,10 +43,14 @@ App({
     const api = require('./utils/api')
     const KEY = 'identitySwitchPendingV1'
     const pending = ui.getStorage(KEY)
-    if (pending && pending.uid) {
+    // 只对微信身份（uid 是 wx: 开头）强制重登。老账号本身是手机号身份，
+    // 没有微信身份可切回，强行登出会让它彻底回不去 —— 那种情况交给用户
+    // 用「我的 → 用旧的手机号账号登录」自己回来。
+    if (pending && pending.uid && pending.uid.indexOf('wx:') === 0) {
       ui.removeStorage(KEY)
       return app.forceRelogin('绑定手机号时身份没切回来')
     }
+    if (pending) ui.removeStorage(KEY)
     // 没有标记也要兜一次：会话存在但不是微信身份、库里又查不到资料，
     // 说明这是绑定过程中留下的空壳账号（正常账号一定有 profiles 行）。
     // 有资料的手机号账号不碰 —— 那是「我的」页注册入口建出来的老账号。

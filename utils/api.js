@@ -134,6 +134,34 @@ async function sendPhoneCode(phone) {
   return sent.data
 }
 
+// 当前账号在登录服务里登记的手机号。微信身份没有；老账号（手机号注册、
+// uid 是数字）有 —— 那是它注册时用短信验证过的号码，可以直接拿来过手机号闸门，
+// 没必要让用户再验证一遍。
+async function myAuthPhone() {
+  const result = await cloud.auth.getUser()
+  if (result.error || !result.data) return ''
+  const phone = String((result.data && result.data.phone) || '').trim()
+  return /^1[3-9]\d{9}$/.test(phone) ? phone : ''
+}
+
+// 手机号 + 密码登录：只为存量老账号保留（uid 是数字、不是 wx: 开头的那批）。
+// 注册入口已经删掉 —— 再开就会造出和微信身份并存的第二套账号，
+// 「绑定手机号」时会撞号（verifyOtp 直接登录进那个老账号）。
+// 老账号最终要迁到微信身份上（改 profiles.owner_id 及各业务表的 uid），
+// 迁完这个函数就可以连同页面入口一起删了。
+async function loginWithPassword(phone, password) {
+  const result = await cloud.auth.signInWithPassword({ phone: phone, password: password })
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  if (!result.data) throw new Error('登录失败，请重试')
+  let profile = null
+  try {
+    profile = await ensureProfile(result.data.user)
+  } catch (e) {
+    profile = null
+  }
+  return { session: result.data, profile: profile }
+}
+
 async function activateAdmin(code) {
   await requireSession()
   const result = await cloud.database.rpc('activate_admin', { p_code: code })
@@ -1634,6 +1662,8 @@ module.exports = {
   getSession: getSession,
   requireSession: requireSession,
   login: login,
+  myAuthPhone: myAuthPhone,
+  loginWithPassword: loginWithPassword,
   sendPhoneCode: sendPhoneCode,
   activateAdmin: activateAdmin,
   listAllOrders: listAllOrders,

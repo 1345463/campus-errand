@@ -1,0 +1,10 @@
+{
+  "name": "app-api",
+  "version": "1.0.0",
+  "description": "新后端统一入口：登录换令牌 + 带身份执行业务 RPC",
+  "main": "index.js",
+  "dependencies": {},
+  "engines": {
+    "node": ">=16"
+  }
+}

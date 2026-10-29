@@ -33,38 +33,29 @@ App({
       })
   },
 
-  // 「绑定手机号」会先把会话借道到手机号身份（验码必须由 auth provider 完成），
-  // 验完再切回微信身份。若那一步中途断了（进程被杀 / wx.login 失败），
-  // 用户下次打开就落在一个没有资料的陌生账号上 —— 看到的正是「跳到另一个账号」。
-  // bind-phone 在切身份前会写下标记，这里见到标记就强制登出重登一次。
+  // 换库之后只剩微信一种身份（uid 恒为 wx: 开头），绑定手机号也不再借道别的身份，
+  // 所以「切身份切不回来」这一类事故不存在了。这里只做两件事：
+  //   1) 清掉旧版本留下的 identitySwitchPending 标记（历史用户升级上来会带着）
+  //   2) 令牌本身失效（服务端换了密钥、过期、被清库）时静默重登一次
   repairIdentity: function () {
     const app = this
     const ui = require('./utils/ui')
     const api = require('./utils/api')
-    const KEY = 'identitySwitchPendingV1'
-    const pending = ui.getStorage(KEY)
-    // 只对微信身份（uid 是 wx: 开头）强制重登。老账号本身是手机号身份，
-    // 没有微信身份可切回，强行登出会让它彻底回不去 —— 那种情况交给用户
-    // 用「我的 → 用旧的手机号账号登录」自己回来。
-    if (pending && pending.uid && pending.uid.indexOf('wx:') === 0) {
-      ui.removeStorage(KEY)
-      return app.forceRelogin('绑定手机号时身份没切回来')
-    }
-    if (pending) ui.removeStorage(KEY)
-    // 没有标记也要兜一次：会话存在但不是微信身份、库里又查不到资料，
-    // 说明这是绑定过程中留下的空壳账号（正常账号一定有 profiles 行）。
-    // 有资料的手机号账号不碰 —— 那是「我的」页注册入口建出来的老账号。
+    ui.removeStorage('identitySwitchPendingV1')
     return api
       .getSession()
       .then(function (session) {
-        const uid = (session && session.user && String(session.user.id || '')) || ''
-        if (!uid || uid.indexOf('wx:') === 0) return false
+        if (!session) return false
         return api.getProfile().then(function (profile) {
           if (profile) return false
-          return app.forceRelogin('空壳手机号身份')
+          // 有令牌却读不到资料：令牌或账号已经对不上了，重登一次拿新的
+          return app.forceRelogin('会话与账号不匹配')
         })
       })
-      .catch(function () {
+      .catch(function (error) {
+        // 明确报「登录失效」的（令牌验签不过 / 过期）才重登，
+        // 网络抖动不在这里折腾，等 onShow 再试
+        if (error && error.needLogin) return app.forceRelogin('登录状态已失效')
         return false
       })
   },

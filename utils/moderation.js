@@ -139,8 +139,8 @@ function currentIndex() {
 
 // 异步拉服务端最新词库。失败不影响使用（自动落到打包的兜底词库里）。
 function refreshWords() {
-  const cloud = require('./cloud').cloud
-  return cloud.database
+  const tcb = require('./tcb')
+  return tcb
     .rpc('list_active_moderation_words', {})
     .then(function (result) {
       if (result.error) return null

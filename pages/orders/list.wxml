@@ -142,7 +142,18 @@
       </view>
       <view class="task-foot">
         <text class="status-pill status-{{order.status}}">{{order.statusText}}</text>
+        <text wx:if="{{order.unpaid}}" class="pill-unpaid">待付款</text>
         <text class="menu-arrow">详情 ></text>
+      </view>
+
+      <!-- 待付款：付了才会进大厅，所以给一个显眼的补付入口 -->
+      <view wx:if="{{order.unpaid}}" class="card-actions">
+        <view
+          class="link-primary strong pressable"
+          hover-class="press"
+          data-id="{{order.id}}"
+          catchtap="payOrder"
+        >去支付 ¥{{order.payable}}</view>
       </view>
 
       <view wx:if="{{order.canDelete}}" class="card-actions">

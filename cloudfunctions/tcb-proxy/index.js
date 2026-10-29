@@ -15,6 +15,10 @@
  *     name: 'tcb-proxy',
  *     data: { target: 'pay-create', code, orderId, amount }
  *   })
+ *
+ * 注意：本函数不持有任何密钥 —— 只有转发地址和白名单。
+ * 身份由上游函数各自校验（app-api 用 code 换 openid、pay-create 同理），
+ * 所以泄露转发能力也拿不到别人的数据（上限是代发请求，拿不到凭据）。
  */
 const https = require('https')
 
@@ -22,6 +26,7 @@ const UPSTREAM = 'ceshi-d2g37cbg7c8f7ee48-1329559054.ap-shanghai.app.tcloudbase.
 
 const ALLOW = {
   'pay-create': '/api/pay-create',
+  api: '/api/app-api',
   withdraw: '/api/withdraw',
 }
 

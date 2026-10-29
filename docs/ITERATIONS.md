@@ -1,11 +1,11 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
-> 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 WorkBuddy Cloud
-> 统计截止：**2026-10-27 23:30**（自动任务复核）｜ 累计 **49 轮迭代**、**38 个页面**、**31 张表**、**129 个数据库函数**、**7 个触发器**、**28 个迁移脚本**、**56 项回归测试**、主包 **1.41 MB**
+> 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
+> 统计截止：**2026-10-29 21:20** ｜ 累计 **52 轮迭代**、**39 个页面**、**34 张表**、**151 个数据库函数**、**9 个触发器**、**53 个迁移脚本**、**56 项回归测试**、主包 **0.94 MB**
 >
-> 📌 **数据库双库期（2026-10-27 起）**：运行库仍是 WorkBuddy Cloud（31 表 / 129 函数 / 7 触发器，本次经 MCP 复核）；
-> 迁库目标 **CloudBase `ceshi-d2g37cbg7c8f7ee48`** 已完成全量迁移（验收 32 表 / 131 函数 / 9 触发器 / 23 开关全开，
-> 前端 99 个 RPC 零缺失），**只剩前端换 SDK**。R49 起的支付表与云函数只落地在新库。
+> 📌 **R50 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
+> `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
+> 的 `svc_rpc`，库里 129 个 `SECURITY DEFINER` 函数一行未改。发单已接入微信支付。
 
 ---
 
@@ -13,7 +13,7 @@
 
 - [0. 项目概况](#0-项目概况)
 - [1. 技术基线（不可动摇的约定）](#1-技术基线不可动摇的约定)
-- [2. 迭代时间线（49 轮）](#2-迭代时间线49-轮)
+- [2. 迭代时间线（52 轮）](#2-迭代时间线52-轮)
 - [3. 数据库演进总览](#3-数据库演进总览)
 - [4. 前端页面与模块总览](#4-前端页面与模块总览)
 - [5. 踩坑知识库](#5-踩坑知识库)
@@ -71,7 +71,7 @@
 
 ---
 
-## 2. 迭代时间线（49 轮）
+## 2. 迭代时间线（52 轮）
 
 ### Day 1 — 2026-10-14：从录屏原型到可用链路
 
@@ -1003,6 +1003,61 @@ return !String(profile.nickname || '').trim()
 
 ---
 
+#### R52 · 前端整体切到 CloudBase + 发单接入微信支付
+
+**背景**：R48 迁完库、R49 部署好 `pay-create` 之后，前端仍然连着旧 WorkBuddy 库 ——
+回调改的是新库的 `orders.pay_status`，前端读的是旧库，**两条链路根本不在一起**。
+所以「发单不用付款」不是漏了按钮，而是架构上就没接上。本轮一次做完切换 + 接支付。
+
+**① 新通道 `utils/tcb.js`**
+网关直连优先（`POST /api/app-api`），域名没配白名单时自动退到 `wx.cloud.callFunction('tcb-proxy')`；
+**只有网络层失败才换通道**，业务拒绝（余额不足、无权限）不重试，避免把拒绝当成超时反复打。
+会话不再依赖任何 SDK：服务端拿 `WX_APP_SECRET` 签 HMAC 令牌（`v1.<payload>.<sig>`），
+验签用 `timingSafeEqual`，uid 必须 `wx:` 开头，端上只负责存和带。
+
+**② 服务端代持身份 `svc_rpc`（关键设计）**
+`wx.cloud` 中转之后「调用者是谁」不能再靠客户端声明，所以：云函数先验令牌拿到可信 uid，
+再在**同一个事务**里 `set_config('request.jwt.claim.sub', uid)` 后执行业务函数 ——
+库里 129 个按 `auth.uid()` 取身份的函数一行都不用改，RLS 与行级校验照常生效。
+前端 95 处 `cloud.database.rpc` 批量换成 `rpc()`；剩下 7 处直连表操作
+（资料 / 地址簿 / 认证申请）补成服务端函数，做到**没有一处裸表访问**。
+
+**③ 手机号改自建验证码**
+不再借道 auth provider，也就不会再出现「绑完跳到另一个账号」（R44 那个坑的根源）。
+新增 `phone_codes` 表只存哈希，明文只回到云函数去发短信；新增 `bind_my_phone_verified`
+把「验码 + 写入」合成一次 RPC —— 客户端拿不到明文，**跳过发码直接绑号这条路堵死了**
+（`add-phone-and-deletion.sql` 里当年记的那条残余风险就此关闭）。
+
+**④ 发单接支付**
+- `create_order` 自己决定这一单要不要付钱：总闸关着、或抵扣券把赏金抵满 → 直接 `paid`；
+  其余落 `unpaid`（应付 = `reward - discount_amount`）。
+- `list_hall_orders` **只放已付的**（批量导入的工单由平台发，放行）。
+- 前端 `utils/pay.js`：`wx.login` 取 code → `pay-create` → `wx.requestPayment` →
+  轮询 `order_pay_state` 确认落库。**不能只信 `requestPayment` 的 success**，
+  它只代表微信扣款成功，库里状态要等回调（1-3 秒）。
+- 付不成的单留在「我发布的」里，卡片上多一枚「待付款」和「去支付 ¥x」入口，随时补付。
+
+**踩坑（两条）**
+- `bind_my_phone_verified` 自己 `RETURNS TABLE(bound, phone)`，函数体里裸写 `phone`
+  就被判 `column reference "phone" is ambiguous` —— **本项目第二次踩 OUT 参数与列名冲突**
+  （第一次是 withdraw 那条）。改法一致：表一律起别名、列一律带限定。
+- 换 SDK 时漏删 `sendPhoneCode` / `myAuthPhone` 的函数体，导出里却还留着引用 ——
+  `node --check` 照样过（它不查未声明标识符），真机一 `require` 就是 ReferenceError。
+  **四件套跑完还要再扫一遍「导出的名字有没有对应实现」**。
+
+**顺带**：删除 `utils/cloud.js` / `utils/workbuddy-cloud-diagnostics.js` / `miniprogram_npm/`
+（508 KB），主包 1.44 MB → **0.94 MB**。
+
+**遗留**：短信要腾讯云 SMS 的 5 个环境变量（`SMS_SECRET_ID` / `SMS_SECRET_KEY` /
+`SMS_SDK_APP_ID` / `SMS_TEMPLATE_ID` / `SMS_SIGN_NAME`）。没配之前新用户绑不了手机号
+（管理员账号已绑，不受影响），前端会明确提示「短信通道未开通」。
+
+> 轮次说明：R50（支付打通：JSAPI 下单 + 公钥验签回调 + 金额核对 + 幂等）与
+> R51（提现打通：云托管固定 IP + 商家转账 + 确认收款 + 失败自动退款）当时只写进了 README，
+> 本文件漏记了两条，这里按 README 的编号往下接，故本轮为 **R52**。
+
+---
+
 ## 3. 数据库演进总览
 
 ### 数据表（31 张，全量 RLS）
@@ -1332,7 +1387,7 @@ END $t$;
 每轮改完必跑**四件套**（R33 起因通配符打回而补的第 4 项）：
 
 ```bash
-# 1. 全量语法检查（56 个业务 JS：pages 38 + utils 16 + components 2）
+# 1. 全量语法检查（58 个业务 JS：pages 40 + utils 16 + components 2）
 cd campus-errand
 for f in $(find pages utils components -name '*.js'); do node --check "$f" || echo "FAIL $f"; done
 

@@ -122,6 +122,15 @@
   color: var(--t3);
 }
 
+/* 待付款：没付钱的订单不进大厅，用暖色提醒用户还差一步 */
+.pill-unpaid {
+  padding: 6rpx 18rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  background: var(--accent-100);
+  color: var(--accent);
+}
+
 .hall-more {
   display: flex;
   align-items: center;

@@ -12,9 +12,6 @@
       <text class="hint">发单、接单和查看对方联系方式前需要绑定手机号，用于对方联系你。浏览任务大厅不需要绑定。</text>
     </view>
 
-    <!-- 老账号自带手机号自动绑定失败时，把原因摆出来，别让用户对着表单干瞪眼 -->
-    <view wx:if="{{authPhoneError}}" class="bp-error">{{authPhoneError}}</view>
-
     <view class="field">
       <view class="field-label">手机号</view>
       <input

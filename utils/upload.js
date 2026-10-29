@@ -20,7 +20,7 @@
  * 展示时先按旧逻辑试一遍（签名链接 → 带 token 直读 → data URL），避免历史记录直接变空白。
  */
 const config = require('./config')
-const { cloud } = require('./cloud')
+const tcb = require('./tcb')
 
 // 与 SDK 内部常量保持一致（见 CLOUD_MODULE_PATHS / RUNTIME_STORAGE_BUCKET）
 const STORAGE_PREFIX = '/.cloud/storage'
@@ -145,29 +145,16 @@ async function shrink(filePath, size) {
   return best
 }
 
+// 新后端没有对象存储读通道了：库已清空，之后的图一律存数据库（asset:<id>）。
+// 下面几个函数只为「历史遗留的对象路径」保留，走到这里说明那条数据本身已过时，
+// 明确报错比静默失败好 —— 但不会崩，交给调用方决定怎么提示。
 async function getAuthToken() {
-  const result = await cloud.auth.getSession()
-  const session = result && !result.error ? result.data : null
-  if (!session) {
-    const error = new Error('请先登录')
-    error.needLogin = true
-    throw error
-  }
-  let token = session.accessToken
-  if (!token && typeof cloud.auth.getAccessToken === 'function') {
-    token = await cloud.auth.getAccessToken()
-  }
-  if (!token) {
-    const error = new Error('登录状态已失效，请重新登录')
-    error.needLogin = true
-    throw error
-  }
-  return token
+  throw new Error('这张图是旧对象存储的遗留记录，读不到了，请重新上传')
 }
 
 function baseHeaders(token) {
   return {
-    'x-wb-webapp-access-key': config.publishableKey,
+    'x-wb-webapp-access-key': (config && config.publishableKey) || '',
     Authorization: 'Bearer ' + token,
     'X-Client-Info': CLIENT_INFO,
   }
@@ -340,7 +327,7 @@ function parseAssetId(path) {
  */
 async function saveToDatabase(filePath, folder, mime) {
   const base64 = await readFileAsBase64(filePath)
-  const result = await cloud.database.rpc('save_media_asset', {
+  const result = await tcb.rpc('save_media_asset', {
     p_scope: String(folder || 'file'),
     p_mime: mime || 'image/jpeg',
     p_data: base64,
@@ -384,7 +371,7 @@ async function uploadImage(tempFilePath, folder, uid) {
 async function readAsset(assetPath) {
   const id = parseAssetId(assetPath)
   if (!id) throw new Error('图片路径无效：' + String(assetPath).slice(0, 40))
-  const result = await cloud.database.rpc('get_media_asset', { p_id: Number(id) })
+  const result = await tcb.rpc('get_media_asset', { p_id: Number(id) })
   if (result.error) throw new Error(describeRpcError(result.error, '读取图片'))
   const rows = Array.isArray(result.data) ? result.data : []
   if (!rows.length) throw new Error('找不到这张图片：可能不是本人提交的')
@@ -434,7 +421,7 @@ async function readOrderAsset(assetPath, orderId) {
   const id = parseAssetId(assetPath)
   if (!id) throw new Error('图片路径无效：' + String(assetPath).slice(0, 40))
   if (!orderId) throw new Error('缺少订单号，无法校验图片权限')
-  const result = await cloud.database.rpc('get_order_asset', {
+  const result = await tcb.rpc('get_order_asset', {
     p_asset_id: Number(id),
     p_order_id: Number(orderId),
   })
@@ -476,7 +463,7 @@ async function orderAssetToDataUrl(assetPath, orderId) {
 async function readPublicAsset(assetPath) {
   const id = parseAssetId(assetPath)
   if (!id) throw new Error('图片路径无效：' + String(assetPath).slice(0, 40))
-  const result = await cloud.database.rpc('get_public_asset', { p_id: Number(id) })
+  const result = await tcb.rpc('get_public_asset', { p_id: Number(id) })
   if (result.error) throw new Error(describeRpcError(result.error, '读取轮播图'))
   const rows = Array.isArray(result.data) ? result.data : []
   if (!rows.length) throw new Error('找不到这张轮播图：可能还没上传成功')
@@ -560,8 +547,7 @@ function probeObject(objectPath) {
       resolve('')
       return
     }
-    cloud.auth
-      .getAccessToken()
+    Promise.resolve('')
       .then(function (token) {
         // 带 token 探测才有意义：匿名访问 runtime 桶一律返回 bucket not found
         const header = baseHeaders(token || '')

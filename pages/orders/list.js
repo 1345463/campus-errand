@@ -4,6 +4,7 @@ const guard = require('../../utils/guard')
 const services = require('../../utils/services')
 const flags = require('../../utils/flags')
 const motion = require('../../utils/motion')
+const pay = require('../../utils/pay')
 
 // 分页每页条数。服务端 list_my_orders 上限 50，这里取 20 兼顾首屏速度
 const PAGE_SIZE = 20
@@ -185,6 +186,14 @@ Page({
       this.data.searching ? this.data.keyword : '')
   },
 
+  // 未付款的订单只有「我发布的」里才需要补付入口：
+  // 接单员看到的单一定是已付的（大厅就不展示 unpaid，服务端也拦着）。
+  payableOf: function (item) {
+    const reward = Number((item && item.reward) || 0)
+    const discount = Number((item && item.discount_amount) || 0)
+    return Math.max(Math.round((reward - discount) * 100) / 100, 0)
+  },
+
   mapRows: function (rows) {
     const page = this
     return (rows || [])
@@ -193,6 +202,9 @@ Page({
         if (item.pickup_addr) route.push(item.pickup_addr)
         if (item.deliver_addr) route.push(item.deliver_addr)
         return {
+          // 待付款：发单时没付成（取消 / 网络断了），订单留在这儿等人补付
+          unpaid: page.data.mode === 'publish' && item.pay_status === 'unpaid' && item.status === 'pending',
+          payable: page.payableOf(item),
           id: item.id,
           title: item.title,
           serviceName: item.service_name,
@@ -306,6 +318,53 @@ Page({
     wx.navigateTo({
       url: '/pages/order/detail?id=' + event.currentTarget.dataset.id,
     })
+  },
+
+  // ---- 补付：发单时没付成的单，从这里接着付 ----
+  // 不重新下单，直接对原订单再拉起一次支付；付完刷新列表，状态自然变成「待接单」。
+  payOrder: function (event) {
+    const page = this
+    const id = Number(event.currentTarget.dataset.id)
+    if (!id || page._paying) return
+    page._paying = true
+    ui.loading({ title: '准备支付', mask: true })
+    pay
+      .orderPayState(id)
+      .then(function (row) {
+        ui.hideLoading()
+        if (!row) throw new Error('读不到订单支付状态，请稍后再试')
+        if (row.pay_status === 'paid') {
+          page.load(true)
+          return null
+        }
+        return ui
+          .confirm({
+            title: '支付赏金',
+            content: '需支付 ¥' + page.payableOf(row) + '，支付成功后任务才会进入大厅。',
+            confirmText: '去支付',
+            cancelText: '取消',
+          })
+          .then(function (go) {
+            if (!go) return null
+            return pay.payOrder({ id: id, reward: row.reward, discount_amount: row.discount_amount })
+          })
+      })
+      .then(function (result) {
+        if (result && result.paid) {
+          ui.toast({ title: '支付成功，任务已发布', icon: 'success' })
+          page.load(true)
+        } else if (result) {
+          ui.toast({ title: '已收到支付，正在确认，下拉刷新看看', icon: 'none', duration: 2400 })
+        }
+      })
+      .catch(function (error) {
+        ui.hideLoading()
+        if (error && error.cancelled) return
+        ui.toast({ title: (error && error.message) || '支付失败，请稍后再试', icon: 'none', duration: 2400 })
+      })
+      .then(function () {
+        page._paying = false
+      })
   },
 
   // ---- 删除历史订单 ----

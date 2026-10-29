@@ -6,6 +6,7 @@ const config = require('../../utils/config')
 const moderation = require('../../utils/moderation')
 const campus = require('../../utils/campus')
 const flags = require('../../utils/flags')
+const pay = require('../../utils/pay')
 
 // 把「进取楼 · 5层 · 512号」拆成楼栋 / 楼层两个字段存进订单，
 // 大厅的楼栋楼层筛选才能直接按字段过滤，不用对地址串做 LIKE。
@@ -546,13 +547,84 @@ Page({
         if (!created) return
         page._published = true
         ui.removeStorage('orderDraftV1')
-        ui.toast({ title: '发布成功', icon: 'success' })
+
+        // 服务端已经按 pay_settings 总闸和抵扣券算好了：
+        // 标成 unpaid 才需要付钱，抵满或总闸关着时直接是 paid。
+        if (created.pay_status !== 'unpaid') {
+          ui.toast({ title: '发布成功', icon: 'success' })
+          setTimeout(function () {
+            wx.switchTab({ url: '/pages/orders/list' })
+          }, 900)
+          return
+        }
+        return page.payAndFinish(created)
+      })
+      .catch(function (error) {
+        page.setData({ submitting: false })
+        guard.toastError(error)
+      })
+  },
+
+  // 赏金先付到平台，任务才进大厅；完成后由系统结算给接单员。
+  // 付不付得成都不影响订单本身 —— 没付的单留在「我发布的」里，随时可以补付。
+  payAndFinish: function (order) {
+    const page = this
+    const amount = pay.payableOf(order)
+    return ui
+      .confirm({
+        title: '支付赏金',
+        content:
+          '发布任务需先支付赏金 ¥' + amount +
+          '（抵扣后应付）。任务完成后平台再结算给接单员。',
+        confirmText: '去支付',
+        cancelText: '稍后再付',
+        defaultConfirm: true,
+      })
+      .then(function (go) {
+        if (!go) {
+          page.setData({ submitting: false })
+          ui.toast({
+            title: '任务已保存为待付款，可在「我发布的」里继续支付',
+            icon: 'none',
+            duration: 2600,
+          })
+          setTimeout(function () {
+            wx.switchTab({ url: '/pages/orders/list' })
+          }, 900)
+          return null
+        }
+        return pay.payOrder(order)
+      })
+      .then(function (result) {
+        if (!result) return
+        page.setData({ submitting: false })
+        if (result.paid) {
+          ui.toast({ title: '支付成功，任务已发布', icon: 'success' })
+        } else {
+          // 钱已扣、回调还没到。说「失败」会让用户以为没扣款，说「成功」又不严谨
+          ui.toast({
+            title: '已收到支付，正在确认，稍后可在订单里刷新查看',
+            icon: 'none',
+            duration: 2600,
+          })
+        }
         setTimeout(function () {
           wx.switchTab({ url: '/pages/orders/list' })
         }, 900)
       })
       .catch(function (error) {
         page.setData({ submitting: false })
+        if (error && error.cancelled) {
+          ui.toast({
+            title: '支付已取消，任务已保存为待付款',
+            icon: 'none',
+            duration: 2400,
+          })
+          setTimeout(function () {
+            wx.switchTab({ url: '/pages/orders/list' })
+          }, 900)
+          return
+        }
         guard.toastError(error)
       })
   },

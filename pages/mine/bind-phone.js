@@ -19,6 +19,7 @@ Page({
     countdown: 0,
     sending: false,
     submitting: false,
+    wxBinding: false,
     formError: '',
     devHint: '',
     bound: false,
@@ -83,6 +84,55 @@ Page({
       }
       page.setData({ countdown: left })
     }, 1000)
+  },
+
+  // 微信手机号快速验证组件：用户点「允许」后，微信给一个一次性 code，
+  // 云函数拿它换出真实手机号并直接绑定 —— 号码不经手用户输入，也不用短信。
+  // 拿不到 code 的几种情况（拒绝授权 / 组件未开通 / 基础库太旧）一律退回手动输入，
+  // 不能把绑定卡死在这一条路上。
+  onWxPhone: function (event) {
+    const page = this
+    const detail = (event && event.detail) || {}
+    const errMsg = String(detail.errMsg || '')
+    if (errMsg && errMsg.indexOf('getPhoneNumber:ok') < 0) {
+      page.setData({ formError: '未获取到微信手机号，可改用短信验证码绑定' })
+      return
+    }
+    const code = String(detail.code || '')
+    if (!code) {
+      page.setData({ formError: '微信未返回手机号凭据，请重试或改用短信验证码绑定' })
+      return
+    }
+    if (page.data.wxBinding) return
+    page.setData({ wxBinding: true, formError: '', devHint: '' })
+    ui.loading({ title: '绑定中', mask: true })
+    api
+      .bindWxPhone(code)
+      .then(function (res) {
+        ui.hideLoading()
+        const phone = String((res && res.phone) || '')
+        page.setData({
+          wxBinding: false,
+          bound: true,
+          phone: '',
+          code: '',
+          devHint: '',
+          boundPhone: phone ? phone.slice(0, 3) + '****' + phone.slice(7) : '',
+        })
+        page.sentPhone = ''
+        page.stopCountdown()
+        ui.toast({ title: '绑定成功', icon: 'success' })
+        setTimeout(function () {
+          page.goBack()
+        }, 700)
+        return null
+      })
+      .catch(function (error) {
+        ui.hideLoading()
+        const message = api.getErrorMessage(error)
+        page.setData({ wxBinding: false, formError: message })
+        ui.toast({ title: message, icon: 'none', duration: 2600 })
+      })
   },
 
   sendCode: function () {

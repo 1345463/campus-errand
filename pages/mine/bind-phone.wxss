@@ -36,6 +36,29 @@
   color: #d93025;
 }
 
+/* 微信手机号快速验证：主路径，用微信绿，跟「手动输入」那条次路径区分开 */
+.bp-wx-btn {
+  margin: 28rpx 0 0;
+  height: 88rpx;
+  line-height: 88rpx;
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #fff;
+  background: #07c160;
+  border-radius: 12rpx;
+}
+
+.bp-wx-btn::after {
+  border: none;
+}
+
+.bp-or {
+  margin: 20rpx 0 4rpx;
+  font-size: 24rpx;
+  color: var(--t3);
+  text-align: center;
+}
+
 /* 短信没开通时的调试通道提示：中性色，别用报错红，它不是失败 */
 .bp-dev-hint {
   margin: 8rpx 0 16rpx;

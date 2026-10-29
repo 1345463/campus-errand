@@ -21,6 +21,7 @@ const API_PATH = path.join(__dirname, '..', 'cloudfunctions', 'app-api', 'index.
 const UTIL_PATH = path.join(__dirname, '..', 'utils', 'api.js')
 const PAGE_PATH = path.join(__dirname, '..', 'pages', 'mine', 'bind-phone.js')
 const WXML_PATH = path.join(__dirname, '..', 'pages', 'mine', 'bind-phone.wxml')
+const MIG_DIR = path.join(__dirname, '..', '..', 'cloudbase', 'migrations')
 
 const src = fs.readFileSync(API_PATH, 'utf8')
 const utilSrc = fs.readFileSync(UTIL_PATH, 'utf8')
@@ -74,4 +75,59 @@ test('页面样式：调试提示不能用报错红', () => {
   assert.ok(at >= 0, '要有独立的提示样式')
   const block = wxss.slice(at, wxss.indexOf('}', at))
   assert.ok(!/#d93025/.test(block), '调试提示不是错误，别用报错红')
+})
+
+
+// ---- 微信手机号快速验证组件（getPhoneNumber，R56）----
+
+function migrationSql(name) {
+  const files = fs.readdirSync(MIG_DIR).filter((f) => f.indexOf(name) >= 0)
+  if (!files.length) return ''
+  return fs.readFileSync(path.join(MIG_DIR, files[0]), 'utf8')
+}
+
+test('微信一键绑定：必须先签发票据，再凭票据绑定', () => {
+  const seg = src.slice(src.indexOf("if (action === 'bindWxPhone')"))
+  const bind = seg.slice(0, seg.indexOf('BAD_ACTION'))
+  assert.ok(bind.indexOf("'issue_wx_phone_ticket'") > 0, '要先签一次性凭据')
+  assert.ok(
+    bind.indexOf("'bind_my_phone_wx'") > bind.indexOf("'issue_wx_phone_ticket'"),
+    '绑定必须在签发票据之后'
+  )
+  // 少了票据这一步，bind_my_phone_wx 就退化成「谁都能给自己绑任意号码」
+  assert.ok(/NO_TICKET/.test(bind), '拿不到票据要明确失败，不能带着空票据去绑')
+})
+
+test('票据相关的两个函数禁止客户端直接 rpc', () => {
+  assert.ok(/'issue_wx_phone_ticket'/.test(src) && /'bind_my_phone_wx'/.test(src), '两个函数都要进 SERVER_ONLY_FNS')
+  const at = src.indexOf('const SERVER_ONLY_FNS')
+  const block = src.slice(at, src.indexOf(']', at))
+  assert.ok(block.indexOf('issue_wx_phone_ticket') > 0, 'issue_wx_phone_ticket 要被挡住')
+  assert.ok(block.indexOf('bind_my_phone_wx') > 0, 'bind_my_phone_wx 要被挡住')
+})
+
+test('微信返回的手机号要剥掉区号并校验格式', () => {
+  const at = src.indexOf('async function getWxPhoneNumber')
+  const fn = src.slice(at, src.indexOf('\n}', src.indexOf('return phone', at)))
+  assert.ok(/purePhoneNumber/.test(fn) && /phoneNumber/.test(fn), '两种字段都要认，别只认一个')
+  assert.ok(/replace\(\/\\^\+86|\/\\\^\\\+86|replace\(\/\\^\\\\\+86|replace\(\/\\^\\\\\+861/.test(fn) || /\+86/.test(fn), '要处理 +86 前缀')
+  assert.ok(/\^1\[3-9\]/.test(fn), '换来的号码必须再校验一次 11 位格式')
+  assert.ok(/errcode/.test(fn), '微信返回错误码要抛出来，不能当成功')
+})
+
+test('拿不到 code 时退回手动输入，不能卡死绑定', () => {
+  assert.ok(/onWxPhone: function \(event\)/.test(pageSrc), '页面要有 getPhoneNumber 回调')
+  assert.ok(/getPhoneNumber:ok/.test(pageSrc), '要认微信的成功回执')
+  assert.ok(/未获取到微信手机号/.test(pageSrc), '拒绝授权要给可执行的提示（改用短信）')
+  assert.ok(/open-type="getPhoneNumber"/.test(wxml), '按钮要挂 open-type')
+  assert.ok(/bp-wx-btn/.test(wxml), '微信一键绑定是主路径，要有独立样式')
+})
+
+test('票据在库里只存哈希、一次性、有有效期', () => {
+  const sql = migrationSql('wx_phone_bind')
+  assert.ok(sql, '要有对应的迁移脚本')
+  assert.ok(/ticket_hash/.test(sql) && /sha256/.test(sql), '凭据要存哈希')
+  assert.ok(/consumed_at/.test(sql), '用完即废')
+  assert.ok(/interval '5 minutes'/.test(sql), '要有有效期')
+  assert.ok(/REVOKE ALL/.test(sql) && /GRANT EXECUTE[\s\S]{0,200}service_role/.test(sql), '只能由服务端调用')
 })

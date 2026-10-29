@@ -209,6 +209,7 @@ orders.pay_status = 'paid'
 | **R53** | **图片分片上传**（绕开 `wx.cloud.callFunction` 1MB 入参上限）：阶梯压缩 + `begin/push/finish` 三片式上传，修掉接单员传身份证弹 `EXCEED_MAX_PAYLOAD_SIZE` |
 | **R54** | **提现改服务端自动转账**：申请提交即打款，不再需要管理员点那一下；顺带查出云函数缺 `PAY_WEBHOOK_SECRET` 会让转账被云托管拒掉，改为运行时从库里读同一份密钥 |
 | **R55** | **手机号验证码的调试通道**：短信（腾讯云 SMS）未开通时，只对超级管理员回显明文验证码并自动填入，让绑定流程能走通；条件直接绑「短信没配好」，配好即自动失效，不留可忘关的开关 |
+| **R56** | **手机号绑定改走微信快速验证组件**：`<button open-type="getPhoneNumber">` 拿一次性 code → 云函数换真实手机号 → 签一次性票据 → 凭票据绑定，**全程免短信**；票据机制防止「跳过验证直接绑号」死灰复燃 |
 
 其中最有价值的几次「翻车与纠正」：
 
@@ -312,7 +313,7 @@ orders.pay_status = 'paid'
 | 人 | AI |
 |---|---|
 | 提需求、定优先级、验收真机效果 | 拆需求、读历史、定位根因、写实现 |
-| 判断「这个交互对不对」 | 跑四件套校验、79 项回归测试、执行 SQL 迁移 |
+| 判断「这个交互对不对」 | 跑四件套校验、84 项回归测试、执行 SQL 迁移 |
 | 决定要不要上线 | 更新文档、写踩坑记录、按轮次提交推送 |
 
 ### AI 实际交付了什么
@@ -321,8 +322,8 @@ orders.pay_status = 'paid'
 |---|---|
 | 页面 | 39 个（四件套齐全，全部在 `app.json` 注册） |
 | 前端代码 | 16,326 行 JS ／ 4,987 行 WXML ／ 4,862 行 WXSS（含 utils / components / app） |
-| 数据库 | 36 张表、154 个函数、9 个触发器、56 个幂等迁移脚本 |
-| 测试 | 79 项回归测试（含真实 PostgreSQL 执行） |
+| 数据库 | 37 张表、156 个函数、9 个触发器、57 个幂等迁移脚本 |
+| 测试 | 84 项回归测试（含真实 PostgreSQL 执行） |
 | 文档 | 1,400+ 行迭代记录 + 踩坑知识库 + 逐轮 CHANGELOG |
 
 ### 为什么把过程也写进仓库
@@ -390,7 +391,7 @@ class 名 `mine`——每条自己发的消息都被撑到一屏高。**类名�
 | `pages/mine/feedback` | 意见反馈 | 提交工单与我提交的列表 |
 | `pages/feedback/thread` | 工单会话 | 用户与客服共用（pending 只有客服能说 / resolved 双方可说） |
 | `pages/mine/reviews` | 评价 | 我收到的评价 + 待评价 |
-| `pages/mine/bind-phone` | 绑定手机号 | 短信验证码绑定/更换，说明一个号只能绑一个账号 |
+| `pages/mine/bind-phone` | 绑定手机号 | 微信一键绑定（主）+ 短信验证码（降级），一个号只能绑一个账号 |
 | `pages/mine/settings` | 设置 | 手机号、后台密码入口、注销账号（含后果确认弹窗）、协议 |
 | `pages/mine/support` | 智能客服 | FAQ 命中 → AI 流式 → 转人工 |
 
@@ -456,7 +457,7 @@ campus-errand/
 ├── cloudfunctions/   7 个（app-api / pay-create / pay-notify / tcb-proxy /
 │                     transfer / transfer-notify / withdraw-api）
 ├── cloudrun/         云托管函数型服务 transfer-svc（固定出口 IP，对接商家转账；已加 packOptions.ignore）
-├── tests/            79 项回归测试（含 PGlite 真实 PostgreSQL）
+├── tests/            84 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 └── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅 / 支付方案
 ```
@@ -465,10 +466,10 @@ campus-errand/
 
 **现役库只有一套**：CloudBase `ceshi-d2g37cbg7c8f7ee48`（R52 起，WorkBuddy Cloud 已退役）。
 
-- **36 张表**（`pay_settings` / `withdraw_requests` / `phone_codes` / `media_uploads` /
+- **37 张表**（`pay_settings` / `withdraw_requests` / `phone_codes` / `wx_phone_tickets` / `media_uploads` /
   `media_upload_parts` 等为 R50–R53 新增；`profile_phones` / `account_deletions` 不开 policy，
   只给函数访问；FAQ 两张为公开只读）
-- **154 个函数**，命名约定 `p_` 前缀参数
+- **156 个函数**，命名约定 `p_` 前缀参数
 - **9 个触发器**：订单消息推送、图片归属校验、手机号闸门 ×3 等
 - **56 条迁移脚本**，全部幂等，按文件名顺序执行即可重建 —— 在
   **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，**不在本仓库内**）。
@@ -564,7 +565,7 @@ UGC 信息安全声明，服务类目需企业主体（跑腿类目个人主体�
 对应小节 + `docs/ITERATIONS.md`；想看某一轮「引入了哪些文件」，`git show --stat <commit>`。
 R29 之后的所有改动都是真实 diff。
 
-当前 `main` 有 **89 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
+当前 `main` 有 **90 次提交、6 个 tag**（`v0.1.0` ~ `v0.6.0`）。
 R39 的三个第三方提交曾被摘除并压成一条整合提交，改写前后文件树 hash 完全一致
 （代码零改动，只换了提交边界与作者）。
 
@@ -600,12 +601,13 @@ R39 的三个第三方提交曾被摘除并压成一条整合提交，改写前�
   `cloudbase/migrations/` 的 56 条脚本 **不在 git 内**——不是被 `.gitignore` 忽略，
   而是仓库根是 `campus-errand/`、`cloudbase/` 是同级兄弟目录。空库重建目前只能靠这份
   本地目录，建议尽快纳入版本控制或另存一份。
-- **短信验证码尚未开通**（R55 已降级为「只影响普通用户」）：腾讯云 SMS 的 5 个环境变量
-  （`SMS_SECRET_ID` / `SMS_SECRET_KEY` / `SMS_SDK_APP_ID` / `SMS_TEMPLATE_ID` /
-  `SMS_SIGN_NAME`）未配置前，**普通用户**绑不了手机号，也就发不了单。
-  缓解措施：超级管理员走「明文回显」的调试通道，仍能完成绑定，流程不会全堵死。
-  根治二选一：① 配齐这 5 个变量（代码已就绪，配完即生效，不用改代码）；
-  ② 改用微信「手机号快速验证组件」`getPhoneNumber`（免短信，但要非个人主体 + 已认证）。
+- ~~**短信验证码尚未开通，新用户绑不了手机号**~~ ✅ **R56 已解决**：手机号绑定主路径改为
+  微信「手机号快速验证组件」`getPhoneNumber`（主体已转企业并通过审核），号码由微信直接给，
+  不需要短信。短信那条路（`sendPhoneCode` + `bindPhone`）保留为降级通道 ——
+  腾讯云 SMS 的 5 个环境变量仍未配置，组件未开通或用户拒绝授权时会退回它，
+  所以**配齐这 5 个变量仍有价值**（代码已就绪，配完即生效，不用改代码）。
+- 微信手机号快速验证**按次计费**（约 0.03 元/次），且需在微信后台开通该组件；
+  未开通时点按钮拿不到 code，会提示改用短信绑定。
 - 旧对象存储的证件照不可读，需用户重新提交。
 - AI 配额按账号在服务端记账，但模型仍由客户端直连（`api.llmChat` →
   `cloud.llm.chat.completions.create`），**绕过端上代码仍可直接调 `llmChat`**；

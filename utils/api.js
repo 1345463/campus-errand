@@ -1501,6 +1501,18 @@ async function bindMyPhone(phone, code) {
   return { bound: true, phone: row.phone || '', uid: session.user && session.user.id }
 }
 
+// 微信手机号快速验证组件：一次性 code 换真实手机号并完成绑定。
+//
+// 号码由微信直接给，不经用户输入，也不用短信 —— 所以这是手机号绑定的主路径。
+// 短信那条（sendPhoneCode + bindMyPhone）留着兜底：组件没开通、或用户不愿授权时用。
+async function bindWxPhone(code) {
+  const session = await requireSession()
+  const res = await tcb.callApi('bindWxPhone', { code: String(code || '').trim() })
+  const phone = String((res && res.phone) || '')
+  if (!phone) throw new Error('未能获取到微信手机号，请稍后再试')
+  return { bound: true, phone: phone, uid: session.user && session.user.id }
+}
+
 // ---- 账号注销（R44，6 个月保留期）----
 
 async function getAccountState() {
@@ -1579,6 +1591,7 @@ module.exports = {
   getProfile: getProfile,
   getMyPhoneState: getMyPhoneState,
   bindMyPhone: bindMyPhone,
+  bindWxPhone: bindWxPhone,
   getAccountState: getAccountState,
   purgeMyAccountIfDue: purgeMyAccountIfDue,
   requestAccountDeletion: requestAccountDeletion,

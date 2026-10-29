@@ -18,6 +18,7 @@
  *   rpc             { token, fn, args }      → { ok, data }
  *   sendPhoneCode   { token, phone }         → { ok }
  *   bindPhone       { token, phone, code }   → { ok, data }
+ *   bindWxPhone     { token, code }          → { ok, phone, data }
  *
  * 后两个不走 rpc：验证码明文要由云函数拿去发短信，绑定又必须「验码 + 写入」
  * 一次做完，都只能在这一层编排，不能让客户端自己挑函数调。
@@ -75,7 +76,15 @@ const ANON_UID = 'wx:anonymous'
 // 只能由本函数编排、不允许客户端直接 rpc 的函数。
 // issue_phone_code 会把验证码明文返回来；bind_my_phone* 是写绑定，
 // 放开就等于「跳过发码直接绑号」，旧实现的那条残余风险正是这么来的。
-const SERVER_ONLY_FNS = ['issue_phone_code', 'bind_my_phone_verified', 'bind_my_phone']
+const SERVER_ONLY_FNS = [
+  'issue_phone_code',
+  'bind_my_phone_verified',
+  'bind_my_phone',
+  // 微信手机号快速验证：签发票据 + 凭票据绑号。放开就等于「随便绑个号」，
+  // 所以只能在云函数里编排 —— 用微信换来的手机号换票据、再用票据绑，客户端碰不到。
+  'issue_wx_phone_ticket',
+  'bind_my_phone_wx',
+]
 
 function httpsJson(hostname, path, method, bodyStr, headers) {
   return new Promise((resolve, reject) => {
@@ -149,6 +158,60 @@ function hmacSha256(key, s) {
 
 function smsConfigured() {
   return !!(SMS_ID && SMS_KEY && SMS_APP && SMS_TPL && SMS_SIGN)
+}
+
+// ---------- 微信接口调用凭证 ----------
+//
+// 换手机号要用 access_token（AppID + AppSecret 换），有效期 7200 秒。
+// 云函数实例会复用，所以缓存在模块变量里；提前 60 秒过期，别卡在临界点上。
+// 缓存只省一次网络往返，拿不到就重新换，不做重试。
+let AT_CACHE = { token: '', exp: 0 }
+
+async function getAccessToken() {
+  const now = Math.floor(Date.now() / 1000)
+  if (AT_CACHE.token && AT_CACHE.exp > now + 60) return AT_CACHE.token
+  const r = await httpsJson(
+    'api.weixin.qq.com',
+    `/cgi-bin/token?grant_type=client_credential&appid=${APPID}&secret=${APP_SECRET}`,
+    'GET',
+    ''
+  )
+  const body = r.body || {}
+  if (!body.access_token) {
+    throw new Error('获取微信 access_token 失败：' + (body.errmsg || body.errcode || '未知错误'))
+  }
+  AT_CACHE = { token: body.access_token, exp: now + Number(body.expires_in || 7200) }
+  return AT_CACHE.token
+}
+
+/**
+ * 用微信手机号快速验证组件的一次性 code 换真实手机号。
+ *
+ * code 只能用一次、5 分钟有效，所以换到的手机号必须立刻用掉 ——
+ * 这里不返回给客户端，直接往下走绑定。
+ * 返回的是不带区号的 11 位号码。
+ */
+async function getWxPhoneNumber(code) {
+  const token = await getAccessToken()
+  const r = await httpsJson(
+    'api.weixin.qq.com',
+    '/wxa/business/getuserphonenumber?access_token=' + encodeURIComponent(token),
+    'POST',
+    JSON.stringify({ code: code }),
+    { 'Content-Type': 'application/json' }
+  )
+  const body = r.body || {}
+  if (body.errcode && Number(body.errcode) !== 0) {
+    throw new Error('微信未能返回手机号：' + (body.errmsg || body.errcode))
+  }
+  const info = body.phone_info || {}
+  // phoneNumber 带区号（+8613…），purePhoneNumber 不带 —— 都有可能缺，两个都认
+  const raw = String(info.purePhoneNumber || info.phoneNumber || '')
+  const phone = raw.replace(/^\+?86/, '')
+  if (!/^1[3-9]\d{9}$/.test(phone)) {
+    throw new Error('微信返回的手机号不可用，请检查小程序是否已开通手机号快速验证')
+  }
+  return phone
 }
 
 /**
@@ -351,6 +414,25 @@ exports.main = async (event) => {
         p_code: String(payload.code || ''),
       })
       return done({ ok: true, data })
+    }
+
+    // 微信手机号快速验证：一次性 code → 真实手机号 → 云函数签发票据 → 绑定。
+    // 短信那条路（sendPhoneCode + bindPhone）留着兜底，这条不需要短信也不用输号码。
+    if (action === 'bindWxPhone') {
+      const uid = verifyToken(payload.token)
+      if (!uid) return done({ ok: false, code: 'TOKEN_INVALID', error: '登录状态已失效，请重新登录' })
+      const wxCode = String(payload.code || '').trim()
+      if (!wxCode) return done({ ok: false, code: 'BAD_PARAM', error: '缺少微信手机号 code' })
+
+      const phone = await getWxPhoneNumber(wxCode)
+      // 票据是一次性的：明文只回到这里，库里只存哈希、5 分钟有效、用完即废。
+      // 少了这一步，bind_my_phone_wx 就退化成「谁都能给自己绑任意号码」。
+      const t = await svcRpc(uid, 'issue_wx_phone_ticket', { p_uid: uid, p_phone: phone })
+      const ticket = Array.isArray(t) && t.length ? String(t[0].ticket || '') : ''
+      if (!ticket) return done({ ok: false, code: 'NO_TICKET', error: '绑定凭据生成失败，请稍后再试' })
+
+      const data = await svcRpc(uid, 'bind_my_phone_wx', { p_phone: phone, p_ticket: ticket })
+      return done({ ok: true, phone: phone, data: data })
     }
 
     return done({ ok: false, code: 'BAD_ACTION', error: '未知的 action：' + (action || '(空)') })

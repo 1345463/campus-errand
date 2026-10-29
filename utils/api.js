@@ -127,45 +127,11 @@ async function login() {
   })
 }
 
-// 手机号 + 密码：不依赖 wx.login，预览环境和真机都能登录
-async function loginWithPassword(phone, password) {
-  const result = await cloud.auth.signInWithPassword({ phone: phone, password: password })
-  if (result.error) throw new Error(getErrorMessage(result.error))
-  if (!result.data) throw new Error('登录失败，请重试')
-  let profile = null
-  try {
-    profile = await ensureProfile(result.data.user)
-  } catch (e) {
-    profile = null
-  }
-  return { session: result.data, profile: profile }
-}
-
 // 注册第一步：发送短信验证码，返回 challenge 由页面保存
 async function sendPhoneCode(phone) {
   const sent = await cloud.auth.sendOtp({ phone: phone })
   if (sent.error) throw new Error(getErrorMessage(sent.error))
   return sent.data
-}
-
-// 注册第二步：验证码 + 密码。同一手机号已注册过时会直接登录。
-async function registerWithPhone(payload) {
-  const completed = await cloud.auth.verifyOtp({
-    phone: payload.phone,
-    verificationId: payload.verificationId,
-    isExistingUser: payload.isExistingUser,
-    token: payload.token,
-    password: payload.isExistingUser ? undefined : payload.password,
-  })
-  if (completed.error) throw new Error(getErrorMessage(completed.error))
-  if (!completed.data) throw new Error('注册失败，请重试')
-  let profile = null
-  try {
-    profile = await ensureProfile(completed.data.user)
-  } catch (e) {
-    profile = null
-  }
-  return { session: completed.data, profile: profile }
 }
 
 async function activateAdmin(code) {
@@ -1668,9 +1634,7 @@ module.exports = {
   getSession: getSession,
   requireSession: requireSession,
   login: login,
-  loginWithPassword: loginWithPassword,
   sendPhoneCode: sendPhoneCode,
-  registerWithPhone: registerWithPhone,
   activateAdmin: activateAdmin,
   listAllOrders: listAllOrders,
   logout: logout,

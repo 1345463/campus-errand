@@ -2,7 +2,6 @@ const ui = require('../../utils/ui')
 const api = require('../../utils/api')
 const guard = require('../../utils/guard')
 const campus = require('../../utils/campus')
-const config = require('../../utils/config')
 const agreement = require('../../utils/agreement')
 const flags = require('../../utils/flags')
 const perms = require('../../utils/perms')
@@ -13,14 +12,7 @@ Page({
     logged: false,
     logining: false,
     school: campus.SCHOOL_NAME,
-    mode: 'login',
-    phone: '',
-    password: '',
-    code: '',
-    regNickname: '',
-    countdown: 0,
     submitting: false,
-    rememberPassword: config.rememberPassword,
     profile: null,
     initial: '同',
     nicknameText: '同学',
@@ -44,10 +36,6 @@ Page({
     agreed: false,
     agreementNotice: agreement.SHORT_NOTICE,
     agreementVersionText: '未签署',
-    // 表单内联报错：预览容器里 wx.showToast 可能不可用，
-    // 只靠 toast 会让「手机号格式不对」这类校验彻底静默，用户只看到按钮没反应
-    formError: '',
-    focusKey: '',
     // 「我的订单」下面四个快捷入口的高亮项。这几个 chip 是跳转到订单页并带筛选，
     // 不是在本页过滤，所以记一下最后点的是哪个，回到本页时才看得出上次看的是哪一类
     orderFilter: 'all',
@@ -138,13 +126,6 @@ Page({
     }
     ui.removeStorage('savedAccount')
     page.refresh()
-  },
-
-  // 密码只用于本次认证；认证 SDK 负责会话恢复。
-  remember: function () {
-    ui.removeStorage('savedAccount')
-    ui.removeStorage('manualLogout')
-    this.setData({ password: '' })
   },
 
   refresh: function () {
@@ -393,11 +374,9 @@ Page({
       })
   },
 
-  // 勾选用户协议：登录和注册都必须先勾选
+  // 勾选用户协议：微信一键登录前必须先勾选
   toggleAgreed: function () {
-    const next = !this.data.agreed
-    // 勾上之后「请先勾选同意《用户协议》」这条提示就不该再挂着
-    this.setData({ agreed: next, formError: next ? '' : this.data.formError })
+    this.setData({ agreed: !this.data.agreed })
   },
 
   goAgreement: function () {
@@ -457,204 +436,6 @@ Page({
       .catch(function (error) {
         ui.hideLoading()
         page.setData({ switching: false })
-        guard.toastError(error)
-      })
-  },
-
-  switchMode: function () {
-    this.setData({
-      mode: this.data.mode === 'login' ? 'register' : 'login',
-      code: '',
-      password: '',
-      formError: '',
-      focusKey: '',
-    })
-  },
-
-  onFieldFocus: function (event) {
-    this.setData({ focusKey: event.currentTarget.dataset.key || '' })
-  },
-
-  onFieldBlur: function () {
-    this.setData({ focusKey: '' })
-  },
-
-  // 校验不通过时同时给出内联文案 + toast：toast 在真机上好认，
-  // 内联文案保证预览环境（没有 showToast）也一定能看到原因
-  showFormError: function (message) {
-    this.setData({ formError: message })
-    ui.toast({ title: message, icon: 'none' })
-  },
-
-  clearFormError: function () {
-    if (this.data.formError) this.setData({ formError: '' })
-  },
-
-  onAccountInput: function (event) {
-    const key = event.currentTarget.dataset.key
-    const patch = { formError: '' }
-    patch[key] = event.detail.value
-    this.setData(patch)
-  },
-
-  stopCountdown: function () {
-    if (this.countdownTimer) {
-      clearInterval(this.countdownTimer)
-      this.countdownTimer = null
-    }
-  },
-
-  startCountdown: function () {
-    const page = this
-    page.stopCountdown()
-    page.setData({ countdown: 60 })
-    page.countdownTimer = setInterval(function () {
-      const left = page.data.countdown - 1
-      if (left <= 0) {
-        page.stopCountdown()
-        page.setData({ countdown: 0 })
-        return
-      }
-      page.setData({ countdown: left })
-    }, 1000)
-  },
-
-  sendCode: function () {
-    const page = this
-    const phone = String(page.data.phone || '').trim()
-    if (!/^1\d{10}$/.test(phone)) {
-      page.showFormError('请输入正确的 11 位手机号')
-      return
-    }
-    if (page.data.countdown > 0) return
-    page.clearFormError()
-    ui.loading({ title: '发送中', mask: true })
-    api
-      .sendPhoneCode(phone)
-      .then(function (challenge) {
-        ui.hideLoading()
-        page.pendingChallenge = {
-          phone: phone,
-          verificationId: challenge.verificationId,
-          isExistingUser: challenge.isExistingUser,
-        }
-        page.startCountdown()
-        ui.toast({ title: '验证码已发送', icon: 'none' })
-      })
-      .catch(function (error) {
-        ui.hideLoading()
-        page.setData({ formError: api.getErrorMessage(error) })
-        guard.toastError(error)
-      })
-  },
-
-  accountLogin: function () {
-    const page = this
-    const phone = String(page.data.phone || '').trim()
-    const password = String(page.data.password || '')
-    if (!/^1\d{10}$/.test(phone)) {
-      page.showFormError('请输入正确的 11 位手机号')
-      return
-    }
-    if (!password) {
-      page.showFormError('请输入密码')
-      return
-    }
-    if (!page.data.agreed) {
-      page.showFormError('请先勾选同意《用户协议》')
-      return
-    }
-    if (page.data.submitting) return
-    page.setData({ submitting: true, formError: '' })
-    api
-      .loginWithPassword(phone, password)
-      .then(function (result) {
-        page.setData({ submitting: false, formError: '' })
-        page.remember(phone, password)
-        page.applyProfile(result.session, result.profile)
-        ui.toast({ title: '登录成功', icon: 'success' })
-      })
-      .catch(function (error) {
-        page.setData({ submitting: false, formError: api.getErrorMessage(error) })
-        guard.toastError(error)
-      })
-  },
-
-  accountRegister: function () {
-    const page = this
-    const phone = String(page.data.phone || '').trim()
-    const code = String(page.data.code || '').trim()
-    const password = String(page.data.password || '')
-    // 用户名是必填项：注册就定下来，之后在「我的 → 头像与用户名」里改。
-    // 不填的话对方的订单页上只能看到"同学"，没法确认是谁在接单。
-    const nickname = String(page.data.regNickname || '').trim()
-    if (!/^1\d{10}$/.test(phone)) {
-      page.showFormError('请输入正确的 11 位手机号')
-      return
-    }
-    if (!page.pendingChallenge || page.pendingChallenge.phone !== phone) {
-      page.showFormError('请先获取当前手机号的验证码')
-      return
-    }
-    if (!/^\d{4,8}$/.test(code)) {
-      page.showFormError('请输入短信验证码')
-      return
-    }
-    if (password.length < 6) {
-      page.showFormError('密码至少 6 位')
-      return
-    }
-    if (nickname.length < 2) {
-      page.showFormError('请填写用户名，至少 2 个字')
-      return
-    }
-    if (nickname.length > 16) {
-      page.showFormError('用户名最多 16 个字')
-      return
-    }
-    if (!page.data.agreed) {
-      page.showFormError('请先勾选同意《用户协议》')
-      return
-    }
-    if (page.data.submitting) return
-    page.setData({ submitting: true, formError: '' })
-    api
-      .registerWithPhone({
-        phone: phone,
-        verificationId: page.pendingChallenge.verificationId,
-        isExistingUser: page.pendingChallenge.isExistingUser,
-        token: code,
-        password: password,
-      })
-      .then(function (result) {
-        // 账号已经建好了，用户名这一步失败就不算注册失败：
-        // 尽最大努力写进去，真写不进去就提示用户去「头像与用户名」补一次。
-        return api
-          .updateProfile({ nickname: nickname, owner_name: nickname })
-          .then(function (profile) {
-            return { session: result.session, profile: profile || result.profile, nameSaved: true }
-          })
-          .catch(function () {
-            return { session: result.session, profile: result.profile, nameSaved: false }
-          })
-      })
-      .then(function (result) {
-        page.setData({ submitting: false, formError: '' })
-        page.pendingChallenge = null
-        page.stopCountdown()
-        page.remember(phone, password)
-        page.applyProfile(result.session, result.profile)
-        if (result.nameSaved === false) {
-          ui.toast({ title: '注册成功，请再去设置一次用户名', icon: 'none', duration: 2600 })
-          setTimeout(function () {
-            wx.navigateTo({ url: '/pages/mine/profile' })
-          }, 800)
-          return
-        }
-        ui.toast({ title: '注册成功', icon: 'success' })
-      })
-      .catch(function (error) {
-        page.setData({ submitting: false, formError: api.getErrorMessage(error) })
         guard.toastError(error)
       })
   },
@@ -820,11 +601,6 @@ Page({
       profile: null,
       submitting: false,
       logining: false,
-      phone: '',
-      password: '',
-      code: '',
-      regNickname: '',
-      mode: 'login',
       isAdmin: false,
       isAnyAdmin: false,
       switching: false,

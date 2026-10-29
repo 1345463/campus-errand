@@ -13,11 +13,6 @@ Page({
     logining: false,
     school: campus.SCHOOL_NAME,
     submitting: false,
-    // 存量老账号（手机号注册、uid 是数字）的折叠登录入口，默认收起
-    showLegacyLogin: false,
-    phone: '',
-    password: '',
-    formError: '',
     profile: null,
     initial: '同',
     nicknameText: '同学',
@@ -382,57 +377,6 @@ Page({
   // 勾选用户协议：微信一键登录前必须先勾选
   toggleAgreed: function () {
     this.setData({ agreed: !this.data.agreed })
-  },
-
-  showLegacy: function () {
-    this.setData({ showLegacyLogin: true, formError: '' })
-  },
-
-  hideLegacy: function () {
-    this.setData({ showLegacyLogin: false, phone: '', password: '', formError: '' })
-  },
-
-  onAccountInput: function (event) {
-    const patch = { formError: '' }
-    patch[event.currentTarget.dataset.key] = event.detail.value
-    this.setData(patch)
-  },
-
-  // 存量老账号登录：uid 是数字（不是 wx: 开头）的那批。注册入口已删，
-  // 这里只让老用户回得来，不产生新账号。老账号迁到微信身份后即可整体删除。
-  accountLogin: function () {
-    const page = this
-    const phone = String(page.data.phone || '').trim()
-    const password = String(page.data.password || '')
-    if (!/^1[3-9]\d{9}$/.test(phone)) {
-      page.setData({ formError: '请输入正确的 11 位手机号' })
-      return
-    }
-    if (!password) {
-      page.setData({ formError: '请输入密码' })
-      return
-    }
-    if (!page.data.agreed) {
-      page.setData({ formError: '请先勾选同意《用户协议》' })
-      return
-    }
-    if (page.data.submitting) return
-    page.setData({ submitting: true, formError: '' })
-    ui.loading({ title: '登录中', mask: true })
-    api
-      .loginWithPassword(phone, password)
-      .then(function (result) {
-        ui.hideLoading()
-        page.setData({ submitting: false, password: '' })
-        page.applyProfile(result.session, result.profile)
-        ui.toast({ title: '登录成功', icon: 'success' })
-      })
-      .catch(function (error) {
-        ui.hideLoading()
-        const message = api.getErrorMessage(error)
-        page.setData({ submitting: false, formError: message })
-        ui.toast({ title: message, icon: 'none', duration: 2200 })
-      })
   },
 
   goAgreement: function () {

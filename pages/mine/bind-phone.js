@@ -33,9 +33,6 @@ Page({
     fromGate: false,
     // 老账号自带的手机号自动绑定失败时的原因（一般是该号已被别的账号占用）
     authPhoneError: '',
-    // 老账号（非微信身份）换号时，需要它的登录密码才能切回来
-    needPassword: false,
-    accountPassword: '',
   },
 
   onLoad: function (options) {
@@ -60,10 +57,6 @@ Page({
       })
       .then(function (phone) {
         page._authPhone = phone || ''
-        // 老账号（不是微信身份）切走之后只能靠「手机号 + 密码」切回来，
-        // 所以换号时必须先拿到密码。微信身份不需要这一栏。
-        const isWechat = String(page._uid || '').indexOf('wx:') === 0
-        page.setData({ needPassword: !isWechat && !!page._authPhone })
         return api.getMyPhoneState()
       })
       .then(function (state) {
@@ -125,10 +118,6 @@ Page({
 
   onCode: function (event) {
     this.setData({ code: event.detail.value, formError: '' })
-  },
-
-  onAccountPassword: function (event) {
-    this.setData({ accountPassword: event.detail.value, formError: '' })
   },
 
   stopCountdown: function () {
@@ -214,12 +203,6 @@ Page({
         if (!uidBefore) {
           throw new Error('登录状态已失效，请回到「我的」重新登录后再绑定')
         }
-        // 老账号（非微信身份）被切走之后没有微信身份可切回，只能靠
-        // 「账号手机号 + 密码」重新登录回来 —— 所以密码在这一步之前必须先拿到。
-        page._isWechat = uidBefore.indexOf('wx:') === 0
-        if (!page._isWechat && !String(page.data.accountPassword || '')) {
-          throw new Error('当前账号不是微信身份，请先填写本账号的登录密码：换号验证后要用它切回原账号')
-        }
         // 写标记：下一步会话会借道到手机号身份，正常流程结束后清除；
         // 万一进程被杀 / 网络断了，app.js 下次启动看到标记会强制切回微信身份。
         ui.setStorage(IDENTITY_PENDING_KEY, { uid: uidBefore, at: Date.now() })
@@ -244,11 +227,9 @@ Page({
           ui.removeStorage(IDENTITY_PENDING_KEY)
           return { session: session }
         }
-        // 确实被换成了别的身份：微信身份用 wx.login 切回；
-        // 老账号用「账号手机号 + 密码」重新登录切回。
+        // 确实被换成了别的身份：用 wx.login 切回微信身份
         page._switched = true
-        if (page._isWechat) return api.login()
-        return api.loginWithPassword(page._authPhone, String(page.data.accountPassword || ''))
+        return api.login()
       })
       .then(function (result) {
         if (!result || !result.session) {

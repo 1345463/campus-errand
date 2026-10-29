@@ -45,18 +45,6 @@
       </view>
     </view>
 
-    <view wx:if="{{needPassword}}" class="field">
-      <view class="field-label">本账号登录密码</view>
-      <input
-        class="field-input"
-        password="{{true}}"
-        placeholder="换号验证后要用它切回原账号"
-        value="{{accountPassword}}"
-        bindinput="onAccountPassword"
-      />
-      <text class="hint">当前账号不是微信身份，验证新号码时会话会临时切走，需要用密码重新登录回来。</text>
-    </view>
-
     <view wx:if="{{formError}}" class="bp-error">{{formError}}</view>
 
     <view class="btn-primary {{submitting ? 'disabled' : ''}}" bindtap="submit">{{submitting ? '绑定中…' : (bound ? '更换手机号' : '确认绑定')}}</view>

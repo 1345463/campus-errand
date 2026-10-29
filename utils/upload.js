@@ -21,6 +21,7 @@
  */
 const config = require('./config')
 const tcb = require('./tcb')
+const ui = require('./ui')
 
 // 与 SDK 内部常量保持一致（见 CLOUD_MODULE_PATHS / RUNTIME_STORAGE_BUCKET）
 const STORAGE_PREFIX = '/.cloud/storage'
@@ -31,9 +32,17 @@ const CACHE_CONTROL = 'max-age=3600'
 // 存库后的路径形式
 const ASSET_PREFIX = 'asset:'
 
-// base64 会让体积涨 1/3。服务端 save_media_asset 的入口限制折算回来约 1.9MB 原图，
-// 这里取一致的值，在客户端就拦住，别让用户等到服务端报错才发现。
-const COMPRESS_THRESHOLD = 300 * 1024
+// 体积三道线，各管一段，别混着用：
+//   · CHANNEL_BUDGET（原图字节）：**通道**线。走 wx.cloud.callFunction 时单次入参上限约
+//     1MB，而图片是 base64 塞进 args 里的（还会再涨 1/3）。压到 420KB ≈ base64 575KB，
+//     留出余量，正常照片一轮就过，不用分片。
+//   · SINGLE_CALL_B64（base64 字符）：**单次**线。超过就改走分片，不硬塞。
+//   · MAX_UPLOAD_BYTES（原图字节）：**服务端**硬上限。save_media_asset 收 2.6M 字符
+//     （约 1.9MB 原图），到这里只能报错，压不动了。
+const CHANNEL_BUDGET = 420 * 1024
+const SINGLE_CALL_B64 = 600 * 1024
+const CHUNK_B64 = 400 * 1024
+const MAX_CHUNKS = 60
 const MAX_UPLOAD_BYTES = Math.floor(1900 * 1024)
 
 const MIME_BY_EXT = {
@@ -124,23 +133,38 @@ function compressOnce(src, quality) {
 }
 
 /**
- * 手机拍的原图动辄 3-5MB，必须压到能安全通过为止。
- * 两级：先用 60 压；还超标就从**原图**再压一次 35（不叠在第一次的产物上，避免画质崩掉）。
- * 压缩接口不可用就原样返回，交给调用方按体积判错误处理。
+ * 手机拍的原图动辄 3-5MB，直接 base64 塞进云函数入参必报
+ * EXCEED_MAX_PAYLOAD_SIZE（那一步的上限约 1MB），所以先压到通道线以内。
+ *
+ * 两轮：
+ *   ① 从**原图**逐级降质量（70 → 55 → 40 → 25），谁先达标就用谁 —— 只压一次，画质最好；
+ *   ② 四档都压不下来，就在最小的那档产物上再压一次（画质会再掉一点，但总比传不上去强）。
+ *
+ * 压缩接口不可用就原样返回，交给后面的分片通道兜底。
+ * 注意：wx.compressImage 只管质量、不改分辨率，所以大图才需要走好几档。
  */
-async function shrink(filePath, size) {
-  if (size <= COMPRESS_THRESHOLD) return filePath
+async function fitChannel(filePath) {
+  if (fileSize(filePath) <= CHANNEL_BUDGET) return filePath
   if (typeof wx === 'undefined' || typeof wx.compressImage !== 'function') return filePath
 
-  let best = await compressOnce(filePath, 60)
-  let bestSize = fileSize(best)
-  if (bestSize > MAX_UPLOAD_BYTES) {
-    const lower = await compressOnce(filePath, 35)
-    const lowerSize = fileSize(lower)
-    if (lowerSize && lowerSize < bestSize) {
-      best = lower
-      bestSize = lowerSize
+  const ladder = [70, 55, 40, 25]
+  let best = filePath
+  let bestSize = fileSize(filePath)
+  for (let i = 0; i < ladder.length; i++) {
+    const out = await compressOnce(filePath, ladder[i])
+    const size = fileSize(out)
+    if (size && size < bestSize) {
+      best = out
+      bestSize = size
     }
+    if (bestSize <= CHANNEL_BUDGET) return best
+  }
+
+  const lower = await compressOnce(best, 30)
+  const lowerSize = fileSize(lower)
+  if (lowerSize && lowerSize < bestSize) {
+    best = lower
+    bestSize = lowerSize
   }
   return best
 }
@@ -321,23 +345,99 @@ function parseAssetId(path) {
   return matched ? matched[1] : ''
 }
 
-/**
- * 存库：把图片 base64 交给 save_media_asset。
- * owner_id 由服务端按 JWT 决定，客户端既传不了也伪造不了。
- */
-async function saveToDatabase(filePath, folder, mime) {
-  const base64 = await readFileAsBase64(filePath)
+// RPC 返回形态有三种（裸标量 / 数组 / 单个对象），统一取第一个值
+function firstValue(data, field) {
+  if (Array.isArray(data)) {
+    const row = data[0]
+    if (row && typeof row === 'object') return row[field]
+    return row
+  }
+  if (data && typeof data === 'object') return data[field]
+  return data
+}
+
+/** 一次调用塞得下就直接存库。owner_id 由服务端按令牌决定，客户端传不了也伪造不了。 */
+async function saveWhole(base64, folder, mime) {
   const result = await tcb.rpc('save_media_asset', {
     p_scope: String(folder || 'file'),
     p_mime: mime || 'image/jpeg',
     p_data: base64,
   })
-  if (result.error) throw new Error(describeRpcError(result.error))
-  const id = result.data
+  if (result.error) {
+    const error = new Error(describeRpcError(result.error))
+    if (result.error.payloadTooLarge) error.payloadTooLarge = true
+    throw error
+  }
+  const id = firstValue(result.data, 'save_media_asset')
   if (id === null || id === undefined || id === '') {
     throw new Error('保存图片失败：服务端没有返回编号')
   }
   return makeAssetPath(id)
+}
+
+/**
+ * 分片上传：base64 太大就切开送。
+ *
+ * 为什么必须有这条路：身份证/学生证这类照片压完仍可能过 600KB，
+ * 一次调用塞进去就是 EXCEED_MAX_PAYLOAD_SIZE。分片后每片 400KB，
+ * 单次永远在安全线内，而且**不用为了塞进通道把证件照压糊** —— 人工核验要看清姓名学号。
+ *
+ * 三步：开任务 → 逐片写（序号重复会覆盖，重试不会拼重）→ 收尾时服务端按序号拼回并入库。
+ */
+async function saveChunked(base64, folder, mime, onProgress, chunkSize) {
+  const size = chunkSize || CHUNK_B64
+  const total = Math.ceil(base64.length / size)
+  if (total > MAX_CHUNKS) {
+    throw new Error(
+      '图片约 ' + ((base64.length * 3) / 4 / 1024 / 1024).toFixed(1) + 'MB，太大了，请换一张更小的'
+    )
+  }
+
+  const begin = await tcb.rpc('begin_media_upload', {
+    p_scope: String(folder || 'file'),
+    p_mime: mime || 'image/jpeg',
+    p_total: total,
+  })
+  if (begin.error) throw new Error(describeRpcError(begin.error))
+  const uploadId = Number(firstValue(begin.data, 'upload_id'))
+  if (!uploadId) throw new Error('保存图片失败：服务端没有返回上传编号')
+
+  for (let i = 0; i < total; i++) {
+    if (onProgress) onProgress(i + 1, total)
+    const part = base64.substr(i * size, size)
+    const pushed = await tcb.rpc('push_media_part', {
+      p_upload_id: uploadId,
+      p_idx: i,
+      p_data: part,
+    })
+    if (pushed.error) throw new Error(describeRpcError(pushed.error))
+  }
+
+  const finish = await tcb.rpc('finish_media_upload', { p_upload_id: uploadId })
+  if (finish.error) throw new Error(describeRpcError(finish.error))
+  const id = firstValue(finish.data, 'asset_id')
+  if (id === null || id === undefined || id === '') {
+    throw new Error('保存图片失败：服务端没有返回编号')
+  }
+  return makeAssetPath(id)
+}
+
+function progressReporter(done, total) {
+  ui.loading({ title: '上传中 ' + done + '/' + total })
+}
+
+/** 存库入口：小图一次搞定，大图自动切成分片（分片时顺手把进度刷到 loading 上）。 */
+async function saveToDatabase(filePath, folder, mime) {
+  const base64 = await readFileAsBase64(filePath)
+  if (base64.length > SINGLE_CALL_B64) return saveChunked(base64, folder, mime, progressReporter)
+
+  // 体积判断只是估算，通道真拒了就再切小一点重来一次，别把英文报错丢给用户
+  try {
+    return await saveWhole(base64, folder, mime)
+  } catch (error) {
+    if (!error || !error.payloadTooLarge) throw error
+    return saveChunked(base64, folder, mime, progressReporter, 200 * 1024)
+  }
 }
 
 /**
@@ -348,11 +448,12 @@ async function saveToDatabase(filePath, folder, mime) {
  *
  * @returns {Promise<string>} asset:<id>
  */
-async function uploadImage(tempFilePath, folder, uid) {
+async function uploadImage(tempFilePath, folder, uid, onProgress) {
   if (!tempFilePath) throw new Error('没有拿到文件，请重新选择')
   if (!uid) throw new Error('登录信息不完整，请重新登录')
 
-  const target = await shrink(tempFilePath, fileSize(tempFilePath))
+  // 先压到通道线以内（压不动也不管，后面分片照样能传）
+  const target = await fitChannel(tempFilePath)
 
   const size = fileSize(target)
   if (size > MAX_UPLOAD_BYTES) {
@@ -364,7 +465,7 @@ async function uploadImage(tempFilePath, folder, uid) {
   }
 
   const mime = resolveMime(tempFilePath, target)
-  return saveToDatabase(target, folder, mime)
+  return saveToDatabase(target, folder, mime, onProgress)
 }
 
 /** 读库里的图片，返回 { mime, data(base64) } */

@@ -77,12 +77,25 @@ function viaCloud(target, payload) {
         }
       },
       fail: function (e) {
-        const err = new Error((e && e.errMsg) || '云开发调用失败')
+        const raw = String((e && e.errMsg) || '')
+        const err = new Error(describeCloudError(raw))
         err._network = true
+        // 让上层知道「是太大，不是网络坏了」—— 图片上传靠这个标记改走分片
+        if (/EXCEED_MAX_PAYLOAD_SIZE/i.test(raw)) err.payloadTooLarge = true
         reject(err)
       },
     })
   })
+}
+
+// 云函数通道的原始报错是一串大写英文，直接弹给用户看不懂。
+// 这里只翻译确定的那几条，其余原样透出（保留排查线索）。
+function describeCloudError(errMsg) {
+  const raw = String(errMsg || '云开发调用失败')
+  if (/EXCEED_MAX_PAYLOAD_SIZE/i.test(raw)) return '图片太大，单次传不下，请换一张小点的图'
+  if (/-501000|could not be found/i.test(raw)) return '云函数没部署或名字不对，请联系管理员'
+  if (/timed out|timeout/i.test(raw)) return '云函数超时，请稍后重试'
+  return raw
 }
 
 function call(target, payload) {

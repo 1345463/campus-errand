@@ -1,4 +1,4 @@
-<view class="page home {{motionClass}}">
+<view class="page pg-home {{motionClass}}">
   <!-- 自定义导航栏：透明底，让下面的渐变主视觉直接顶到状态栏，做沉浸感 -->
   <nav-bar bg="transparent" title="" />
 

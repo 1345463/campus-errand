@@ -28,6 +28,7 @@ const ALLOW = {
   'pay-create': '/api/pay-create',
   api: '/api/app-api',
   withdraw: '/api/withdraw',
+  'ai-api': '/api/ai-api',
 }
 
 function postJson(path, bodyObj) {

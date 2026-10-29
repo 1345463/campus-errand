@@ -1,4 +1,4 @@
-<view class="page orders {{motionClass}}">
+<view class="page pg-orders {{motionClass}}">
   <nav-bar title="我的订单" flow="{{true}}" />
 
   <!-- 自定义导航是 fixed 的，内容必须自己让位 -->

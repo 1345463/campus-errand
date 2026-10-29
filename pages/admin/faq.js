@@ -103,17 +103,19 @@ Page({
       api
         .llmModels()
         .then(function (rows) {
-          return rows || []
+          return { models: rows || [], err: '' }
         })
-        .catch(function () {
-          // 模型列表拿不到不影响改 FAQ，只是不能选模型而已
-          return []
+        .catch(function (error) {
+          // 模型列表拿不到不影响改 FAQ，只是不能选模型而已 ——
+          // 但原因要留下来：不然管理员只看到「暂无可用模型」，不知道该去哪开。
+          return { models: [], err: api.getErrorMessage(error) }
         }),
     ])
       .then(function (result) {
         const items = result[0] || []
         const settings = result[1] || {}
-        const models = result[2] || []
+        const models = (result[2] && result[2].models) || []
+        const modelErr = (result[2] && result[2].err) || ''
 
         const list = items.map(function (row) {
           return {
@@ -158,7 +160,9 @@ Page({
           modelIndex: modelIndex < 0 ? 0 : modelIndex,
           modelHint: modelIds.length
             ? ''
-            : '没有可用模型：请先在云服务里开通大模型能力，或稍后重试',
+            : (modelErr
+                ? '拉不到模型列表：' + modelErr
+                : '没有可用模型：去云开发控制台 → AI → 生文模型里至少启用一个，再把 API Key 配到 ai-api 云函数的 TCB_AI_KEY 上。'),
           temperature: isNaN(temperature) ? '0.3' : String(temperature),
           maxTokens: String(Number(settings.max_tokens) || 400),
           timeoutSec: String(timeoutSec),

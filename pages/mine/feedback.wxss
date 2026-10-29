@@ -1,5 +1,25 @@
 /* 意见反馈 */
 
+/* 历史列表一行：左侧占满剩余宽度、右侧状态块固定不压缩。
+   用专属类而不是 .detail-label（全局把左侧写死 180rpx，长文本会在数字中间折断）。 */
+.fb-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid var(--fill);
+}
+
+.fb-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.fb-side {
+  flex: none;
+  margin-left: 16rpx;
+  padding-top: 4rpx;
+}
+
 .flow-kind {
   display: block;
   font-size: 28rpx;

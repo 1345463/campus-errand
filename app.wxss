@@ -1829,8 +1829,12 @@ page {
 .nav-back-arrow { font-size: 34rpx; font-weight: 600; }
 
 /* ---------- 页面命名空间（verify-mp.js 会对账 WXML 里用到的 class）---------- */
-.home, .mine { min-height: 100vh; }
-.hall, .orders { padding-bottom: 40rpx; }
+/* 一律带 pg- 前缀。历史教训：这里原本写的是裸的 .home / .mine，
+   而「我的消息」气泡行的 class 正好叫 mine —— 于是每条自己发的消息都被
+   min-height:100vh 撑成一屏高，表现为「两句话中间空一大截」，连修了六轮才定位到。
+   裸的通用词（mine / home / page / card / list / item）绝不能再当全局选择器。 */
+.pg-home, .pg-mine { min-height: 100vh; }
+.pg-hall, .pg-orders { padding-bottom: 40rpx; }
 
 /* ---------- 减弱动效：关掉一切循环动画，入场动画去掉位移 ---------- */
 .reduced-motion .sk,

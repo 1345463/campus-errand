@@ -1,4 +1,4 @@
-<view class="page hall {{motionClass}}">
+<view class="page pg-hall {{motionClass}}">
   <nav-bar title="任务大厅" showBack="{{true}}" flow="{{true}}" />
 
   <!-- 自定义导航是 fixed 的，内容必须自己让位，否则第一屏被导航栏盖住 -->

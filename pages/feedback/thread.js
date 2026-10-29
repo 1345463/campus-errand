@@ -144,7 +144,10 @@ Page({
             content: String(row.content || ''),
             author: String(row.author || (row.role === 'admin' ? '客服' : '同学')),
             mine: mine,
-            align: mine ? 'mine' : 'peer',
+            // 注意：不要简写成 'mine'。app.wxss 的页面命名空间曾定义过裸的
+            // .mine{min-height:100vh}，每条自己发的消息会被撑成一屏高 ——
+            // 表现就是「两句话中间空一大截」。统一走 msg- 前缀，和智能客服页一致。
+            align: mine ? 'msg-mine' : 'msg-peer',
             timeText: api.formatTime(row.created_at),
           }
         })

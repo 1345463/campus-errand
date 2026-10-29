@@ -1,4 +1,4 @@
-<view class="page mine {{motionClass}}">
+<view class="page pg-mine {{motionClass}}">
   <!-- 自定义导航：透明底，直接压在下面的渐变头部上 -->
   <nav-bar bg="transparent" title="" />
 

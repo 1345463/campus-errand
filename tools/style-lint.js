@@ -17,6 +17,10 @@
  *   7. 选择器里的通配符 * —— WXSS 不支持，编译报 error at token '*'
  *      （真事：.stagger > *:nth-child(n) 让整个包发布失败两次）
  *   8. wxml 里 {{ }} 与反引号
+ *   9. 裸的页面命名空间类名 home / mine / hall / orders —— app.wxss 曾定义
+ *      `.home, .mine { min-height: 100vh }`，而消息行的 class 恰好叫 mine，
+ *      结果每条自己发的消息被撑成一屏高（「两句话中间空很多」），连修六轮才找到。
+ *      现在统一成 pg- 前缀，这里守住不许再退化。
  *
  * 用法：node tools/style-lint.js [项目根目录]
  */
@@ -44,6 +48,9 @@ const rel = (p) => path.relative(ROOT, p).replace(/\\/g, '/')
 // 全角标点：出现在注释之外一律视为错误（属性名/值里不可能合法）
 const FULLWIDTH = /[：；，（）【】“”‘’、]/
 
+// 页面命名空间的裸类名：被 app.wxss 全局规则占用，业务元素再撞上就会被撑成一屏高
+const NS_BLOCKED = ['home', 'mine', 'hall', 'orders']
+
 const problems = []
 
 function report(file, line, msg, snippet) {
@@ -63,6 +70,17 @@ function lintWxss(file, src) {
     }
     if (/\{\{|\}\}/.test(text)) {
       report(file, i + 1, '模板语法 {{ }} 出现在样式文件里', text.trim())
+    }
+    // 选择器里出现裸的命名空间类名（.mine 而不是 .pg-mine / .msg-mine）
+    const sel = text.indexOf('{') >= 0 ? text.slice(0, text.indexOf('{')) : ''
+    if (sel) {
+      for (const m of sel.matchAll(/\.([A-Za-z][A-Za-z0-9_-]*)/g)) {
+        if (NS_BLOCKED.indexOf(m[1]) !== -1) {
+          report(file, i + 1,
+            `选择器用了裸的命名空间类名 .${m[1]} —— 会命中 app.wxss 的页面规则，请改成 pg- 前缀`,
+            text.trim())
+        }
+      }
     }
   })
 
@@ -149,6 +167,19 @@ function main() {
     const c = (src.match(/\}\}/g) || []).length
     if (o !== c) {
       report(rel(f), 0, `{{ }} 不配对：{{ ${o} 个，}} ${c} 个`, '')
+    }
+    // class 里出现裸的命名空间类名（动态类名由 JS 拼出来时这里抓不到，
+    // 所以 wxss 侧那条规则是主要防线，这里挡住直接写在模板里的）
+    for (const m of src.matchAll(/class\s*=\s*"([^"]*)"/g)) {
+      for (const token of m[1].split(/\s+/)) {
+        if (!token || token.indexOf('{{') >= 0) continue
+        if (NS_BLOCKED.indexOf(token) !== -1) {
+          const line = src.slice(0, m.index).split('\n').length
+          report(rel(f), line,
+            `class 用了裸的命名空间类名 ${token} —— 改用 pg-${token}`,
+            m[1].slice(0, 60))
+        }
+      }
     }
   }
 

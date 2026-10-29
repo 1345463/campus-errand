@@ -1416,15 +1416,16 @@ async function adminUpdateFaqSettings(patch) {
 }
 
 // ---- 大模型 ----
-// stream 只能传 true（传 false 会被 SDK 直接拒绝），所以这里统一把片段拼成完整
-// 文本再返回；onDelta 拿到的是「截至目前的完整文本」，用来做逐字渲染。
+// R52 迁到 CloudBase 之后这里一度是占位实现（返回空数组 / 直接抛错），
+// 结果后台一直显示「暂无可用模型」。现在走 cloudfunctions/ai-api：
+// 云开发自带大模型能力且兼容 OpenAI 协议，密钥只留在云函数里，端上碰不到。
 //
-// 模型列表的返回形态在 SDK 各版本间不统一（数组 / { data } / { models }），
-// 这里一次性归一化成数组，页面层不用猜。
+// 关于流式：云函数 → 小程序这一段没法流式回传，所以这里拿到的是一次性的完整文本。
+// onDelta 仍然按约定回调一次（传完整文本），页面层的「正在输入」效果不变。
 async function llmModels() {
-  // 迁移到 CloudBase 之后模型列表还没对接，先返回空数组：
-  // 后台 AI 设置页会显示「暂无可用模型」，比弹一句英文错误好排查。
-  return []
+  const res = await tcb.callTarget('ai-api', { action: 'models' })
+  const list = (res && Array.isArray(res.models) && res.models) || []
+  return list
 }
 
 // options: { conversationId, signal, temperature, maxTokens }
@@ -1432,7 +1433,17 @@ async function llmModels() {
 // 上下文仍然要靠 messages 自己带上（support 页会把最近几轮对话拼进来）。
 // 温度与最大字数由后台 faq_settings 下发，默认给客服场景的保守值。
 async function llmChat(modelId, messages, onDelta, options) {
-  throw new Error('智能客服正在迁移到新后端，暂时不可用。请先在后台关闭 AI 客服，或联系人工客服')
+  const opts = options || {}
+  const res = await tcb.callTarget('ai-api', {
+    action: 'chat',
+    model: String(modelId || ''),
+    messages: messages || [],
+    temperature: typeof opts.temperature === 'number' ? opts.temperature : undefined,
+    maxTokens: typeof opts.maxTokens === 'number' ? opts.maxTokens : undefined,
+  })
+  const text = String((res && res.text) || '')
+  if (typeof onDelta === 'function') onDelta(text)
+  return text
 }
 
 async function supportRpc(name, args) {

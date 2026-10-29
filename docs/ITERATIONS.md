@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-10-30 01:15** ｜ 累计 **56 轮迭代**、**39 个页面**、**37 张表**、**156 个数据库函数**、**9 个触发器**、**57 个迁移脚本**、**84 项回归测试**、主包 **0.97 MB**
+> 统计截止：**2026-10-30 01:50** ｜ 累计 **57 轮迭代**、**39 个页面**、**37 张表**、**156 个数据库函数**、**9 个触发器**、**58 个迁移脚本**、**97 项回归测试**、主包 **0.98 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -13,7 +13,7 @@
 
 - [0. 项目概况](#0-项目概况)
 - [1. 技术基线（不可动摇的约定）](#1-技术基线不可动摇的约定)
-- [2. 迭代时间线（56 轮）](#2-迭代时间线56-轮)
+- [2. 迭代时间线（57 轮）](#2-迭代时间线57-轮)
 - [3. 数据库演进总览](#3-数据库演进总览)
 - [4. 前端页面与模块总览](#4-前端页面与模块总览)
 - [5. 踩坑知识库](#5-踩坑知识库)
@@ -71,7 +71,7 @@
 
 ---
 
-## 2. 迭代时间线（56 轮）
+## 2. 迭代时间线（57 轮）
 
 ### Day 1 — 2026-10-14：从录屏原型到可用链路
 
@@ -1258,6 +1258,83 @@ summary 补转、手动与自动共用一份实现、前端提示、kind 映射�
 **待用户确认**：手机号快速验证组件需在微信后台开通并按次计费（0.03 元/次）。
 未开通时点按钮会拿不到 code，走上面的降级路径 —— 真机点一次即可判断。
 
+### R57 · 客服会话与反馈三修，外加把智能客服从「死的」救活（10-30 凌晨）
+
+用户一次性报了三个界面问题，外加一句「还有 AI 客服无可用模型修一下」。四个都改完才发现，
+**前三个其实是同一类病：改过一次、换个地方又犯。**
+
+#### 1. 工单会话「两句话中间空很多」—— 和 R39 那个雷一模一样
+
+`pages/feedback/thread` 的 align 计算出的是裸的 `mine` / `peer`，而 `app.wxss` 有
+`.home, .mine { min-height: 100vh }` —— **每条自己发的消息被撑成一屏高**。
+这正是 R36–R38 连改六轮才定位到的那个坑（当时把 support 页改成了 `msg-mine` / `msg-peer`，
+但工单会话页是后来新写的，又写回了裸 `mine`）。
+
+这次不只是改名，而是**把雷挖掉**：
+- 全局命名空间统一成 `pg-home` / `pg-mine` / `pg-hall` / `pg-orders`，四个页面根节点跟着改；
+- 会话气泡对齐 `msg-mine` / `msg-peer`，与智能客服页一致；
+- 给 `.chat-scroll` 补 `height: 0`（scroll-view 默认 `height:auto` 会被内容撑开，`flex-grow` 管不住它）；
+- **`style-lint` 加一条规则**：wxss 选择器与 wxml class 里出现裸的 `home/mine/hall/orders` 直接报错。
+  已经验证过：往 thread.wxss 里塞一行 `.mine { color: red }` 会被拦下。
+
+#### 2. 点进对话后「N 条未读」不刷新 —— SQL 里一个 ELSIF
+
+库里实况：`user_feedbacks` id=1，`user_seen_at` 一直是 NULL，而 `admin_seen_at` 每次都被刷新。
+说明标记已读一直在跑，只是**写错了列**。
+
+```sql
+IF v_admin THEN          -- 有 support 权限
+  UPDATE ... admin_seen_at
+ELSIF v_row.user_id = v_uid THEN   -- 是提交人
+  UPDATE ... user_seen_at
+```
+
+「提交人恰好是超管」时两个条件同时成立，`ELSIF` 只走第一支 —— 客服侧的已读一直更新，
+自己作为提交人的已读永远不动，而 `list_my_feedbacks` 的未读数正是按 `user_seen_at` 算的。
+
+还有第二个成因：**未读数把「自己发的」也算进去了**。同一人既是提交人又有客服权限时，
+他在会话里说的话 role 是 `admin`，于是被算成「客服的新回复」——截图里那 2 条未读，
+其实全是用户自己发的。
+
+改法：两支判断拆开、写进同一个 UPDATE；三个列表/详情函数的未读口径统一加 `r.user_id <> v_uid`。
+库内验证（主动回滚零副作用）：`user_seen_at` 从 NULL 被正确写上、错误凭据仍被拒、未读数归零。
+
+#### 3. 反馈列表文字折断 —— 又踩 `.detail-label`
+
+「最新（10-30 00:28）」在截图里显示成 `00:2 8`，因为整行用的是全局 `.detail-label`
+（左侧写死 `180rpx`），长文本在时间中间折行。改成本页专属 `fb-row / fb-main / fb-side`：
+左侧 `flex:1; min-width:0` 可收缩，右侧状态块 `flex:none` 不参与压缩。
+
+#### 4. 「AI 客服无可用模型」—— R52 留下的占位实现
+
+R52 迁库时 `cloud.llm.*` 整体失效，当时的处理是「`llmModels()` 返回空数组、`llmChat()` 直接抛错」，
+于是后台一直显示「暂无可用模型」，智能客服从那时起就是死的。
+
+现在新建 `cloudfunctions/ai-api`：
+- 走 CloudBase 自带的 OpenAI 兼容接口 `https://{env}.api.tcloudbasegateway.com/v1/ai/cloudbase`
+- **密钥只在云函数里**（`TCB_AI_KEY`），端上只带 action / model / messages
+- **必须验会话令牌**（AI 是要花钱的），每日次数另由库里 `begin_support_ai` 限流
+- 网关加路由 `/api/ai-api`，`tcb-proxy` 白名单同步放行
+
+**踩坑：CloudBase 的 AI 接口没有模型列表路由。** `/models`、`/v1/models`、`/v1/ai/models`
+全是 403 / 404（`/models` 会被当成模型名，报 `AI_MODEL_NOT_SUPPORTED`）。
+所以改成内置静态目录，并且是**实测过的**：逐个真调了一遍，本环境只有 `hy3` 与 `hy3-preview` 可用
+（小程序成长计划送的正是 hy3 额度），deepseek / glm / kimi / qwen / minimax 全都是 403 ——
+要用得先买 Token 资源包，买了之后把模型名填进 `TCB_AI_MODELS` 即可，不用改代码。
+
+另一个坑：**hy3 是推理模型**，`max_tokens` 给小了会出现「reasoning 写完了、正文一个字没出」。
+已兜下限 300，并在只有思考过程时明确报 `AI_EMPTY`，不假装回答成功。
+
+顺带把库里 `faq_settings.ai_model` 从已失效的 `deepseek-v4.1-flash` 改成 `hy3`。
+端到端实测：`chat` 3.2 秒返回「校园跑腿是指学生在校园内为其他同学提供代买、代送、代取等有偿或互助性质的便捷代办服务。」
+
+#### 校验
+新增 `tests/feedback-ui.test.js` 13 条（类名前缀、scroll-view 高度、列表布局、SQL 双写、排除自己、
+大模型非占位、密钥不下发、令牌校验、内置目录、空正文、网关与转发白名单）。
+全量 **97 项通过**；四件套全绿，主包 **0.98 MB**。`ai-api` 已部署并建好网关路由。
+
+---
+
 ---
 
 ## 3. 数据库演进总览
@@ -1639,9 +1716,9 @@ node campus-errand/tools/style-lint.js campus-errand
 | `check-mp.js` | **工作区根目录** | ① ESM 严格解析（抓重复声明）② JSON 可解析 ③ WXML 标签配对 + id 唯一 ④ app.json 页面文件齐全 ⑤ usingComponents 指向存在 ⑥ 按 packOptions.ignore 算真实上传体积 ⑦ 裸包名能在 miniprogram_npm 解析 |
 | `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
-**当前状态（2026-10-30 01:15 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
-`check-mp.js` **0.97MB / 2.00MB**（183 个文件，扫描 JS 72 个）通过，`style-lint.js`（33 wxss / 42 wxml）通过，
-`npm test` **84 项**全过。
+**当前状态（2026-10-30 01:50 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
+`check-mp.js` **0.98MB / 2.00MB**（183 个文件，扫描 JS 72 个）通过，`style-lint.js`（33 wxss / 42 wxml）通过，
+`npm test` **97 项**全过。
 
 > 主包从 1.41MB 降到 **0.95MB**，是 R52 删掉 WorkBuddy Cloud SDK 与 `miniprogram_npm/` 的结果。
 

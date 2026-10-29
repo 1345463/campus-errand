@@ -19,6 +19,7 @@ const PATHS = {
   'pay-create': '/api/pay-create',
   api: '/api/app-api',
   withdraw: '/api/withdraw',
+  'ai-api': '/api/ai-api',
 }
 
 // true = 网关可用；false = 本次启动只走云函数通道
@@ -131,14 +132,22 @@ function call(target, payload) {
 }
 
 /**
+ * 调某个云函数，自动带上会话令牌（没有令牌就照发，由服务端决定要不要放行）。
+ * callApi 是它在 app-api 上的特例。
+ */
+function callTarget(target, payload) {
+  const session = readSession()
+  const body = Object.assign({}, payload || {})
+  if (session && session.token) body.token = session.token
+  return call(target, body)
+}
+
+/**
  * 调 app-api（登录 / 带身份执行业务 RPC）。
  * payload 里自带 action，其余字段原样透传。
  */
 function callApi(action, payload) {
-  const session = readSession()
-  const body = Object.assign({ action: action }, payload || {})
-  if (session && session.token) body.token = session.token
-  return call('api', body)
+  return callTarget('api', Object.assign({ action: action }, payload || {}))
 }
 
 // ============================================================
@@ -203,6 +212,7 @@ function rpc(fn, args) {
 module.exports = {
   call: call,
   callApi: callApi,
+  callTarget: callTarget,
   rpc: rpc,
   readSession: readSession,
   saveSession: saveSession,

@@ -986,6 +986,35 @@ _提交时间：2026-10-23 16:50:00_
   `app-api` 已重新部署到 `ceshi`。
 - **待确认**：手机号快速验证需在微信后台开通并按次计费（约 0.03 元/次）。
 
+## R57 · 客服会话与反馈三修 + 智能客服复活（10-30 凌晨）
+
+- **工单会话气泡巨大间距**：`align` 算出裸的 `mine`，撞上 `app.wxss` 的
+  `.home, .mine { min-height: 100vh }` —— 每条自己发的消息被撑成一屏高。
+  这是 R36–R38 连改六轮才定位到的老雷（当时只改了 support 页）。
+  这次不只是改名：全局命名空间统一成 `pg-` 前缀（四个页面根节点跟着改），
+  会话气泡改 `msg-mine` / `msg-peer`，`.chat-scroll` 补 `height: 0`，
+  并给 `style-lint` 加了规则 —— wxss 选择器 / wxml class 出现裸的
+  `home/mine/hall/orders` 直接报错，已验证拦得住。
+- **未读清不掉**：`feedback_mark_read` 用 `ELSIF` 二选一，「提交人恰好是超管」时
+  只更新 `admin_seen_at`，`user_seen_at` 永远 NULL，而列表未读数正是按它算的。
+  改成两支独立判断写进同一个 UPDATE。另：**未读数把「自己发的」也算进去了**
+  （超管在自己工单里说话 role 是 admin），三个列表/详情函数统一加 `r.user_id <> v_uid`。
+  库内验证（主动回滚）：`user_seen_at` NULL → 已写入，未读归零。迁移 `20261030013000_feedback_unread_fix.sql`。
+- **反馈列表文字折断**：整行用全局 `.detail-label`（左侧写死 180rpx），
+  「最新（10-30 00:28）」显示成 `00:2 8`。改专属 `fb-row / fb-main / fb-side`。
+- **AI 客服「无可用模型」**：R52 迁库后 `cloud.llm.*` 失效，`llmModels()` 返回空数组、
+  `llmChat()` 直接抛错 —— 智能客服从那时起就是死的。新建 `cloudfunctions/ai-api`：
+  走 CloudBase 的 OpenAI 兼容接口，**密钥只留在云函数**，**必须验会话令牌**，
+  网关加路由 `/api/ai-api`、`tcb-proxy` 白名单放行。
+- **踩坑**：CloudBase 的 AI 接口**没有模型列表路由**（`/models` 会被当成模型名报 403）。
+  改成内置静态目录，且逐个真调验证过：本环境只有 `hy3` / `hy3-preview` 可用，
+  其余要买 Token 资源包；买了之后填环境变量 `TCB_AI_MODELS` 即可，不用改代码。
+  另外 hy3 是推理模型，`max_tokens` 太小会出现「只有思考过程没正文」，已兜下限并在空正文时报 `AI_EMPTY`。
+- 顺带把库里失效的 `faq_settings.ai_model`（`deepseek-v4.1-flash`）改成 `hy3`。
+  端到端实测 3.2 秒拿到正常回答。
+- **校验**：新增 `tests/feedback-ui.test.js` 13 条，全量 **97 项通过**；
+  四件套全绿，主包 **0.98 MB**。`ai-api` 已部署并建好网关路由。
+
 ## 文档维护（10-29 23:30 自动同步）
 
 - 按代码/迁移脚本全面复核统计数字：页面 **38 → 39**；数据库函数 **129 → 154**；

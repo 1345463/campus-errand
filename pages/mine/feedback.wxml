@@ -67,18 +67,24 @@
       <view wx:if="{{!mineLoaded}}" class="hint">加载中…</view>
       <view wx:elif="{{mine.length === 0}}" class="hint">还没有提交过反馈</view>
       <view wx:else>
-        <view class="detail-row" wx:for="{{mine}}" wx:key="id" data-id="{{item.id}}" bindtap="openThread">
-          <view class="detail-label">
-            <text class="flow-kind">{{item.kindText}} · {{item.timeText}}</text>
-            <text class="flow-time">{{item.content}}</text>
-            <text wx:if="{{item.note}}" class="flow-time">客服处理：{{item.note}}</text>
-            <text wx:if="{{item.lastPreview}}" class="flow-time">最新（{{item.lastTimeText}}）{{item.lastRoleText}}：{{item.lastPreview}}</text>
-            <text wx:if="{{item.replyCount > 0}}" class="flow-link">💬 共 {{item.replyCount}} 条对话，点这里继续沟通</text>
-            <text wx:elif="{{item.statusText === '已受理'}}" class="flow-link">💬 客服已受理，点这里可以追问</text>
-            <text wx:if="{{item.unreadCount > 0}}" class="flow-unread">{{item.unreadCount}} 条未读</text>
+        <!--
+          这里不能用全局的 .detail-row / .detail-label：那条规则把左侧写死成 180rpx，
+          而这一行要放的是「类型·时间 + 正文 + 最新回复」，180rpx 会把
+          「最新（10-30 00:28）」在时间中间折断（截图里就是 00:2 8）。
+          换成本页专属的 fb-row，左侧可收缩、右侧状态块不参与压缩。
+        -->
+        <view class="fb-row" wx:for="{{mine}}" wx:for-item="row" wx:key="id" data-id="{{row.id}}" bindtap="openThread">
+          <view class="fb-main">
+            <text class="flow-kind">{{row.kindText}} · {{row.timeText}}</text>
+            <text class="flow-time">{{row.content}}</text>
+            <text wx:if="{{row.note}}" class="flow-time">客服处理：{{row.note}}</text>
+            <text wx:if="{{row.lastPreview}}" class="flow-time">最新（{{row.lastTimeText}}）{{row.lastRoleText}}：{{row.lastPreview}}</text>
+            <text wx:if="{{row.replyCount > 0}}" class="flow-link">💬 共 {{row.replyCount}} 条对话，点这里继续沟通</text>
+            <text wx:elif="{{row.statusText === '已受理'}}" class="flow-link">💬 客服已受理，点这里可以追问</text>
+            <text wx:if="{{row.unreadCount > 0}}" class="flow-unread">{{row.unreadCount}} 条未读</text>
           </view>
-          <view class="detail-value">
-            <text class="status-block {{item.statusClass}}">{{item.statusText}}</text>
+          <view class="fb-side">
+            <text class="status-block {{row.statusClass}}">{{row.statusText}}</text>
           </view>
         </view>
       </view>

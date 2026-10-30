@@ -152,3 +152,57 @@ test('换通道后模型名自动跟随，否则 ai_model 还停在 hy3 → 必�
   const sync = faqJs.slice(faqJs.indexOf('syncModel: function'))
   assert.match(sync.slice(0, 500), /picked === page\.data\.aiModel/)
 })
+
+// ---- R58 补丁3：ok 字段漏写导致「暂无可用模型」 ----
+//
+// 踩坑记录：models / chat 两个成功分支原本 return done({ models, ... })，
+// 没有 ok 字段。前端 utils/tcb.js 的 viaGateway 只认 data.ok，
+// 于是「成功响应」被判成失败整份丢掉，表现是后台一直显示「暂无可用模型」，
+// 而且连报错都没有 —— 因为它不是失败，是成功被当成失败。
+// 所以这里不逐条写死，而是扫全部 done() 调用，缺 ok 直接失败。
+
+test('ai-api 里每个 done({...}) 都必须显式带 ok 字段', () => {
+  const re = /return done\(\{/g
+  let m = null
+  let n = 0
+  while ((m = re.exec(aiApi)) !== null) {
+    n += 1
+    const seg = aiApi.slice(m.index, m.index + 300)
+    assert.ok(
+      /ok:\s*(?:true|false)/.test(seg),
+      '第 ' + n + ' 个 done() 漏了 ok 字段，前端会把这整份响应当失败丢掉：' + seg.slice(0, 120)
+    )
+  }
+  assert.ok(n >= 2, '至少要扫到 2 个 done()（models 与 chat 的成功分支），实际 ' + n)
+})
+
+test('models 成功响应带 ok:true，并回报手写清单是否过期', () => {
+  const seg = aiApi.slice(aiApi.indexOf("if (action === 'models')"))
+  assert.match(seg.slice(0, 2200), /ok:\s*true/)
+  assert.match(seg.slice(0, 2200), /modelsStale/)
+})
+
+test('chat 成功响应带 ok:true，否则客服页会把答出来的结果当失败降级', () => {
+  const seg = aiApi.slice(aiApi.indexOf("if (action === 'chat')"))
+  assert.match(seg.slice(0, 2600), /done\(\{\s*ok:\s*true,\s*text:/)
+})
+
+test('llmCatalog 不会把「漏 ok」的响应静默当成空目录', () => {
+  const fn = apiJs.slice(apiJs.indexOf('async function llmCatalog'))
+  assert.match(fn.slice(0, 900), /res\.ok === false/)
+  assert.match(fn.slice(0, 900), /throw new Error/)
+})
+
+test('后台发现手写模型名与真实 id 不符时，静默纠正库里的清单', () => {
+  assert.match(faqJs, /cat\.modelsStale/)
+  assert.match(faqJs, /adminSetAiChannel\(\{ models: picker\.modelIds\[0\] \}\)/)
+})
+
+test('探测到真实模型列表时以它为准，手写清单只作兜底', () => {
+  const seg = aiApi.slice(aiApi.indexOf("if (action === 'models')"))
+  const body = seg.slice(0, 2200)
+  assert.match(body, /if \(ids\.length\)/)
+  assert.match(body, /models = ids\.map/)
+  // 探测失败才用 probeErr 兜底，不能因为探测失败就清空列表
+  assert.match(body, /probeErr/)
+})

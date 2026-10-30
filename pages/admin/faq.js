@@ -394,6 +394,15 @@ Page({
           ? '已保存密钥（末四位 ' + String(channel.key_tail || '****') + '）。要换就填新的，留空表示不改。'
           : '还没填密钥。填 Base URL + API Key 保存后即切到自定义通道；清空则退回云开发内置通道。',
       })
+      // 手写的模型名和真实 id 对不上时，静默把库里的清单纠正成探测结果。
+      // 坑在这里：DeepSeek 的 /models 里 name 是 DeepSeek-V4.1-Flash，
+      // 但调用只能用它家的 id（deepseek-flash），照 name 填进去每次调用都 400。
+      // 只改 models、不动 base/key（另外两项传 undefined = 不修改）。
+      if (cat.modelsStale && picker.modelIds.length && cat.source === 'custom') {
+        api.adminSetAiChannel({ models: picker.modelIds[0] }).catch(function () {
+          return null
+        })
+      }
       return null
     })
   },

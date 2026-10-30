@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-10-30 15:10** ｜ 累计 **58 轮迭代**、**39 个页面**、**38 张表**、**159 个数据库函数**、**9 个触发器**、**60 个迁移脚本**、**119 项回归测试**、主包 **0.98 MB**
+> 统计截止：**2026-10-30 15:40** ｜ 累计 **58 轮迭代**、**39 个页面**、**38 张表**、**159 个数据库函数**、**9 个触发器**、**60 个迁移脚本**、**125 项回归测试**、主包 **0.99 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -1433,6 +1433,55 @@ svc_rpc('wx:attacker', 'svc_ai_runtime_config', '{}')
 
 **待用户填**：后台「智能客服配置 → 大模型通道」填 Base URL + API Key 即可切过去。
 
+#### 补丁3：`ok` 字段漏写 —— 「暂无可用模型」的真凶
+
+后台填完通道后列表依然为空，逐层排除：
+
+- **密钥**：让 `ai-api` 用自己的 `WX_APP_SECRET` 签一个 `wx:selftest` 令牌，拿去 `app-api` 调
+  `admin_my_perms` → `{"ok":true,"data":[]}`。两边密钥一致，不是这个问题。
+- **网关**：`/api/ai-api` 无令牌时正常回 `TOKEN_INVALID`，路由在、函数在。
+- **探测**：`GET https://api.deepseek.com/models` 回 200，可用模型是 `deepseek-flash` / `deepseek-v4-pro`。
+- 那 `models` 本该有两条 —— 除非响应被前端丢了。
+
+真凶：`models` 与 `chat` 两个**成功**分支 `return done({ models, ... })` 时**没写 `ok` 字段**，
+而 `utils/tcb.js` 的 `viaGateway` 只认 `data.ok`：
+
+```js
+if (data.ok) { data._via = 'gateway'; resolve(data) }
+else { reject(new Error(data.error || data.code || '调用失败')) }
+```
+
+于是「成功响应」被判成失败整份丢掉，`llmCatalog` 一层层吞成空数组，UI 只剩「暂无可用模型」——
+**连报错都没有，因为它不是失败，是成功被当成了失败**。同一个 bug 也让 `chat` 答出来的内容被丢掉。
+
+修复三处：
+
+1. 两个成功分支补 `ok: true`；
+2. 新增通用断言：扫 `ai-api` 里**每个** `return done({`，缺 `ok` 直接失败 —— 以后加 action 漏不掉；
+3. `llmCatalog` 加防御：`ok === false` 抛错，不再静默返回空目录（宁可见红，不要变空）。
+
+**顺手纠正模型名**：DeepSeek 的 `/models` 里 `name` 是 `DeepSeek-V4.1-Flash`，
+但调用只能用 `id`（`deepseek-flash`），照 name 填必然 400：
+`The supported API model names are deepseek-flash, deepseek-v4-pro`。
+现在探测成功就以真实 id 为准，并回 `modelsStale`，后台自动把库里的清单纠正过来。
+
+**实测（走网关 + 真实令牌，非 invokeFunction）**：
+
+```
+POST /api/ai-api {"action":"models"}
+→ {"ok":true,"models":[{"id":"deepseek-flash"},{"id":"deepseek-v4-pro"}],
+   "source":"custom","modelsStale":false}
+
+POST /api/ai-api {"action":"chat","model":"deepseek-flash"}
+→ {"ok":true,"text":"我是……","model":"deepseek-flash","source":"custom"}
+```
+
+库里同步：`ai_secrets.models = deepseek-flash`、`faq_settings.ai_model = deepseek-flash`
+（原值 `hy3`，留着必 400）。
+
+**校验**：`tests/ai-channel.test.js` +6 条（done 必带 ok、models/chat 成功分支、llmCatalog 防御、
+stale 自动纠正、探测优先），全量 **125 项通过**；四件套全绿，主包 **0.99 MB**。
+
 ---
 
 ## 3. 数据库演进总览
@@ -1833,7 +1882,7 @@ node campus-errand/tools/style-lint.js campus-errand
 
 **当前状态（2026-10-30 01:50 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
 `check-mp.js` **0.98MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（33 wxss / 42 wxml）通过，
-`npm test` **119 项**全过。
+`npm test` **125 项**全过。
 
 > 主包从 1.41MB 降到 **0.95MB**，是 R52 删掉 WorkBuddy Cloud SDK 与 `miniprogram_npm/` 的结果。
 

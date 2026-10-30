@@ -257,6 +257,10 @@ exports.main = async function (event) {
       let models = ch.models.map((id) => ({ id: id, name: id }))
       let builtin = !ch.custom
       let probeErr = ''
+      // 手写清单和探测结果对不上时置 true：后台据此把库里的模型名纠正成真能调的 id。
+      // 典型坑：DeepSeek 返回的 name 是 DeepSeek-V4.1-Flash，id 却是 deepseek-flash，
+      // 照 name 填进去每次调用都 400。
+      let stale = false
       if (ch.custom) {
         // 第三方通道（OpenAI 协议）有 /models，真拉一次覆盖手写清单
         try {
@@ -267,6 +271,7 @@ exports.main = async function (event) {
             if (ids.length) {
               models = ids.map((id) => ({ id: id, name: id }))
               builtin = false
+              stale = ch.models.some((id) => ids.indexOf(id) < 0)
             }
           } else {
             probeErr = describeUpstream(r.status, r.body)
@@ -275,10 +280,15 @@ exports.main = async function (event) {
           probeErr = String((e && e.message) || e || '拉取模型列表失败')
         }
       }
+      // ⚠️ ok:true 一个都不能漏：前端 viaGateway 只认 data.ok，
+      // 漏掉的话整份响应会被当成失败丢掉 —— 表现是「后台一直显示暂无可用模型」，
+      // 而且连错误提示都没有，因为它是「成功但被判成失败」。
       return done({
+        ok: true,
         models: models,
         builtin: builtin,
         source: ch.source,
+        modelsStale: stale,
         // probeErr 只是提示：探测失败时前端仍能用配置里手写的模型名
         probeErr: probeErr,
       })
@@ -322,7 +332,8 @@ exports.main = async function (event) {
           error: '模型这次只输出了思考过程就到字数上限了，把「最大字数」调大些再试',
         }
       }
-      return done({ text: text, model: model, source: ch.source })
+      // 同样不能漏 ok:true —— 漏了客服页会把「答出来了」当成失败，直接降级到 FAQ。
+      return done({ ok: true, text: text, model: model, source: ch.source })
     }
 
     return { ok: false, code: 'BAD_ACTION', error: '未知的 action：' + (action || '(空)') }

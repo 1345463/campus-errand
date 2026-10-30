@@ -1109,3 +1109,49 @@ key 留空 = 传 `null` = **不修改**，所以日常改 Base URL 不会把已�
 - **校验**：新增 `tests/ai-channel.test.js` 16 条；`feedback-ui.test.js` 里 `builtin: true`
   改成 `builtin: builtin`（自定义通道是 false，语义变了）。全量 **119 项通过**；四件套全绿，
   主包 **0.98 MB / 183 文件**（多了一张卡片）。
+
+### 补丁3 · `ok` 字段漏写，导致「暂无可用模型」（R58）
+
+**现象**：后台填完 Base URL / API Key / 模型名，保存后下拉仍是「暂无可用模型」，客服也不答。
+
+**排除过程**（都不是原因）：
+
+- 密钥不一致？让 `ai-api` 用自己的 `WX_APP_SECRET` 签一个 `wx:selftest` 令牌，拿去 `app-api` 调
+  `admin_my_perms`，回 `{"ok":true,"data":[]}` —— 两边一致。
+- 网关路由不在？`/api/ai-api` 无令牌回 `TOKEN_INVALID`，路由在。
+- 上游不通？`GET https://api.deepseek.com/models` 回 200，模型是 `deepseek-flash` / `deepseek-v4-pro`。
+
+**真因**：`models` 与 `chat` 两个**成功**分支 `return done({ models, ... })` 漏写 `ok` 字段，
+而 `utils/tcb.js` 的 `viaGateway` 只认 `data.ok`：
+
+```js
+if (data.ok) { resolve(data) } else { reject(new Error(data.error || data.code || '调用失败')) }
+```
+
+成功响应被判成失败整份丢掉 → `llmCatalog` 吞成空数组 → UI 只剩「暂无可用模型」。
+**连报错都没有，因为它不是失败，是成功被当成了失败。** 同一个 bug 也把 `chat` 的正文丢掉。
+
+**修复**：
+
+1. `models` / `chat` 成功分支补 `ok: true`；
+2. 通用断言：扫 `ai-api` 里每个 `return done({`，缺 `ok` 直接失败 —— 以后加 action 漏不掉；
+3. `llmCatalog` 加防御，`ok === false` 抛错而不是返回空目录。
+
+**顺手修掉模型名坑**：DeepSeek 的 `/models` 里 `name` 是 `DeepSeek-V4.1-Flash`，
+调用只能用 `id`（`deepseek-flash`），照 name 填必然 400
+（`The supported API model names are deepseek-flash, deepseek-v4-pro`）。
+现在探测成功以真实 id 为准，并回 `modelsStale` 让后台静默纠正库里的清单。
+
+**实测（网关 + 真实令牌）**：
+
+```
+POST /api/ai-api {"action":"models"}
+→ {"ok":true,"models":[{"id":"deepseek-flash"},{"id":"deepseek-v4-pro"}],"source":"custom","modelsStale":false}
+POST /api/ai-api {"action":"chat","model":"deepseek-flash"}
+→ {"ok":true,"text":"我是……","model":"deepseek-flash","source":"custom"}
+```
+
+库里同步：`ai_secrets.models = deepseek-flash`、`faq_settings.ai_model = deepseek-flash`（原为 hy3）。
+
+- **校验**：`tests/ai-channel.test.js` +6 条（done 必带 ok、models/chat 成功分支、llmCatalog 防御、
+  stale 自动纠正、探测优先）。全量 **125 项通过**；四件套全绿，主包 **0.99 MB / 183 文件**。

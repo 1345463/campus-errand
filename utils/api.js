@@ -1451,11 +1451,19 @@ async function adminSetAiChannel(patch) {
 // 后台用它显示「现在走的是哪条通道」，不用另外查一次库。
 async function llmCatalog() {
   const res = await tcb.callTarget('ai-api', { action: 'models' })
+  // 正常情况下 callTarget 已经把 ok:false 抛成异常了，这里再兜一层：
+  // 云函数万一漏了 ok 字段，会被当成「目录为空」显示成「暂无可用模型」，
+  // 完全看不出原因 —— R58 就踩过这个坑，所以宁可报错也不要静默变空。
+  if (!res || res.ok === false) {
+    throw new Error((res && (res.error || res.code)) || '拉取模型列表失败')
+  }
   const list = (res && Array.isArray(res.models) && res.models) || []
   return {
     models: list,
     source: String((res && res.source) || ''),
     builtin: !!(res && res.builtin),
+    // 手写清单和真实 id 对不上（例如填了显示名 DeepSeek-V4.1-Flash，真 id 是 deepseek-flash）
+    modelsStale: !!(res && res.modelsStale),
     probeErr: String((res && res.probeErr) || ''),
   }
 }

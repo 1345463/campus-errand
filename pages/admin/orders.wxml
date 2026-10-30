@@ -1,0 +1,99 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>登录后才能使用管理后台</view>
+    <view class="btn-primary top-gap" bindtap="goLogin">去登录</view>
+  </view>
+
+  <view wx:elif="{{denied}}" class="empty">
+    <view>没有管理权限</view>
+    <view class="hint top-gap">订单运维需要「结算」或「客服」权限，请找超管开通</view>
+  </view>
+
+  <view wx:else>
+    <view class="err-bar" wx:if="{{errorText}}">
+      <text class="err-text">{{errorText}}</text>
+      <text class="err-retry" bindtap="load">重试</text>
+    </view>
+
+    <view class="ops-search">
+      <input
+        class="ops-input"
+        value="{{keyword}}"
+        bindinput="onKeywordInput"
+        bindconfirm="doSearch"
+        confirm-type="search"
+        placeholder="订单号 / 标题 / 昵称"
+        placeholder-class="field-ph"
+      />
+      <view class="ops-search-btn" bindtap="doSearch">搜索</view>
+    </view>
+
+    <view class="ops-tabs">
+      <view
+        class="ops-tab {{tab === item.key ? 'ops-tab-on' : ''}}"
+        wx:for="{{tabs}}"
+        wx:for-item="item"
+        wx:key="key"
+        data-key="{{item.key}}"
+        bindtap="onTab"
+      >{{item.label}}</view>
+    </view>
+
+    <view wx:if="{{loading}}" class="empty">加载中…</view>
+    <view wx:elif="{{list.length === 0 && !errorText}}" class="empty">
+      <view>没有符合条件的订单</view>
+      <view class="hint top-gap">换个关键词或状态试试</view>
+    </view>
+
+    <view class="card ops-card" wx:for="{{list}}" wx:for-item="item" wx:key="id">
+      <view class="ops-head">
+        <text class="ops-title">#{{item.id}} {{item.title}}</text>
+        <text class="ops-badge">{{item.statusText}}</text>
+      </view>
+
+      <view class="detail-row">
+        <view class="detail-label">金额</view>
+        <view class="detail-value">赏金 ¥{{item.reward}} · 实付 ¥{{item.paidAmount}}（{{item.payChannel}}）</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">付款</view>
+        <view class="detail-value">{{item.payText}}{{item.paidText ? ' · ' + item.paidText : ''}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">发布方</view>
+        <view class="detail-value">{{item.ownerName}}</view>
+      </view>
+      <view class="detail-row" wx:if="{{item.runnerName}}">
+        <view class="detail-label">接单员</view>
+        <view class="detail-value">{{item.runnerName}}</view>
+      </view>
+      <view class="detail-row">
+        <view class="detail-label">发布时间</view>
+        <view class="detail-value">{{item.createdText}}</view>
+      </view>
+      <view class="detail-row" wx:if="{{item.refundNo}}">
+        <view class="detail-label">退款单号</view>
+        <view class="detail-value">{{item.refundNo}}</view>
+      </view>
+      <view class="detail-row" wx:if="{{item.refundError}}">
+        <view class="detail-label">退款异常</view>
+        <view class="detail-value ops-warn">{{item.refundError}}</view>
+      </view>
+      <view class="detail-row last" wx:if="{{item.cancelReason}}">
+        <view class="detail-label">取消原因</view>
+        <view class="detail-value">{{item.cancelReason}}</view>
+      </view>
+
+      <view class="btn-row" wx:if="{{item.isRefunding}}">
+        <view class="btn-primary" data-id="{{item.id}}" bindtap="refreshRefund">
+          {{actingId === item.id ? '查询中…' : '查询 / 重试退款'}}
+        </view>
+      </view>
+      <view class="btn-row" wx:elif="{{item.canCancel}}">
+        <view class="btn-danger half" data-id="{{item.id}}" bindtap="forceCancel">
+          {{actingId === item.id ? '处理中…' : '强制取消并退款'}}
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

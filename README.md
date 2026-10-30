@@ -9,15 +9,15 @@
 
 | 指标 | 数值 |
 |---|---|
-| 页面 | **38** |
+| 页面 | **39** |
 | 前端代码 | **17,137** 行 JS / **5,048** 行 WXML / **5,041** 行 WXSS |
-| 数据库 | **38** 表 / **164** 个函数 / **9** 个触发器 |
+| 数据库 | **38** 表 / **170** 个函数 / **9** 个触发器 |
 | 云函数 | **8** 个 |
 | 云托管 | **1** 个（固定出口 IP，专门对接商家转账） |
-| 迁移脚本 | **62** 条（全部可重放） |
+| 迁移脚本 | **64** 条（全部可重放） |
 | 灰度开关 / 违规词 | **23** 个 / **292** 条（13 大类 + 4 条白名单） |
-| 回归测试 | **168** 项（含真实 PostgreSQL 执行） |
-| 小程序包体积 | **1.01 MB** / 上限 2 MB |
+| 回归测试 | **181** 项（含真实 PostgreSQL 执行） |
+| 小程序包体积 | **1.03 MB** / 上限 2 MB |
 
 ---
 
@@ -122,7 +122,7 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
 
 ---
 
-## 二、核心迭代（57 轮）
+## 二、核心迭代（63 轮）
 
 | 阶段 | 交付 |
 |---|---|
@@ -159,7 +159,7 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
 
 ```
 ┌──────────────────────────────────────────┐
-│  微信小程序（原生，38 页）                  │
+│  微信小程序（原生，39 页）                  │
 │  页面层 ES5，utils/api.js 是唯一数据出口    │
 └──────────────┬───────────────────────────┘
                │ HTTPS 网关（优先）/ wx.cloud（兜底）
@@ -181,7 +181,7 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
     │              │
 ┌───▼──────────────▼─────┐
 │ CloudBase PostgreSQL    │
-│ 38 表 / 164 函数 / 9 触发器 │
+│ 38 表 / 170 函数 / 9 触发器 │
 │ RLS + SECURITY DEFINER  │
 └─────────────────────────┘
 ```
@@ -212,7 +212,7 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
 
 ---
 
-## 五、页面地图（38 页）
+## 五、页面地图（39 页）
 
 ### 主流程
 | 路径 | 页面 | 做什么 |
@@ -262,6 +262,7 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
 | `pages/admin/review` | 接单员审核 | `review` |
 | `pages/admin/reports` | 举报处理 | `review` |
 | `pages/admin/settle` | 结算核查 | `settle` |
+| `pages/admin/orders` | 订单运维（查单 / 强制退款） | `settle` |
 | `pages/admin/rental` | 租赁报价 | `rental` |
 | `pages/admin/items` | 机型与挂牌价 | `rental` |
 | `pages/admin/feedback` | 客服受理 | `support` |
@@ -295,7 +296,7 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
 ```
 campus-errand/
 ├── app.js / app.json / app.wxss     全局（含 wx.getUpdateManager 热更新）
-├── pages/            38 个页面（见「页面地图」）
+├── pages/            39 个页面（见「页面地图」）
 ├── components/room-picker/          三级宿舍选择器
 ├── utils/            16 个：api / tcb / upload / pay / ui / guard / flags / perms /
 │                     motion / moderation / moderation-words / campus / services /
@@ -303,7 +304,7 @@ campus-errand/
 ├── cloudfunctions/   8 个：app-api / ai-api / pay-create / pay-notify /
 │                     tcb-proxy / transfer / transfer-notify / withdraw-api
 ├── cloudrun/         云托管 transfer-svc（固定出口 IP，对接商家转账）
-├── tests/            168 项回归测试（含 PGlite 真实 PostgreSQL）
+├── tests/            181 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 └── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅 / 支付方案
 ```
@@ -316,9 +317,9 @@ campus-errand/
 
 - **38 张表**：`pay_settings` / `withdraw_requests` / `phone_codes` / `wx_phone_tickets` /
   `media_uploads` / `media_upload_parts` 等；`profile_phones` / `account_deletions` 不开 policy，只给函数访问
-- **164 个函数**，命名约定 `p_` 前缀参数
+- **170 个函数**，命名约定 `p_` 前缀参数
 - **9 个触发器**：订单消息推送、图片归属校验、手机号闸门 ×3 等
-- **63 条迁移脚本**，全部幂等 —— 在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，
+- **64 条迁移脚本**，全部幂等 —— 在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，
   **不在本仓库内**）。完整清单见 [`docs/ITERATIONS.md` 第 3 章](docs/ITERATIONS.md)
 - 包内 `sql/` 还有 28 个早期脚本，属已退役旧库的结构参考，不再对现役库执行
 
@@ -342,7 +343,7 @@ pending ──accept──> accepted ──complete──> waiting_confirm ─�
 
 ```bash
 npm ci --ignore-scripts
-npm test        # 168 项回归测试
+npm test        # 181 项回归测试
 npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预检
 ```
 
@@ -355,7 +356,7 @@ npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预�
 没有 AppSecret、14 天不转正即注销。正式提审前需准备：小程序备案、用户隐私保护指引
 （手机号 / 证件照 / 地址 / 图片）、UGC 信息安全声明。
 
-1. 微信开发者工具打开本目录；主包需 ≤ 2 MB，当前 **1.01 MB / 2.00 MB**（181 个文件）。
+1. 微信开发者工具打开本目录；主包需 ≤ 2 MB，当前 **1.03 MB / 2.00 MB**（185 个文件）。
 2. **云函数 8 个**已部署到 `ceshi`（`tcb-proxy` 在小程序自有环境 `baozi-d2gbl784gd773f8b6`，
    需由开发者工具上传）。密钥只在云函数控制台的环境变量里配，不进代码与仓库。
 3. **云托管 `cloudrun/transfer-svc`**：函数型服务，端口 3000，9 个环境变量

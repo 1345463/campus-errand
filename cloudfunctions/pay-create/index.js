@@ -16,10 +16,16 @@
  *   前端仍按语义调用（PATHS 里 'refund' 指向同一地址），代码里不混。
  *
  * action（不传 = 下单，保持老调用兼容）：
- *   create   下单（= 老行为，参数 code / orderId / amount / notifyUrl）
- *   cancel   发布方取消：待接单直接退款，已接单转协商
- *   respond  接单员回应取消申请
- *   sync     主动查退款结果（回调没到时的兜底）
+ *   create      下单（= 老行为，参数 code / orderId / amount / notifyUrl）
+ *   cancel      发布方取消：待接单直接退款，已接单转协商
+ *   respond     接单员回应取消申请
+ *   sync        主动查退款结果（回调没到时的兜底）
+ *   adminRetry  管理端：退款失败重试 / 强制取消后补发退款
+ *
+ * 定时触发（R63）：
+ *   event.Type === 'Timer' 且不是 HTTP 调用时走 cron：关超时未付单 +
+ *   补查滞留退款。判断依据是「定时事件没有 httpMethod」，HTTP 请求
+ *   一定带 httpMethod，所以 body 里伪造 Type=Timer 进不来。
  *
  * 环境变量：
  *   WXPAY_MCHID / WXPAY_APPID / WXPAY_SERIAL_NO / WXPAY_PRIVATE_KEY / WXPAY_NOTIFY_URL
@@ -416,6 +422,119 @@ async function doRespond(uid, payload) {
   return doRefund(orderId, row)
 }
 
+/**
+ * 管理端：退款卡住时的人工兜底。
+ *
+ * 先查再发，顺序不能反：微信退款是幂等的（同一 out_refund_no 重复提交
+ * 返回同一笔），但如果微信其实已经退成功、只是回调丢了，再发一次只会
+ * 拿回「已成功」的旧结果 —— 先查还能顺手把订单落成 canceled。
+ *
+ * 权限不在这里判：admin_order_detail 内部用 admin_has_perm 校验，
+ * 非管理员调用直接抛错，服务端一处口径。
+ */
+async function doAdminRetry(uid, payload) {
+  const orderId = toOrderId(payload.orderId)
+  if (!orderId) return { ok: false, code: 'BAD_PARAM', error: '订单号有误' }
+
+  let rows
+  try {
+    rows = await svcRpc(uid, 'admin_order_detail', { p_order_id: orderId })
+  } catch (e) {
+    return { ok: false, code: 'FORBIDDEN', error: String((e && e.message) || e || '没有权限处理订单') }
+  }
+  const row = (rows && rows[0]) || null
+  if (!row) return { ok: false, code: 'NOT_FOUND', error: '订单不存在' }
+
+  if (String(row.pay_status || '') === 'refunded') {
+    return { ok: true, status: 'refunded', message: '这笔订单已经退款完成' }
+  }
+  if (String(row.order_status || '') !== 'canceling') {
+    return {
+      ok: false,
+      code: 'BAD_STATE',
+      error: '订单当前不是退款中状态（' + (row.order_status || '未知') + '），请先强制取消',
+    }
+  }
+  if (String(row.pay_channel || '') === 'balance') {
+    return { ok: false, code: 'BAD_STATE', error: '余额支付的订单应在库里同步退回，请先强制取消' }
+  }
+
+  const refundNo = String(row.refund_no || '') || 'RF' + orderId
+  let q
+  try {
+    q = await wxpayRequest('GET', '/v3/refund/domestic/refunds/' + refundNo, null)
+  } catch (e) {
+    return { ok: false, code: 'SYNC_FAILED', error: String((e && e.message) || e || '查询退款结果失败') }
+  }
+
+  if (q.status >= 200 && q.status < 300) {
+    const wxStatus = String((q.body && q.body.status) || '')
+    const refundId = String((q.body && q.body.refund_id) || '')
+    if (wxStatus === 'SUCCESS' || wxStatus === 'CLOSED') {
+      await directRpc('svc_finish_order_refund', {
+        p_refund_no: refundNo,
+        p_refund_id: refundId,
+        p_state: wxStatus,
+      })
+      return {
+        ok: true,
+        status: wxStatus === 'SUCCESS' ? 'refunded' : 'canceling',
+        wxStatus: wxStatus,
+        message: wxStatus === 'SUCCESS' ? '退款已完成，订单已结束' : '退款被关闭，钱没有出去，需要重新处理',
+      }
+    }
+    // PROCESSING / ABNORMAL：微信还在处理，不能重复发起
+    return { ok: true, status: 'canceling', wxStatus: wxStatus, message: '微信正在处理退款（' + wxStatus + '），稍后再看' }
+  }
+
+  if (q.status !== 404) {
+    return { ok: false, code: 'SYNC_FAILED', error: describeWxError(q.status, q.body) }
+  }
+
+  // 404 = 微信侧压根没有这笔退款，说明当初没发出去，现在补发
+  return doRefund(orderId, {
+    refund_fen: Math.round(Number(row.refund_amount || 0) * 100),
+    txn_id: String(row.pay_txn_id || ''),
+  })
+}
+
+/**
+ * 定时任务（每 10 分钟）：两件事都是「没有它就永远没人管」的。
+ *   ① 关掉超时未付的 pending 单 —— 以前它们永远停在列表里
+ *   ② 补查滞留退款 —— 回调丢了就永远 canceling，用户只能来找客服
+ * 单次最多补查 5 笔，避免把函数超时拖爆；剩下的下一轮继续。
+ */
+async function runCron() {
+  if (!TCB_ENV || !TCB_KEY) {
+    return { ok: false, code: 'NOT_CONFIGURED', error: '读库配置缺失（TCB_ENV_ID / TCB_PUBLISHABLE_KEY）' }
+  }
+  const out = { ok: true, closed: 0, stuck: 0, refunded: 0, failed: 0 }
+
+  try {
+    const closedRows = await directRpc('svc_close_expired_orders', { p_minutes: 30 })
+    const c = (closedRows && closedRows[0]) || {}
+    out.closed = Number(c.closed_count) || 0
+  } catch (e) {
+    out.closeError = String((e && e.message) || e || '关单失败')
+  }
+
+  try {
+    const rows = await directRpc('svc_list_stuck_refunds', { p_minutes: 10 })
+    const list = Array.isArray(rows) ? rows : []
+    out.stuck = list.length
+    for (let i = 0; i < list.length && i < 5; i++) {
+      const one = list[i] || {}
+      const r = await doSync('', { orderId: one.order_id })
+      if (r && r.wxStatus === 'SUCCESS') out.refunded += 1
+      else if (!r || r.ok === false) out.failed += 1
+    }
+  } catch (e) {
+    out.refundError = String((e && e.message) || e || '补查退款失败')
+  }
+
+  return out
+}
+
 /** 主动查一次退款结果：回调丢了 / 用户等不及时的兜底 */
 async function doSync(uid, payload) {
   const orderId = toOrderId(payload.orderId)
@@ -456,6 +575,7 @@ async function runRefund(action, payload) {
   try {
     if (action === 'cancel') return await doCancel(uid, payload)
     if (action === 'respond') return await doRespond(uid, payload)
+    if (action === 'adminRetry') return await doAdminRetry(uid, payload)
     return await doSync(uid, payload)
   } catch (err) {
     return { ok: false, code: 'REFUND_ERROR', error: String((err && err.message) || err || '退款处理异常') }
@@ -465,6 +585,11 @@ async function runRefund(action, payload) {
 exports.main = async (event) => {
   const isHttp = !!(event && (event.httpMethod || event.requestContext))
   let payload = event || {}
+  // 有些调用方（含 MCP 的 invokeFunction）直接把参数序列化成 JSON 字符串传，
+  // 不解析的话 event.Type / action 全部读不到，会掉进下单分支报 NO_OPENID。
+  if (typeof payload === 'string') {
+    try { payload = JSON.parse(payload) } catch (e) { payload = {} }
+  }
   if (isHttp && typeof event.body === 'string') {
     try { payload = JSON.parse(event.body || '{}') } catch (e) { payload = {} }
   }
@@ -479,10 +604,20 @@ exports.main = async (event) => {
   }
 
   try {
+    // 定时触发器走这里。两条判定都要求「非 HTTP」：
+    // 网关请求一定带 httpMethod，所以 HTTP body 里伪造 Type / action 进不来。
+    const isTimer =
+      !isHttp &&
+      (String(payload.Type || '').toLowerCase() === 'timer' ||
+        String(payload.action || '') === 'cron')
+    if (isTimer) {
+      return done(await runCron())
+    }
+
     // R60：取消与退款走另一条分支，和下单共用同一套商户凭据。
     // 不传 action 的老调用照旧走下单，前端不用改。
     const action = String(payload.action || '')
-    if (action === 'cancel' || action === 'respond' || action === 'sync') {
+    if (action === 'cancel' || action === 'respond' || action === 'sync' || action === 'adminRetry') {
       return done(await runRefund(action, payload))
     }
 

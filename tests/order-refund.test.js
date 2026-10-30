@@ -110,7 +110,11 @@ test('回调收尾与失败回滚只给服务端（svc_ 前缀 + 只 GRANT servi
 
 test('pay-create 用 action 分派，老下单调用不受影响', () => {
   assert.match(payCreate, /const action = String\(payload\.action \|\| ''\)/)
-  assert.match(payCreate, /if \(action === 'cancel' \|\| action === 'respond' \|\| action === 'sync'\)/)
+  // 分派名单会随能力增长（R63 加了 adminRetry），这里只钉「取消/回应/查单都在」
+  for (const act of ['cancel', 'respond', 'sync']) {
+    assert.match(payCreate, new RegExp("action === '" + act + "'"), '缺 action ' + act)
+  }
+  assert.match(payCreate, /if \(action === 'cancel'[\s\S]{0,200}return done\(await runRefund\(action, payload\)\)/)
   // 不传 action 时仍然走到下单逻辑
   assert.ok(
     payCreate.indexOf('const miss = missingEnv()') > payCreate.indexOf("action === 'cancel'"),

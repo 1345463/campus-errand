@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-10-30 22:30** ｜ 累计 **62 轮迭代**、**38 个页面**、**38 张表**、**164 个数据库函数**、**9 个触发器**、**63 个迁移脚本**、**168 项回归测试**、主包 **1.01 MB**
+> 统计截止：**2026-10-30 23:20** ｜ 累计 **63 轮迭代**、**39 个页面**、**38 张表**、**170 个数据库函数**、**9 个触发器**、**64 个迁移脚本**、**181 项回归测试**、主包 **1.03 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -13,7 +13,7 @@
 
 - [0. 项目概况](#0-项目概况)
 - [1. 技术基线（不可动摇的约定）](#1-技术基线不可动摇的约定)
-- [2. 迭代时间线（57 轮）](#2-迭代时间线57-轮)
+- [2. 迭代时间线（63 轮）](#2-迭代时间线63-轮)
 - [3. 数据库演进总览](#3-数据库演进总览)
 - [4. 前端页面与模块总览](#4-前端页面与模块总览)
 - [5. 踩坑知识库](#5-踩坑知识库)
@@ -29,7 +29,7 @@
 |---|---|
 | 项目 | 仿「韶乐园跑跑」（韶关学院校园跑腿平台）做同类双边校园跑腿小程序 |
 | 学校 | 广东邮电职业技术学院 |
-| 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 38 个页面 |
+| 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 39 个页面 |
 | 云端 | WorkBuddy Cloud，应用 id `wbapp_yPJnSvicojPmz998PjKfpM`；**R48 起并行迁往 CloudBase `ceshi-d2g37cbg7c8f7ee48`**（数据库已迁完，待切前端 SDK） |
 | 数据库 | PostgreSQL 31 张表，全量 RLS，129 个 `SECURITY DEFINER` 函数、7 个触发器（CloudBase 新库 32 表 / 131 函数 / 9 触发器） |
 | 代码位置 | 工作区 `campus-errand/` |
@@ -71,7 +71,7 @@
 
 ---
 
-## 2. 迭代时间线（57 轮）
+## 2. 迭代时间线（63 轮）
 
 ### Day 1 — 2026-10-14：从录屏原型到可用链路
 
@@ -787,7 +787,8 @@ restored_at / purged_at）。规则：
 - 满 6 个月：`purge_account_data` 清除昵称 / 头像 / 手机号 / 证件照 / 联系方式，
   订单保留去标识化记录，手机号释放可被新账号绑定
 - 清理时机：登录时 `purge_my_account_if_due`（只清自己）+ 超管打开工作台时
-  `admin_purge_expired_deletions` 兜底（本项目没有定时任务，否则再没人登录的账号永远不会清）
+  `admin_purge_expired_deletions` 兜底（R63 前全仓没有定时任务；现在 `pay-create` 每 10 分钟
+  跑一次关超时单 + 补查退款，但**没有把 purge 接进去**，所以这条仍然靠登录触发）
 
 ##### 五、残余风险（必须知情）
 
@@ -1669,6 +1670,101 @@ accepted --申请取消---> cancel_requested --同意--> canceling --> canceled
 
 ---
 
+### R63 · 券要退、单要能管、没人管的自愈（10-30 深夜）
+
+用户一句「p1p2 都修」——上一轮列出的四条待办，两条 P1 两条 P2，这轮全做了。
+
+**① 券核销后取消不回滚（P2）**
+
+`create_order` 下单时就把 `point_redemptions` 置 `used` 并写上 `order_id`，
+可取消 / 退款路径**一处都没把它放回去** —— 用户那张券就这么永久蒸发了。
+补 `svc_rollback_order_coupon(p_order_id)`，只回滚 `order_id` 匹配本单的记录；
+管理员手动核销的兑换码 `order_id` 是 NULL，不会被连带回滚。
+
+回滚点必须在**所有终态出口**，漏一个就有人的券回不来：
+
+| 出口 | 时机 |
+|---|---|
+| `request_cancel_order` 未付款分支 | 立即 |
+| `request_cancel_order` 余额分支 | 立即（同库退钱的同时还券） |
+| `respond_cancel_request` 余额分支 | 接单员同意时 |
+| `svc_finish_order_refund` 的 SUCCESS | 微信退款成功回调 |
+| `admin_force_cancel_order` 三个分支 | 管理员强制取消 |
+| `svc_close_expired_orders` | 超时关单 |
+
+**为什么微信单不能在发起退款时就还券**：`CLOSED`（退款被关闭）意味着钱没出去、
+订单要回滚成 `paid` 让用户重试。这时候券必须还留在「已用」，否则同一张券能抵两次。
+
+**② 管理端没有能处理订单的接口（P1）**
+
+后台 30 多个 `admin_*` RPC 里，没有一个能改订单状态或动退款 ——
+退款回调丢了、商户号余额不足、用户投诉要强制退，客服只能改库。补三个：
+
+| 函数 | 权限 | 作用 |
+|---|---|---|
+| `admin_list_orders(keyword, status, limit)` | `settle` / `support` | 订单号 / 标题 / 昵称搜索；状态筛选支持 `unpaid` `refund` `doing` `closed` |
+| `admin_order_detail(id)` | `settle` / `support` | 单条全字段，云函数 `adminRetry` 用它验权 |
+| `admin_force_cancel_order(id, reason)` | `settle` / `super` | 强制取消；余额单当场退，微信单落 `canceling` |
+
+新页面 `pages/admin/orders`（工作台「订单运维」，挂 `settle` 权限）：
+搜索框 + 状态筛选 + 单卡操作（查询/重试退款、强制取消并退款）。
+**权限只在 DB 函数里判一次** —— 云函数 `adminRetry` 通过
+`svcRpc(uid, 'admin_order_detail')` 间接验权，不在 JS 里重复实现 `is_admin`，
+避免两套口径分叉（测试里专门 `doesNotMatch(/is_admin/)` 钉住）。
+
+**③ `syncRefund` 前端零调用（P1）**
+
+`api.syncRefund` 从 R60 就写好了，但**一处都没调**。后果：退款回调一丢，
+订单永远停在 `canceling` —— 钱其实早就退了，用户只能看着「退款中」干等。两处补上：
+
+- 详情页 `autoSyncRefund`：进页面若 `status=canceling` 自动查一次，
+  **2 分钟节流**（微信查单接口有频率限制），失败静默，不能让兜底反而打扰用户
+- `canceling` 态新增「刷新退款进度」按钮，只读操作，不走二次点按确认
+
+**④ 全仓没有定时任务（P2）**
+
+两个「没有它就永远没人管」的问题：未付款单永远 `pending`、退款回调丢了永远 `canceling`。
+给 `pay-create` 加 `event.Type === 'Timer'` 分支（CloudBase 7 段 cron，
+`0 */10 * * * * *` 即每 10 分钟），做两件事：
+
+1. `svc_close_expired_orders(30)` —— 只关「超时 + 未付 + 非批量」；
+   已付的一律不动，线下批量单（`batch_no`）本来就不在线付，也不动
+2. `svc_list_stuck_refunds(10)` —— 列出滞留退款，逐个查微信，`SUCCESS` 就落库；
+   单轮最多 5 笔，防止把函数超时拖爆，剩下的下一轮继续
+
+⚠️ **cron 判定必须带 `!isHttp`**：HTTP 请求一定带 `httpMethod`，这样 body 里伪造
+`{"Type":"Timer"}` 进不来。函数入口还补了 JSON 字符串解析 —— MCP 的 `invokeFunction`
+就是把参数序列化成字符串传的，不解析时 `Type` 读不到，会掉进下单分支报 `NO_OPENID`
+（本轮实测踩到，第一次调用返回的就是这个，第二次才通）。
+
+**⑤ `profiles.owner_id` 无唯一索引（P2）**
+
+并发首登能插两行 profile，之后 `balance` 双写、扣款只扣一行 —— 最隐蔽的资金错账。
+补 `profiles_owner_id_uidx`；建之前先把万一存在的重复行处理掉：余额 / 积分并到最早那行，
+其余行 `owner_id` 改成「原值`#dup<id>`」而不是删除（保留数据，
+不破坏任何以 `profiles.id` 为外键的引用）。线上实测 6 条 profile，无重复。
+
+**真库实测**（`DO` 块 + 末尾 `RAISE EXCEPTION` 回滚，零残留）
+
+| 场景 | 结果 |
+|---|---|
+| 余额单取消 | 余额 100 → **110**，券回 `unused`、`order_id` 清空 |
+| 管理员手动核销的券 | 保持 `used`，不被连带回滚 |
+| 普通用户调 `admin_force_cancel_order` | 拒绝：`没有结算权限` |
+| 管理员强制取消余额单 | 余额 +10、券回滚 |
+| 普通用户调 `admin_list_orders` | 拒绝：`admin only` |
+| 超时未付单 | `closed_count=1`，其余三单（刚发 / 已付 / 批量）不动 |
+| 滞留退款 | 只列出超过 10 分钟的那一笔 |
+
+`invokeFunction` 实跑 cron 返回 `{"ok":true,"closed":1,"stuck":0}` —— 顺手关掉了线上
+订单 #8（管理员 17:47 发的 2 元测试单，一直没付款，本来也不会出现在大厅）。
+
+**数字**：迁移 63 → **64**，函数 164 → **170**（线上 `pg_proc` 实测），页面 38 → **39**，
+测试 168 → **181**（`tests/order-ops.test.js` 13 条，其中 8 条在 PGlite 跑真实 SQL），
+主包 1.01 → **1.03 MB / 185 个文件**，提交 103 → **104**。
+
+---
+
 
 ## 3. 数据库演进总览
 
@@ -1757,7 +1853,7 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 不查微信交易号 —— 钱从没进过商户号，也就没有回调可等。只有 `pay_channel='wxpay'` 的单
 才需要那套异步状态机。
 
-### 数据库函数（164 个，现役 CloudBase 库）
+### 数据库函数（170 个，现役 CloudBase 库）
 按职能分：
 - **订单**：`create_order`(17参) / `accept_order` / `complete_order` / `cancel_order` / `confirm_order_done` / `get_order_detail` / `order_relation` / `list_my_orders` / `search_my_orders` / `hide_my_order` / `order_hidden` …
 - **取消与退款（R60）**：`request_cancel_order`（发布方发起，已付直接进退款、已接单转协商）/
@@ -1766,6 +1862,10 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
   客户端调用实测 42501。
 - **余额支付（R61）**：`pay_order_with_balance`（全额抵扣；先看 `pay_status` 再扣钱，
   重复调用只扣一次；余额不足返回 `insufficient` 且分文不动）
+- **订单运维（R63）**：`admin_list_orders` / `admin_order_detail` / `admin_force_cancel_order`
+  （管理端查单与强制取消，`settle` / `support` 校验在函数内部）/
+  `svc_rollback_order_coupon`（券回滚，被四个终态出口调用）/ `svc_close_expired_orders` /
+  `svc_list_stuck_refunds`（后三个 `svc_` 前缀，只 GRANT `service_role`，供定时任务调用）
 - **图片**：`save_media_asset` / `get_media_asset` / `get_public_asset` / **`get_order_asset`**
 - **租赁**：`submit_rental_request` / `admin_set_rental_price` / `admin_create_rental_order` / `list_rental_items` / `admin_*_rental_item`
 - **结算与争议**：`submit_settle_feedback` / `admin_list_feedbacks` / `admin_resolve_feedback`
@@ -1872,7 +1972,7 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 | | `agreement/index` | 用户协议（强制勾选） |
 | **管理后台** | `admin/dashboard` | 工作台（所有后台入口的唯一汇总处） |
 | | `admin/staff`、`admin/flags` | 人员查找与授权矩阵、灰度总闸（仅 super） |
-| | `admin/review`、`admin/settle` | 接单员审核、结算核查 |
+| | `admin/review`、`admin/settle`、`admin/orders` | 接单员审核、结算核查、**订单运维**（R63：查单 / 强制取消并退款 / 退款重试） |
 | | `admin/reports`、`admin/feedback` | 举报处理、客服受理 |
 | | `admin/rental`、`admin/items` | 租赁报价、机型挂牌价 |
 | | `admin/banners` | 轮播管理 |
@@ -2176,6 +2276,13 @@ node campus-errand/tools/style-lint.js campus-errand
     `cloudbase/migrations/`，与 `campus-errand/` 同级，目前**不受版本控制**（工作区根不是 git 仓库）。
     现役库的完整结构只存在于这些脚本 + 线上库本身，**没有异地留档**；
     若要长期留档，需单独入仓库或另建一个仓库。
+14. ~~**退款回调丢失后订单永久停在 `canceling`**~~ ✅ **R63 已收口**，三层兜底：
+    详情页进页面自动补查（2 分钟节流）+ `canceling` 态手动「刷新退款进度」+
+    `pay-create` 定时任务每 10 分钟补查一次（微信侧 SUCCESS 就落库）。
+15. ~~**券核销后取消不回滚 / 管理端无法处理订单 / `profiles.owner_id` 无唯一索引 /
+    全仓无定时任务**~~ ✅ **R63 全部收口**（四条待办分别对应迁移里的券回滚函数、
+    三个 `admin_*` 订单 RPC + `pages/admin/orders`、`profiles_owner_id_uidx`、
+    `pay-create` 的 timer 触发器），详见 R63 章节。
 
 ### 🟢 设计取舍（不是 bug）
 - **抵扣券只记在订单上，接单员仍拿全额赏金**，差价由平台承担。

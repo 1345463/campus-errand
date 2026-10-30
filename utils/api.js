@@ -530,6 +530,62 @@ async function adminUpdatePaySettings(patch) {
   return rows.length ? rows[0] : null
 }
 
+// ---------------- 管理端订单运维（R63） ----------------
+// 为什么要有这一组：后台 30 多个 admin_* RPC 里没有一个能处理订单。
+// 退款回调丢了、商户号余额不足、用户投诉要强制退，客服以前只能改库。
+
+// 查单：keyword 命中订单号 / 标题 / 发布方 / 接单员；
+// status 支持 unpaid（未付款）/ refund（退款相关）/ doing / closed，空=全部。
+async function adminListOrders(keyword, status, limit) {
+  const result = await rpc('admin_list_orders', {
+    p_keyword: String(keyword || '').slice(0, 40),
+    p_status: String(status || ''),
+    p_limit: Number(limit) || 30,
+  })
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  return Array.isArray(result.data) ? result.data : []
+}
+
+// 强制取消：余额单在库里同步退完；微信单落 canceling 并返回待退款信息。
+// 服务端 admin_force_cancel_order 内部校验 settle / super 权限。
+async function adminForceCancelOrder(id, reason) {
+  const result = await rpc('admin_force_cancel_order', {
+    p_order_id: Number(id),
+    p_reason: String(reason || '').slice(0, 100),
+  })
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  const rows = Array.isArray(result.data) ? result.data : []
+  if (!rows.length) throw new Error('处理失败，请重试')
+  const row = rows[0]
+  if (row.result !== 'ok') throw new Error(row.message || '取消失败')
+  return row
+}
+
+// 退款卡住时的人工兜底：云函数先查微信退款单，没发出去才补发（幂等）
+function adminRetryRefund(id) {
+  return tcb.callTarget('refund', { action: 'adminRetry', orderId: Number(id) })
+}
+
+// 强制取消 + 必要时的退款编排。页面只调这一个，避免两步之间漏掉退款。
+async function adminCancelOrder(id, reason) {
+  const row = await adminForceCancelOrder(id, reason)
+  if (row.order_status !== 'canceling') {
+    return { ok: true, status: row.order_status, refunding: false, message: row.message || '' }
+  }
+  const r = await adminRetryRefund(id)
+  if (r && r.ok === false) {
+    // 库里已经进退款态、微信没发出去：必须把原话抛上去，不能吞成「成功」
+    throw new Error((r && r.error) || '退款发起失败，请到微信商户平台核对')
+  }
+  return {
+    ok: true,
+    status: (r && r.status) || 'canceling',
+    refunding: true,
+    wxStatus: (r && r.wxStatus) || '',
+    message: (r && r.message) || row.message || '已发起退款',
+  }
+}
+
 // 接单员：完成满 48 小时发布方仍未确认，可申请管理员核查
 async function submitSettleFeedback(id, text) {
   const result = await rpc('submit_settle_feedback', { p_order_id: id, p_text: text })
@@ -1794,6 +1850,10 @@ module.exports = {
   abandonOrder: abandonOrder,
   submitSettleFeedback: submitSettleFeedback,
   adminListFeedbacks: adminListFeedbacks,
+  adminListOrders: adminListOrders,
+  adminForceCancelOrder: adminForceCancelOrder,
+  adminRetryRefund: adminRetryRefund,
+  adminCancelOrder: adminCancelOrder,
   adminResolveFeedback: adminResolveFeedback,
   submitRentalRequest: submitRentalRequest,
   listMyRentalRequests: listMyRentalRequests,

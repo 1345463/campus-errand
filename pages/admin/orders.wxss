@@ -1,0 +1,84 @@
+.ops-search {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.ops-input {
+  flex: 1;
+  height: 76rpx;
+  padding: 0 24rpx;
+  background: #FFFFFF;
+  border-radius: var(--r-sm);
+  font-size: 28rpx;
+  color: var(--t1);
+}
+
+.ops-search-btn {
+  flex: 0 0 auto;
+  margin-left: 16rpx;
+  padding: 0 30rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  background: var(--brand);
+  color: #FFFFFF;
+  border-radius: var(--r-sm);
+  font-size: 28rpx;
+}
+
+/* 五个筛选块等分一行：靠负外边距抵消首尾 padding，
+   不用 :last-child —— style-lint 对伪类有限制，且这样各端表现一致 */
+.ops-tabs {
+  display: flex;
+  margin: 0 -6rpx 20rpx;
+}
+
+.ops-tab {
+  flex: 1;
+  margin: 0 6rpx;
+  height: 62rpx;
+  line-height: 62rpx;
+  text-align: center;
+  font-size: 26rpx;
+  color: var(--t3);
+  background: #FFFFFF;
+  border-radius: var(--r-sm);
+}
+
+.ops-tab-on {
+  color: #FFFFFF;
+  background: var(--brand);
+}
+
+.ops-card {
+  margin-bottom: 20rpx;
+}
+
+.ops-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+
+.ops-title {
+  flex: 1;
+  margin-right: 16rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--t1);
+  word-break: break-all;
+}
+
+.ops-badge {
+  flex: 0 0 auto;
+  padding: 4rpx 14rpx;
+  font-size: 24rpx;
+  color: var(--brand);
+  background: rgba(46, 124, 246, 0.10);
+  border-radius: 999rpx;
+}
+
+.ops-warn {
+  color: #E5484D;
+}

@@ -178,7 +178,49 @@ Page({
 
   onShow: function () {
     const page = this
-    return Promise.resolve(page._flagsReady).then(function () { return page.load() })
+    return Promise.resolve(page._flagsReady)
+      .then(function () {
+        return page.load()
+      })
+      .then(function () {
+        return page.autoSyncRefund()
+      })
+  },
+
+  // 退款中（canceling）时自动查一次微信退款结果。
+  // 为什么需要：微信退款是「先受理、后回调」，回调一旦丢了，订单就永远停在
+  // canceling —— 钱其实早就退了，只是没人把状态落库，用户只能看着「退款中」
+  // 干等。这里进页面顺手补一次，失败静默（不能因为兜底反而打扰用户）。
+  // 两分钟内只自动查一次：微信查单接口有频率限制，用户来回切页不能一直打。
+  autoSyncRefund: function () {
+    const page = this
+    const order = page.data.order || {}
+    const id = Number(page.data.id) || 0
+    if (!id || order.status !== 'canceling') return null
+
+    const key = 'refundSyncAt_' + id
+    let last = 0
+    try {
+      last = Number(wx.getStorageSync(key) || 0)
+    } catch (e) {
+      last = 0
+    }
+    if (last && Date.now() - last < 2 * 60 * 1000) return null
+    try {
+      wx.setStorageSync(key, Date.now())
+    } catch (e) {
+      // 存不进去也照样查，只是下次可能再查一遍
+    }
+
+    return api
+      .syncRefund(id)
+      .then(function (res) {
+        if (res && res.wxStatus === 'SUCCESS') return page.load()
+        return null
+      })
+      .catch(function () {
+        return null
+      })
   },
 
   onUnload: function () {
@@ -306,8 +348,11 @@ Page({
                 }
               } else if (order.status === 'waiting_confirm' && isOwner) {
                 primary = { key: 'confirm', label: '确认完成并支付 ¥' + order.reward }
+              } else if (order.status === 'canceling') {
+                // 钱在微信那边，改不了也拦不住，但允许主动查一次进度：
+                // 回调可能丢，用户不该只能干等（自动补查在 autoSyncRefund）
+                primary = { key: 'sync_refund', label: '刷新退款进度' }
               }
-              // canceling（退款中）谁都没有按钮：钱在路上，改不了也拦不住
 
               if (order.status === 'pending' && isOwner) {
                 if (order.pay_status !== 'paid') {
@@ -555,6 +600,12 @@ Page({
     // 直接弹确认会让接单员以为「点一下就完事了」，结果被服务端挡回来。
     if (action.key === 'complete') {
       page.doComplete()
+      return
+    }
+
+    // 查退款进度是只读操作，不需要二次确认，点一下就查
+    if (action.key === 'sync_refund') {
+      page.runRpc('sync_refund')
       return
     }
 
@@ -906,6 +957,11 @@ Page({
     if (kind === 'request_cancel') return '已提交取消申请，等接单员回应'
     if (kind === 'respond_cancel') return '已同意，退款处理中'
     if (kind === 'reject_cancel') return '已拒绝，订单继续'
+    if (kind === 'sync_refund') {
+      if (r.wxStatus === 'SUCCESS') return '退款已完成，订单已结束'
+      if (r.wxStatus === 'CLOSED') return '退款已关闭，钱没有出去'
+      return '微信还在处理退款，请稍后再看'
+    }
     if (r.refunding) return '已发起退款，1~3 个工作日到账'
     if (r.status === 'cancel_requested') return '已提交取消申请，等接单员回应'
     return '已取消'
@@ -928,7 +984,9 @@ Page({
               ? api.respondCancel(id, true)
               : kind === 'reject_cancel'
                 ? api.respondCancel(id, false)
-                : api.cancelOrder(id, reason)
+                : kind === 'sync_refund'
+                  ? api.syncRefund(id)
+                  : api.cancelOrder(id, reason)
     return call
       .then(function (res) {
         ui.toast({ title: page.resultText(kind, res), icon: 'success' })

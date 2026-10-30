@@ -29,6 +29,9 @@ const ENTRY_DEFS = [
   // 之前这里写 support，导致客服看得到入口却每次下架都被拒。
   { key: 'reports', label: '举报处理', icon: '🛡️', url: '/pages/admin/reports', check: 'review', desc: '下架违规订单' },
   { key: 'settle', label: '结算核查', icon: '🧾', url: '/pages/admin/settle', check: 'settle', desc: '48 小时未确认申诉' },
+  // 订单运维：查单、强制取消并退款、退款卡住时重试。
+  // 挂 settle 权限（不是 super）：管钱的岗位就该能处理钱的异常。
+  { key: 'order_ops', label: '订单运维', icon: '🧰', url: '/pages/admin/orders', check: 'settle', desc: '查单 / 强制退款' },
   { key: 'points', label: '积分商城', icon: '🎁', url: '/pages/admin/points', check: 'settle', flag: 'point_mall', desc: '商品 / 积分 / 核销' },
   { key: 'dispatch', label: '批量发单', icon: '📦', url: '/pages/admin/dispatch', check: 'dispatch', flag: 'admin_batch_order', desc: '同栋同层一次发多单' },
   { key: 'staff', label: '人员与授权', icon: '👥', url: '/pages/admin/staff', check: ['hr', 'super'], flag: 'staff_search', desc: '查找并开通权限' },

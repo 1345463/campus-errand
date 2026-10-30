@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-10-30 15:40** ｜ 累计 **58 轮迭代**、**39 个页面**、**38 张表**、**159 个数据库函数**、**9 个触发器**、**60 个迁移脚本**、**125 项回归测试**、主包 **0.99 MB**
+> 统计截止：**2026-10-30 15:55** ｜ 累计 **59 轮迭代**、**38 个页面**、**38 张表**、**159 个数据库函数**、**9 个触发器**、**60 个迁移脚本**、**125 项回归测试**、主包 **0.98 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -29,7 +29,7 @@
 |---|---|
 | 项目 | 仿「韶乐园跑跑」（韶关学院校园跑腿平台）做同类双边校园跑腿小程序 |
 | 学校 | 广东邮电职业技术学院 |
-| 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 39 个页面 |
+| 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 38 个页面 |
 | 云端 | WorkBuddy Cloud，应用 id `wbapp_yPJnSvicojPmz998PjKfpM`；**R48 起并行迁往 CloudBase `ceshi-d2g37cbg7c8f7ee48`**（数据库已迁完，待切前端 SDK） |
 | 数据库 | PostgreSQL 31 张表，全量 RLS，129 个 `SECURITY DEFINER` 函数、7 个触发器（CloudBase 新库 32 表 / 131 函数 / 9 触发器） |
 | 代码位置 | 工作区 `campus-errand/` |
@@ -1484,6 +1484,29 @@ stale 自动纠正、探测优先），全量 **125 项通过**；四件套全�
 
 ---
 
+### R59 · 删掉「提现管理」后台页（10-30 下午）
+
+R54 把提现改成**提交即自动打款**之后，`pages/admin/withdraw` 的日常职责只剩两件：
+自动转账失败时点一次重试、判定不能打款时点「转账失败」触发退款。这两条路径一次都没走过
+（两次真金实测都一次打通），后台却始终挂着一个「提现管理 · 人工转账后标记结果」的入口 ——
+描述与现在的行为不符，反过来让人以为提现还要手工点。按用户要求整页删除。
+
+删的是**界面**，不是能力：
+
+| 删 | 留 |
+|---|---|
+| `pages/admin/withdraw.{js,json,wxml}` | `admin_finish_withdrawal` RPC（`transfer` / `transfer-notify` / `transfer-svc` 三处转账回调都在调，删了会打断自动打款） |
+| `app.json` 里的路由 | `withdraw-api` 云函数（`create` / `transfer` / `summary` 是提现主链路） |
+| 工作台 `ENTRY_DEFS` 里的入口 | 用户侧钱包页的申请、确认收款流程 |
+
+真出现卡住的单子，处理退回服务端：`withdraw-api` 的 `summary` 会补转 pending 旧单；
+仍不通就直接调 RPC 收尾（失败分支会自动把金额退回钱包并写一条 `withdraw_refund` 流水）。
+
+**校验**：页面 39 → **38**，业务 JS 58 → 57，`check-mp.js` 扫描 JS 73 → 72、**0.98 MB / 180 个文件**，
+`style-lint.js` 33 wxss / 41 wxml，`npm test` **125 项**全过（没有测试引用该页）。
+
+---
+
 ## 3. 数据库演进总览
 
 ### 数据表（38 张，全量 RLS）
@@ -1880,8 +1903,8 @@ node campus-errand/tools/style-lint.js campus-errand
 | `check-mp.js` | **工作区根目录** | ① ESM 严格解析（抓重复声明）② JSON 可解析 ③ WXML 标签配对 + id 唯一 ④ app.json 页面文件齐全 ⑤ usingComponents 指向存在 ⑥ 按 packOptions.ignore 算真实上传体积 ⑦ 裸包名能在 miniprogram_npm 解析 |
 | `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
-**当前状态（2026-10-30 01:50 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
-`check-mp.js` **0.98MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（33 wxss / 42 wxml）通过，
+**当前状态（2026-10-30 15:55 复核）**：57 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
+`check-mp.js` **0.98MB / 2.00MB**（180 个文件，扫描 JS 72 个）通过，`style-lint.js`（33 wxss / 41 wxml）通过，
 `npm test` **125 项**全过。
 
 > 主包从 1.41MB 降到 **0.95MB**，是 R52 删掉 WorkBuddy Cloud SDK 与 `miniprogram_npm/` 的结果。
@@ -1891,10 +1914,10 @@ node campus-errand/tools/style-lint.js campus-errand
 > 它只参与四件套第 1 项的 `node --check`，不参与后三项。
 
 > ⚠️ **三个 JS 数字口径不同，别误判成文档漂移**（复核时三个都对，不要互相覆盖）：
-> **58** = 业务代码：`pages` 40 + `utils` 16 + `components` 2（上面第 1 步 `find` 的范围）；
+> **57** = 业务代码：`pages` 39 + `utils` 16 + `components` 2（上面第 1 步 `find` 的范围）；
 > **72** = `check-mp.js` 按 `packOptions.ignore` 算出的**真正会被上传**的 JS
 > （含 `app.js`，排除 `tests/` `tools/` `cloudfunctions/`）；
-> **79** = `scripts/sync_github.py` 四件套第 1 项实际检查的数量
+> **78** = `scripts/sync_github.py` 四件套第 1 项实际检查的数量
 > （`os.walk` 全扫，只排除 `node_modules` / `miniprogram_npm` / `.git`，**含** `tests/` 与 `tools/`）。
 
 **数据库侧**：每轮用上面的 `DO` 块冒充真实用户做角色化自检，最后主动抛错回滚，收尾一定跑脏数据复核（自测数量应为 0）。

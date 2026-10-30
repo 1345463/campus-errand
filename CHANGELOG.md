@@ -1155,3 +1155,14 @@ POST /api/ai-api {"action":"chat","model":"deepseek-flash"}
 
 - **校验**：`tests/ai-channel.test.js` +6 条（done 必带 ok、models/chat 成功分支、llmCatalog 防御、
   stale 自动纠正、探测优先）。全量 **125 项通过**；四件套全绿，主包 **0.99 MB / 183 文件**。
+
+## R59 · 删掉「提现管理」后台页（10-30 下午）
+
+R54 之后提现是**提交即自动打款**，后台那个页面只剩「重试转账」和「标记失败（触发退款）」两件事，
+而这两条路径一次都没走过。入口描述还写着「人工转账后标记结果」，与实际行为相反。按用户要求删除。
+
+- **删**：`pages/admin/withdraw.{js,json,wxml}`、`app.json` 路由、工作台 `ENTRY_DEFS` 入口。
+- **留**：`admin_finish_withdrawal` RPC（`transfer` / `transfer-notify` / `transfer-svc` 转发成功、
+  失败回调都在调它，删了等于掐断自动打款）、`withdraw-api` 云函数（提现主链路）、用户侧钱包流程。
+- **兜底**：卡单交给 `withdraw-api` 的 `summary` 补转；还不行直接调 RPC 收尾，失败分支自动退款。
+- **校验**：页面 39 → 38，业务 JS 58 → 57，主包 **0.98 MB / 180 文件**，`npm test` 125 项全过。

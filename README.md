@@ -16,7 +16,7 @@
 | 云托管 | **1** 个（固定出口 IP，专门对接商家转账） |
 | 迁移脚本 | **60** 条（全部可重放） |
 | 灰度开关 / 违规词 | **23** 个 / **292** 条（13 大类 + 4 条白名单） |
-| 回归测试 | **118** 项（含真实 PostgreSQL 执行） |
+| 回归测试 | **119** 项（含真实 PostgreSQL 执行） |
 | 小程序包体积 | **0.98 MB** / 上限 2 MB |
 
 ---
@@ -303,7 +303,7 @@ campus-errand/
 ├── cloudfunctions/   8 个：app-api / ai-api / pay-create / pay-notify /
 │                     tcb-proxy / transfer / transfer-notify / withdraw-api
 ├── cloudrun/         云托管 transfer-svc（固定出口 IP，对接商家转账）
-├── tests/            118 项回归测试（含 PGlite 真实 PostgreSQL）
+├── tests/            119 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 └── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅 / 支付方案
 ```
@@ -342,7 +342,7 @@ pending ──accept──> accepted ──complete──> waiting_confirm ─�
 
 ```bash
 npm ci --ignore-scripts
-npm test        # 118 项回归测试
+npm test        # 119 项回归测试
 npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预检
 ```
 

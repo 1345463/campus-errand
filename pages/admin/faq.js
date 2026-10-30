@@ -55,6 +55,7 @@ Page({
 
     // AI 设置
     aiEnabled: false,
+    aiModel: '',
     modelIds: [],
     modelNames: [],
     modelIndex: 0,
@@ -196,6 +197,7 @@ Page({
           list: list,
           loading: false,
           aiEnabled: !!settings.ai_enabled,
+          aiModel: String(settings.ai_model || ''),
           aiPrompt: String(settings.ai_prompt || ''),
           welcome: String(settings.welcome || ''),
           dailyLimit: String(Number(settings.daily_limit) || 20),
@@ -282,6 +284,9 @@ Page({
         return page.reloadChannel()
       })
       .then(function () {
+        return page.syncModel()
+      })
+      .then(function () {
         ui.hideLoading()
         page.setData({ channelSaving: false })
         ui.toast({ title: '通道已保存', icon: 'success' })
@@ -313,6 +318,9 @@ Page({
             return page.reloadChannel()
           })
           .then(function () {
+            return page.syncModel()
+          })
+          .then(function () {
             ui.hideLoading()
             page.setData({ channelClearing: false })
             ui.toast({ title: '已退回内置通道', icon: 'none' })
@@ -324,6 +332,29 @@ Page({
           })
       },
     })
+  },
+
+  // 换通道后模型名必然要跟着换：原来存的是 hy3，切到 DeepSeek 就只剩 deepseek-chat。
+  // 不自动跟随的话，用户填完通道点「测试连接」会报 404，还看不出是这里的问题。
+  syncModel: function () {
+    const page = this
+    const picked = page.data.modelIds[page.data.modelIndex] || ''
+    if (!picked || picked === page.data.aiModel) return Promise.resolve(null)
+    return api
+      .adminUpdateFaqSettings({ ai_model: picked })
+      .then(function () {
+        page.setData({ aiModel: picked })
+        return null
+      })
+      .catch(function () {
+        // 跟随失败不影响通道本身，手点一次「保存 AI 设置」也能改
+        ui.toast({
+          title: '通道已保存，但模型名没跟上，请在「AI 兜底」里点一次保存',
+          icon: 'none',
+          duration: 3000,
+        })
+        return null
+      })
   },
 
   // 只刷新「通道 + 模型目录」两块，不整页 load ——

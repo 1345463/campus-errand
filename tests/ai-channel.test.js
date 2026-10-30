@@ -141,3 +141,14 @@ test('退回内置通道时显式传空串（传 null 是「不修改」）', ()
   const fn = faqJs.slice(faqJs.indexOf('clearChannel: function'))
   assert.match(fn.slice(0, 900), /base_url: '', api_key: '', models: ''/)
 })
+
+test('换通道后模型名自动跟随，否则 ai_model 还停在 hy3 → 必然 404', () => {
+  assert.match(faqJs, /syncModel: function/)
+  const save = faqJs.slice(faqJs.indexOf('saveChannel: function'))
+  assert.match(save.slice(0, 1600), /page\.syncModel\(\)/)
+  const clear = faqJs.slice(faqJs.indexOf('clearChannel: function'))
+  assert.match(clear.slice(0, 1200), /page\.syncModel\(\)/)
+  // 比较基准必须是「已保存的 ai_model」，不能拿当前选中值跟自己比
+  const sync = faqJs.slice(faqJs.indexOf('syncModel: function'))
+  assert.match(sync.slice(0, 500), /picked === page\.data\.aiModel/)
+})

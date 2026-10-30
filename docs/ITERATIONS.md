@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-10-30 15:10** ｜ 累计 **58 轮迭代**、**39 个页面**、**38 张表**、**159 个数据库函数**、**9 个触发器**、**60 个迁移脚本**、**118 项回归测试**、主包 **0.98 MB**
+> 统计截止：**2026-10-30 15:10** ｜ 累计 **58 轮迭代**、**39 个页面**、**38 张表**、**159 个数据库函数**、**9 个触发器**、**60 个迁移脚本**、**119 项回归测试**、主包 **0.98 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -1426,10 +1426,10 @@ svc_rpc('wx:attacker', 'svc_ai_runtime_config', '{}')
 `dbRead: true` 说明云函数真能经 `{env}.api.tcloudbasegateway.com/v1/rdb/rest/rpc/ai_runtime_config`
 读到库 —— 这条路径之前只有 `app-api` 用过，`ai-api` 是新接的，必须验。
 
-**校验**：新增 `tests/ai-channel.test.js` 15 条（RLS 零 policy、改名后只 GRANT service_role、
+**校验**：新增 `tests/ai-channel.test.js` 16 条（RLS 零 policy、改名后只 GRANT service_role、
 `svc_` 前缀通用断言、不回明文、NULL 语义、TTL、双条件、402、前端导出、password 输入框）。
 `feedback-ui.test.js` 里 `builtin: true` 那条改成 `builtin: builtin`（自定义通道是 false，语义变了）。
-全量 **118 项通过**；四件套全绿，主包 **0.98 MB**（多了一张卡片）。
+全量 **119 项通过**；四件套全绿，主包 **0.98 MB**（多了一张卡片）。
 
 **待用户填**：后台「智能客服配置 → 大模型通道」填 Base URL + API Key 即可切过去。
 
@@ -1833,7 +1833,7 @@ node campus-errand/tools/style-lint.js campus-errand
 
 **当前状态（2026-10-30 01:50 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
 `check-mp.js` **0.98MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（33 wxss / 42 wxml）通过，
-`npm test` **118 项**全过。
+`npm test` **119 项**全过。
 
 > 主包从 1.41MB 降到 **0.95MB**，是 R52 删掉 WorkBuddy Cloud SDK 与 `miniprogram_npm/` 的结果。
 

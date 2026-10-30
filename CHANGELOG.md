@@ -1106,6 +1106,6 @@ key 留空 = 传 `null` = **不修改**，所以日常改 Base URL 不会把已�
 验完**已删除该分支并重新部署**，现在 `diag_r58` 返回 `TOKEN_INVALID`（正常校验路径）。
 改名 `svc_ai_runtime_config` 后又重验一次：`dbRead: true`（489ms，冷启动）。
 
-- **校验**：新增 `tests/ai-channel.test.js` 15 条；`feedback-ui.test.js` 里 `builtin: true`
-  改成 `builtin: builtin`（自定义通道是 false，语义变了）。全量 **118 项通过**；四件套全绿，
+- **校验**：新增 `tests/ai-channel.test.js` 16 条；`feedback-ui.test.js` 里 `builtin: true`
+  改成 `builtin: builtin`（自定义通道是 false，语义变了）。全量 **119 项通过**；四件套全绿，
   主包 **0.98 MB / 183 文件**（多了一张卡片）。

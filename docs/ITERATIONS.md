@@ -1622,7 +1622,7 @@ accepted --申请取消---> cancel_requested --同意--> canceling --> canceled
 | 表 | 用途 | 引入轮次 |
 |---|---|---|
 | `profiles` | 用户资料、角色、认证状态、积分、信誉分 | R1 |
-| `orders` | 任务订单（含租赁工单、43 列；R60 起含退款与取消协商字段，R61 起含支付渠道） | R1 / R60 / R61 |
+| `orders` | 任务订单（含租赁工单、50 列；R60 起含退款与取消协商字段，R61 起含支付渠道） | R1 / R60 / R61 |
 | `addresses` | 我的常用地址 | R1 |
 | `runner_applications` | 接单员实名认证申请（证件照脱敏） | R1 |
 | `rental_requests` | 相机租赁预填申请 | R11 |

@@ -1241,3 +1241,47 @@ R54 之后提现是**提交即自动打款**，后台那个页面只剩「重试
 - **校验**：新增 `tests/settle-pay.test.js` 10 条，全量 **168 项**通过；四件套全绿，
   主包 **1.01 MB / 181 文件**，迁移 **63** 条。
 - **影响**：线上 `done` 订单 0 笔、赏金流水 0 元，**未造成真实资金损失**。
+
+_提交时间：2026-10-30 23:00_
+
+## R63 · 券要退、单要能管、没人管的自愈（10-30 深夜）
+
+上一轮列的两条 P1 + 两条 P2，这轮一起收口。真库 `DO` 块实测 7 项全过、零残留。
+
+**① 券核销后取消不回滚（P2）** —— `create_order` 下单即把 `point_redemptions` 置 `used`，
+可取消 / 退款路径一处都没放回去，用户的券永久蒸发。补 `svc_rollback_order_coupon(order_id)`，
+只回滚 `order_id` 匹配本单的记录（管理员手动核销的兑换码 `order_id` 为 NULL，天然不受影响）。
+回滚点铺在 5 个函数的 8 个终态出口：`request_cancel_order`（未付 / 余额两分支）、
+`respond_cancel_request`、`svc_finish_order_refund` 的 SUCCESS、`admin_force_cancel_order`
+三个分支、`svc_close_expired_orders`。
+
+> **微信单必须在退款 SUCCESS 才还券**：`CLOSED` 说明钱没出去、订单要回滚重试，
+> 提前还券等于同一张券抵两次。
+
+**② 管理端没有能处理订单的接口（P1）** —— 30 多个 `admin_*` RPC 里没有一个能改订单状态或动退款，
+退款回调丢了只能改库。补 `admin_list_orders` / `admin_order_detail` / `admin_force_cancel_order`
+三个 RPC 与页面 `pages/admin/orders`（挂 `settle` 权限）。**权限只在 DB 函数里判一次**，
+云函数 `adminRetry` 经 `svcRpc(uid,'admin_order_detail')` 间接验权，JS 里不重复实现 `is_admin`
+（测试用 `doesNotMatch(/is_admin/)` 钉住）。
+
+**③ `syncRefund` 前端零调用（P1）** —— 从 R60 写好但一处没调，回调一丢订单永久卡 `canceling`
+而钱早退了。详情页 `autoSyncRefund` 进页面自动补查（**2 分钟节流**，微信查单有频率限制，
+失败静默），`canceling` 态加手动「刷新退款进度」按钮。
+
+**④ 全仓没有定时任务（P2）** —— `pay-create` 加 `event.Type === 'Timer'` 分支
+（CloudBase 7 段 cron，`0 */10 * * * * *`），每 10 分钟跑 `svc_close_expired_orders(30)`
+（只关「超时 + 未付 + 非批量」，已付与线下批量单一律不动）与 `svc_list_stuck_refunds(10)`
+（单轮最多补查 5 笔，防止拖爆函数超时）。
+⚠️ **cron 判定必须带 `!isHttp`** —— HTTP 请求一定带 `httpMethod`，否则 body 里伪造
+`{"Type":"Timer"}` 就能进来。入口补了 JSON 字符串解析：MCP 的 `invokeFunction` 把参数
+序列化成字符串传，不解析时 `Type` 读不到，会掉进下单分支报 `NO_OPENID`（本轮实测踩到）。
+
+**⑤ `profiles.owner_id` 无唯一索引（P2）** —— 并发首登能插两行 profile，之后 `balance` 双写、
+扣款只扣一行，是最隐蔽的资金错账。补 `profiles_owner_id_uidx`，重复行不删除而是把
+`owner_id` 改成「原值`#dup<id>`」保留数据。线上实测 6 条 profile，无重复。
+
+- **实测**（真库 `DO` 块）：余额单取消余额 100 → 110 且券回 `unused`、管理员手动核销的券保持
+  `used`、普通用户调管理接口被拒、强制取消生效、超时关单只关 1 笔、滞留退款只列超 10 分钟那笔。
+  `invokeFunction` 实跑 cron 返回 `{"ok":true,"closed":1,"stuck":0}`。
+- **校验**：新增 `tests/order-ops.test.js` 13 条（其中 8 条在 PGlite 跑真实 SQL），
+  全量 **181 项**通过；四件套全绿，主包 **1.03 MB / 185 文件**，迁移 **64** 条、函数 **170** 个。

@@ -30,8 +30,8 @@
 | 项目 | 仿「韶乐园跑跑」（韶关学院校园跑腿平台）做同类双边校园跑腿小程序 |
 | 学校 | 广东邮电职业技术学院 |
 | 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 39 个页面 |
-| 云端 | WorkBuddy Cloud，应用 id `wbapp_yPJnSvicojPmz998PjKfpM`；**R48 起并行迁往 CloudBase `ceshi-d2g37cbg7c8f7ee48`**（数据库已迁完，待切前端 SDK） |
-| 数据库 | PostgreSQL 31 张表，全量 RLS，129 个 `SECURITY DEFINER` 函数、7 个触发器（CloudBase 新库 32 表 / 131 函数 / 9 触发器） |
+| 云端 | **CloudBase `ceshi-d2g37cbg7c8f7ee48`（现役唯一）**。原 WorkBuddy Cloud（应用 id `wbapp_yPJnSvicojPmz998PjKfpM`）已随 R52 退役；历史值 31 表 / 129 函数 / 7 触发器属旧库，仅作存档 |
+| 数据库 | CloudBase PostgreSQL：**38** 张表，全量 RLS，**170** 个 `SECURITY DEFINER` 函数、**9** 个触发器（2026-10-30 复核） |
 | 代码位置 | 工作区 `campus-errand/` |
 | 发布状态 | **企业主体小程序已绑定，微信审核中（2026-10-27）**。此前经 WorkBuddy 试用版（微信「试用小程序」，14 天 / 15 人 / 不能转正式版）完成真机验证，试用期已结束；审核通过后发布正式版。 |
 
@@ -1864,8 +1864,11 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
   重复调用只扣一次；余额不足返回 `insufficient` 且分文不动）
 - **订单运维（R63）**：`admin_list_orders` / `admin_order_detail` / `admin_force_cancel_order`
   （管理端查单与强制取消，`settle` / `support` 校验在函数内部）/
-  `svc_rollback_order_coupon`（券回滚，被四个终态出口调用）/ `svc_close_expired_orders` /
-  `svc_list_stuck_refunds`（后三个 `svc_` 前缀，只 GRANT `service_role`，供定时任务调用）
+  `svc_rollback_order_coupon`（券回滚，铺在 5 个函数的 **8 个终态出口**：
+  `request_cancel_order` 未付 + 余额两分支、`respond_cancel_request`、
+  `svc_finish_order_refund` 的 SUCCESS、`admin_force_cancel_order` 三个分支、
+  `svc_close_expired_orders`）/ `svc_list_stuck_refunds`
+  （后三个 `svc_` 前缀，只 GRANT `service_role`，供定时任务调用）
 - **图片**：`save_media_asset` / `get_media_asset` / `get_public_asset` / **`get_order_asset`**
 - **租赁**：`submit_rental_request` / `admin_set_rental_price` / `admin_create_rental_order` / `list_rental_items` / `admin_*_rental_item`
 - **结算与争议**：`submit_settle_feedback` / `admin_list_feedbacks` / `admin_resolve_feedback`
@@ -1982,17 +1985,21 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 
 ### 工具模块（`utils/`，16 个）
 
-`api.js`（唯一允许 async 的地方）、`ui.js`（wx API 安全封装）、`upload.js`（二进制上传 + 三条读图通道）、`cloud.js`、
-`guard.js`（登录/命名统一入口；R44 加 `requirePhone()` 手机号闸门引导）、`flags.js`、`perms.js`、`moderation.js`、
-`moderation-words.js`、`services.js`、`campus.js`、`config.js`、`agreement.js`、
-`motion.js`（R31 新增：动效与触感统一入口）、`workbuddy-cloud-diagnostics.js`、
+`api.js`（唯一允许 async 的地方）、`ui.js`（wx API 安全封装）、`upload.js`（分片上传 + 三条读图通道）、
+`tcb.js`（R52 新增：网关直连优先、失败退 `tcb-proxy` 的通道层）、
+`pay.js`（R50 新增：JSAPI 下单与补付）、`guard.js`（登录/命名统一入口；R44 加 `requirePhone()` 手机号闸门引导）、
+`flags.js`、`perms.js`、`moderation.js`、`moderation-words.js`、`services.js`、`campus.js`、`config.js`、`agreement.js`、
+`motion.js`（R31 新增：动效与触感统一入口）、
 `login-return.js`（R39–R41 引入：登录跳走的返回归口：走之前先 `saveDraft()` 存草稿、记录受限白名单地址，30 分钟内回来自动 `navigateTo` 回去）
+
+> ⚠️ 早期文档里列出的 `cloud.js` 与 `workbuddy-cloud-diagnostics.js` 已在 **R52** 随
+> `miniprogram_npm/` 一起删除（主包因此从 1.44 MB 降到 0.94 MB），不要再按旧清单找这两个文件。
 
 ### 组件（2 个）
 - `components/nav-bar`（自定义导航栏，fixed；高度由 `motion.systemInfo()` 计算）
 - `components/room-picker`（三个 scroll-view 列 + 自定义输入，非原生 picker-view）
 
-### 云函数（`cloudfunctions/`，R49 起，7 个）
+### 云函数（`cloudfunctions/`，R49 起，8 个）
 
 ⚠️ **整个 `cloudfunctions/` 目录已加进 `project.config.json` 的 `packOptions.ignore`** ——
 云函数是服务端代码，不能进小程序包（见第 5 章）。它只参与四件套第 1 项的 `node --check`。
@@ -2005,9 +2012,10 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 | `transfer` | 商家转账到零钱（提现执行）：校验 secret → `transfer_prepare` 锁单 → 调微信 API | CloudBase `ceshi` |
 | `transfer-notify` | 商家转账结果回调（Event + 网关路由）：解密后写 `state` / `fail_reason` | CloudBase `ceshi` |
 | `withdraw-api` | 提现管理 API（供管理后台调用，service_role 访问新库） | CloudBase `ceshi` |
+| `ai-api` | **智能客服代理**（R57 重建）：验 HMAC 令牌 → 取 `ai_secrets` 通道配置 → 转发大模型；密钥只留在服务端 | CloudBase `ceshi` |
 | `tcb-proxy` | **网关转发**（零配置、白名单目标；不持有任何密钥，身份由上游函数各自校验） | **小程序自己的微信云开发环境** |
 
-前 6 个走 CloudBase MCP/网关部署；`tcb-proxy` 因要跑在小程序自身的云开发环境里，用
+前 7 个走 CloudBase MCP/网关部署；`tcb-proxy` 因要跑在小程序自身的云开发环境里，用
 微信开发者工具 CLI 部署（`cli cloud functions deploy --env <EnvId>`）。
 
 ### 灰度开关（23 个）
@@ -2191,9 +2199,9 @@ node campus-errand/tools/style-lint.js campus-errand
 | `check-mp.js` | **工作区根目录** | ① ESM 严格解析（抓重复声明）② JSON 可解析 ③ WXML 标签配对 + id 唯一 ④ app.json 页面文件齐全 ⑤ usingComponents 指向存在 ⑥ 按 packOptions.ignore 算真实上传体积 ⑦ 裸包名能在 miniprogram_npm 解析 |
 | `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
-**当前状态（2026-10-30 16:45 复核）**：57 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
-`check-mp.js` **0.99MB / 2.00MB**（180 个文件，扫描 JS 72 个）通过，`style-lint.js`（33 wxss / 41 wxml）通过，
-`npm test` **150 项**全过。
+**当前状态（2026-10-30 23:30 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
+`check-mp.js` **1.03MB / 2.00MB**（185 个文件，扫描 JS 73 个）通过，`style-lint.js`（35 wxss / 42 wxml）通过，
+`npm test` **181 项**全过。
 
 > 主包从 1.41MB 降到 **0.95MB**，是 R52 删掉 WorkBuddy Cloud SDK 与 `miniprogram_npm/` 的结果。
 
@@ -2202,10 +2210,12 @@ node campus-errand/tools/style-lint.js campus-errand
 > 它只参与四件套第 1 项的 `node --check`，不参与后三项。
 
 > ⚠️ **三个 JS 数字口径不同，别误判成文档漂移**（复核时三个都对，不要互相覆盖）：
-> **57** = 业务代码：`pages` 39 + `utils` 16 + `components` 2（上面第 1 步 `find` 的范围）；
-> **72** = `check-mp.js` 按 `packOptions.ignore` 算出的**真正会被上传**的 JS
+> **58** = 业务代码：`pages` 40 + `utils` 16 + `components` 2（上面第 1 步 `find` 的范围）；
+>   其中 `pages` 是 40 个 `.js` 而 `app.json` 只注册了 39 个页面 —— 多出的一个是
+>   `pages/paytest/paytest.js`（R50 支付联调留下的调试页，未注册、无跳转点，但仍会打进包）。
+> **73** = `check-mp.js` 按 `packOptions.ignore` 算出的**真正会被上传**的 JS
 > （含 `app.js`，排除 `tests/` `tools/` `cloudfunctions/`）；
-> **84** = `scripts/sync_github.py` 四件套第 1 项实际检查的数量
+> **89** = `scripts/sync_github.py` 四件套第 1 项实际检查的数量
 > （`os.walk` 全扫，只排除 `node_modules` / `miniprogram_npm` / `.git`，**含** `tests/` 与 `tools/`）。
 
 **数据库侧**：每轮用上面的 `DO` 块冒充真实用户做角色化自检，最后主动抛错回滚，收尾一定跑脏数据复核（自测数量应为 0）。
@@ -2272,7 +2282,7 @@ node campus-errand/tools/style-lint.js campus-errand
     前端整体切到 CloudBase（`utils/cloud.js` 与 `miniprogram_npm/` 已删除，
     换为 `utils/tcb.js` + `svc_rpc` 代持身份），WorkBuddy Cloud 退役，**现役库只剩一套**，
     不再有「只改一边对不上账」的问题。
-13. **`cloudbase/` 不在 git 仓库内** ⚠️ **仍是未决项**：58 批迁库脚本在工作区根下
+13. **`cloudbase/` 不在 git 仓库内** ⚠️ **仍是未决项**：64 批迁库脚本在工作区根下
     `cloudbase/migrations/`，与 `campus-errand/` 同级，目前**不受版本控制**（工作区根不是 git 仓库）。
     现役库的完整结构只存在于这些脚本 + 线上库本身，**没有异地留档**；
     若要长期留档，需单独入仓库或另建一个仓库。
@@ -2290,10 +2300,14 @@ node campus-errand/tools/style-lint.js campus-errand
 - **`hall_page` 开关被主动删除** —— 大厅是任务列表唯一入口，关掉等于直接下掉功能、没有回滚路径。
 - **租赁下架 ≠ 删除**（历史租赁申请仍引用 item_id）；**改价要点保存才生效**（金额敏感，不做失焦即改）。
 - **前台积分14个新开关默认全 false**，只有 super 能切。
-- **智能客服的模型通道（R57 已重建）**：走 CloudBase 的 OpenAI 兼容接口，密钥 `TCB_AI_KEY` 只在
-  `ai-api` 云函数里、由云函数代持调用；端上只带会话令牌，**拿不到 Key**。
-  仍不支持在后台填自己的第三方 API Key / Base URL —— 要接第三方模型得改 `ai-api` 的上游地址，
-  可用环境变量 `TCB_AI_MODELS` 扩展模型清单（先把对应 Token 资源包买上，否则 403）。
+- **智能客服的模型通道（R57 已重建、R58 已可配置）**：走 CloudBase 的 OpenAI 兼容接口，密钥
+  `TCB_AI_KEY` 只在 `ai-api` 云函数里、由云函数代持调用；端上只带会话令牌，**拿不到 Key**。
+  ~~仍不支持在后台填自己的第三方 API Key / Base URL~~ ✅ **R58 起已支持**（2026-10-30 复核）：
+  后台「智能客服配置 → 大模型通道」可填 Base URL + API Key + 模型名，存 `ai_secrets` 表
+  （RLS 零 policy，只有 service_role 能取），60 秒 TTL 生效，**优先级高于环境变量**；
+  现役第三方模型 `deepseek-flash`。
+  ⚠️ 内置通道仍是静态模型清单（CloudBase 无列表接口，本环境只有 `hy3` / `hy3-preview`），
+  要用 `TCB_AI_MODELS` 扩展得先把对应 Token 资源包买上，否则 403。
 - ~~AI 每日配额记在本地 `storage`~~ **R39 起改为服务端按账号记账**：
   `begin_support_ai` 先预留、`finish_support_ai` 成功计入 / 失败释放，
   记录落在 `support_ai_requests`（按 Asia/Singapore 日期切分，预占 130 秒自动过期）。
@@ -2301,6 +2315,14 @@ node campus-errand/tools/style-lint.js campus-errand
   所以这套配额从「端上路径的配额」升级为真正的服务端限额（只在令牌有效的前提下成立）。
 - **客服会话的上下文靠端上拼 history 携带**：目前最多带 `history_turns` 轮（默认 3），
   更早的内容模型看不到；也没有做会话长度裁剪，超长对话理论上会顶到模型上限。
+
+### 🟡 已知但未处理（R63 新增）
+16. **`pages/paytest/` 孤儿调试页仍在包里**：R50 联调微信支付时建的 4 个文件（约 194 行），
+    `app.json` 未注册、全仓无任何跳转点，但不在 `packOptions.ignore` 中，会被打进主包、
+    也计入四件套第 1 项的 58 个业务 JS。确认不再需要后整个目录删除即可（删除不影响任何页面跳转）。
+17. **`profiles.owner_id` 唯一索引已补，但重复行的归并逻辑只在迁移里跑过一次**：`profiles_owner_id_uidx`
+    建完后若再有并发首登插入，会直接报唯一冲突而不是静默双写 —— 这是期望行为（宁可报错也不要错账），
+    但要留意 `ensure_my_profile` 的报错文案是否对用户友好。
 
 ---
 

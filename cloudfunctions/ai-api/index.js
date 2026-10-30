@@ -159,7 +159,13 @@ function envChannel() {
 function readDbChannel() {
   if (!TCB_ENV || !TCB_KEY) return Promise.resolve(null)
   const host = TCB_ENV + '.api.tcloudbasegateway.com'
-  return request('POST', '/v1/rdb/rest/rpc/ai_runtime_config', {}, 'https://' + host, TCB_KEY, DB_TIMEOUT_MS)
+  // ⚠️ 函数名必须是 svc_ 前缀。app-api 的 rpc 入口只挡「svc_ 前缀」和一份人工维护的
+  // SERVER_ONLY_FNS 名单，而这个函数本身没做权限校验（只靠 GRANT service_role 挡）——
+  // 可 svc_rpc 恰好就是以 service_role 身份 EXECUTE 的，GRANT 对它完全无效。
+  // 也就是说叫 ai_runtime_config 时，任何登录用户 rpc 一次就能读到明文 API Key。
+  // 改成 svc_ 前缀后，svc_rpc 里 left(p_fn,4)='svc_' 的硬规则会直接拒掉；
+  // 而这里走的是 PostgREST 直连（不经过 svc_rpc），自己照样读得到。
+  return request('POST', '/v1/rdb/rest/rpc/svc_ai_runtime_config', {}, 'https://' + host, TCB_KEY, DB_TIMEOUT_MS)
     .then((r) => {
       if (r.status < 200 || r.status >= 300) return null
       let data = r.body

@@ -1078,6 +1078,21 @@ key 留空 = 传 `null` = **不修改**，所以日常改 Base URL 不会把已�
 「退回内置」才显式传三个空串。新增 `llmCatalog()` 带 `source` / `builtin` / `probeErr`，
 `llmModels()` 仍返回数组，其他调用点不受影响。
 
+### 自查发现一个真漏洞：函数名必须 `svc_` 前缀
+
+写完测试回头审 `app-api` 的 rpc 入口，发现它只挡两类名字：`svc_` 前缀，和一份人工维护的
+`SERVER_ONLY_FNS` 名单。而 `svcRpc()` 是**以 service_role 身份 EXECUTE** 目标函数的 ——
+所以 `ai_runtime_config` 上的 `REVOKE FROM anon, authenticated` **完全无效**：
+任何登录用户 `rpc('ai_runtime_config')` 就能把明文 API Key 读走。
+
+修法不是往名单里加一行，而是**改名成 `svc_ai_runtime_config`** —— `svc_rpc` 里
+`left(p_fn,4)='svc_'` 是硬规则，从生成上拦死；云函数自己走 PostgREST 直连、不经过
+`svc_rpc`，照样读得到。实测 `svc_rpc('wx:attacker','svc_ai_runtime_config','{}')`
+报 `不允许调用内部函数`。
+
+测试里另加一条通用断言：`ai-api` 里所有 `/v1/rdb/rest/rpc/xxx` 的 `xxx` 必须以 `svc_` 开头，
+以后再加读密钥的 RPC 一律拦得住。
+
 ### 端到端实测
 
 云函数此前**只有 `app-api` 走过** `/v1/rdb/rest/rpc/` 这条读库路径，`ai-api` 是新接的，必须真验一次。
@@ -1089,7 +1104,8 @@ key 留空 = 传 `null` = **不修改**，所以日常改 Base URL 不会把已�
 ```
 
 验完**已删除该分支并重新部署**，现在 `diag_r58` 返回 `TOKEN_INVALID`（正常校验路径）。
+改名 `svc_ai_runtime_config` 后又重验一次：`dbRead: true`（489ms，冷启动）。
 
-- **校验**：新增 `tests/ai-channel.test.js` 14 条；`feedback-ui.test.js` 里 `builtin: true`
-  改成 `builtin: builtin`（自定义通道是 false，语义变了）。全量 **117 项通过**；四件套全绿，
+- **校验**：新增 `tests/ai-channel.test.js` 15 条；`feedback-ui.test.js` 里 `builtin: true`
+  改成 `builtin: builtin`（自定义通道是 false，语义变了）。全量 **118 项通过**；四件套全绿，
   主包 **0.98 MB / 183 文件**（多了一张卡片）。

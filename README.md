@@ -14,9 +14,9 @@
 | 数据库 | **38** 表 / **159** 个函数 / **9** 个触发器 |
 | 云函数 | **8** 个 |
 | 云托管 | **1** 个（固定出口 IP，专门对接商家转账） |
-| 迁移脚本 | **59** 条（全部可重放） |
+| 迁移脚本 | **60** 条（全部可重放） |
 | 灰度开关 / 违规词 | **23** 个 / **292** 条（13 大类 + 4 条白名单） |
-| 回归测试 | **117** 项（含真实 PostgreSQL 执行） |
+| 回归测试 | **118** 项（含真实 PostgreSQL 执行） |
 | 小程序包体积 | **0.98 MB** / 上限 2 MB |
 
 ---
@@ -96,8 +96,9 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
   也可以在后台「智能客服配置 → 大模型通道」填任意 OpenAI 兼容服务（DeepSeek / 通义 / Kimi / 自建），
   对方有 `/models` 就实时拉，没有就用配置里手写的。
 - **自定义通道的密钥不进前端**：存 `ai_secrets` 表，**RLS 开着但一条 policy 都不建** ——
-  anon / authenticated 直连 0 行；读它的 `ai_runtime_config()` 只 GRANT `service_role`，
-  后台只能看到「有没有」和末四位。
+  anon / authenticated 直连 0 行；读它的 `svc_ai_runtime_config()` 只 GRANT `service_role`，
+  后台只能看到「有没有」和末四位。函数名**必须 `svc_` 前缀** —— `svc_rpc` 是拿 service_role
+  身份 EXECUTE 的，GRANT 拦不住它，只有 `svc_` 前缀能被 `svc_rpc` 的硬规则直接拒掉。
 
 ### 6. 权限、灰度与闸门都在服务端
 
@@ -302,7 +303,7 @@ campus-errand/
 ├── cloudfunctions/   8 个：app-api / ai-api / pay-create / pay-notify /
 │                     tcb-proxy / transfer / transfer-notify / withdraw-api
 ├── cloudrun/         云托管 transfer-svc（固定出口 IP，对接商家转账）
-├── tests/            117 项回归测试（含 PGlite 真实 PostgreSQL）
+├── tests/            118 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 └── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅 / 支付方案
 ```
@@ -317,7 +318,7 @@ campus-errand/
   `media_uploads` / `media_upload_parts` 等；`profile_phones` / `account_deletions` 不开 policy，只给函数访问
 - **159 个函数**，命名约定 `p_` 前缀参数
 - **9 个触发器**：订单消息推送、图片归属校验、手机号闸门 ×3 等
-- **59 条迁移脚本**，全部幂等 —— 在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，
+- **60 条迁移脚本**，全部幂等 —— 在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，
   **不在本仓库内**）。完整清单见 [`docs/ITERATIONS.md` 第 3 章](docs/ITERATIONS.md)
 - 包内 `sql/` 还有 28 个早期脚本，属已退役旧库的结构参考，不再对现役库执行
 
@@ -341,7 +342,7 @@ pending ──accept──> accepted ──complete──> waiting_confirm ─�
 
 ```bash
 npm ci --ignore-scripts
-npm test        # 117 项回归测试
+npm test        # 118 项回归测试
 npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预检
 ```
 
@@ -394,7 +395,7 @@ npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预�
   改通道前务必重新二分实测。
 - **AI 模型目录是静态内置的**（CloudBase 没有列表接口）。本环境只有 `hy3` / `hy3-preview` 可用，
   要用 DeepSeek / GLM / Kimi 等需先买 Token 资源包，再把模型名填进 `TCB_AI_MODELS`。
-- **`cloudbase/migrations/` 的 59 条脚本不在 git 内** —— 不是被 `.gitignore` 忽略，而是仓库根是
+- **`cloudbase/migrations/` 的 60 条脚本不在 git 内** —— 不是被 `.gitignore` 忽略，而是仓库根是
   `campus-errand/`、`cloudbase/` 是同级兄弟目录。空库重建目前只能靠这份本地目录，建议尽快纳入版本控制。
 - **短信仍未开通**：腾讯云 SMS 的 5 个环境变量未配置。主路径已是微信 `getPhoneNumber`（免短信），
   短信只作降级通道；配齐这 5 个变量仍有价值（代码已就绪，配完即生效）。

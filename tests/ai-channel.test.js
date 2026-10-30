@@ -27,7 +27,9 @@ const ROOT = path.join(__dirname, '..')
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8')
 
 const SQL_PATH = path.join(ROOT, '..', 'cloudbase', 'migrations', '20261030150000_ai_channel_config.sql')
+const SQL2_PATH = path.join(ROOT, '..', 'cloudbase', 'migrations', '20261030160000_ai_runtime_config_rename.sql')
 const sql = fs.existsSync(SQL_PATH) ? fs.readFileSync(SQL_PATH, 'utf8') : ''
+const sql2 = fs.existsSync(SQL2_PATH) ? fs.readFileSync(SQL2_PATH, 'utf8') : ''
 const aiApi = read('cloudfunctions/ai-api/index.js')
 const apiJs = read('utils/api.js')
 const faqWxml = read('pages/admin/faq.wxml')
@@ -48,9 +50,26 @@ test('ai_secrets 一条 policy 都不建 —— 开了 RLS 且零 policy 才是�
   )
 })
 
-test('ai_runtime_config 只 GRANT 给 service_role，客户端调不动', () => {
-  assert.match(sql, /REVOKE ALL ON FUNCTION public\.ai_runtime_config\(\)\s*FROM PUBLIC,\s*anon,\s*authenticated/)
-  assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.ai_runtime_config\(\) TO service_role/)
+test('读密钥的函数叫 svc_ai_runtime_config，旧名已 DROP，且只 GRANT service_role', () => {
+  assert.ok(sql2, '迁移文件不存在：cloudbase/migrations/20261030160000_ai_runtime_config_rename.sql')
+  // 旧名必须删掉：留着就等于「svc_rpc 能把它转发出去」
+  assert.match(sql2, /DROP FUNCTION IF EXISTS public\.ai_runtime_config\(\)/)
+  assert.match(sql2, /CREATE FUNCTION public\.svc_ai_runtime_config\(\)/)
+  assert.match(sql2, /REVOKE ALL ON FUNCTION public\.svc_ai_runtime_config\(\)\s*FROM PUBLIC,\s*anon,\s*authenticated/)
+  assert.match(sql2, /GRANT EXECUTE ON FUNCTION public\.svc_ai_runtime_config\(\) TO service_role/)
+})
+
+test('读密钥的 RPC 一律 svc_ 前缀 —— 否则 svc_rpc 会把它原样转发给客户端', () => {
+  // app-api 的 rpc 入口只挡「svc_ 前缀」和一份人工维护的 SERVER_ONLY_FNS 名单，
+  // 而 svc_rpc 是 service_role 身份 EXECUTE 的，函数里的 GRANT 对它完全无效。
+  // 所以「不带 svc_ 前缀 + 没做权限校验」的读密钥函数 = 明文密钥对全体登录用户开放。
+  const paths = aiApi.match(/\/v1\/rdb\/rest\/rpc\/[a-z_]+/g) || []
+  assert.ok(paths.length > 0, 'ai-api 应该至少有一条读库 RPC')
+  paths.forEach((p) => {
+    const fn = p.split('/').pop()
+    assert.strictEqual(fn.indexOf('svc_'), 0, '读密钥的 RPC 必须以 svc_ 开头，当前：' + fn)
+  })
+  assert.match(aiApi, /\/v1\/rdb\/rest\/rpc\/svc_ai_runtime_config/)
 })
 
 test('后台读接口只回末四位，RETURNS TABLE 里没有明文 api_key 列', () => {
@@ -72,8 +91,8 @@ test('后台写接口要校 admin_has_perm、要卡 https、NULL 表示不修改
   assert.match(fn, /WHEN p_api_key\s+IS NULL THEN s\.api_key/)
 })
 
-test('云函数从 ai_runtime_config 读通道，走的是和 app-api 同一条网关', () => {
-  assert.match(aiApi, /\/v1\/rdb\/rest\/rpc\/ai_runtime_config/)
+test('云函数从 svc_ai_runtime_config 读通道，走的是和 app-api 同一条网关', () => {
+  assert.match(aiApi, /\/v1\/rdb\/rest\/rpc\/svc_ai_runtime_config/)
   assert.match(aiApi, /TCB_ENV \+ '\.api\.tcloudbasegateway\.com'/)
 })
 

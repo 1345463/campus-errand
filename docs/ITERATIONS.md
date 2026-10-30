@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-10-30 15:10** ｜ 累计 **58 轮迭代**、**39 个页面**、**38 张表**、**159 个数据库函数**、**9 个触发器**、**59 个迁移脚本**、**117 项回归测试**、主包 **0.98 MB**
+> 统计截止：**2026-10-30 15:10** ｜ 累计 **58 轮迭代**、**39 个页面**、**38 张表**、**159 个数据库函数**、**9 个触发器**、**60 个迁移脚本**、**118 项回归测试**、主包 **0.98 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -1391,6 +1391,28 @@ SECURITY DEFINER 函数，而那个函数只 GRANT 给 `service_role`。三条�
 新增 `llmCatalog()`（带 `source` / `builtin` / `probeErr`），`llmModels()` 仍返回数组，
 其他调用点不受影响。
 
+#### 自查发现一个真漏洞：函数名必须 `svc_` 前缀
+
+写完测试回头审 `app-api` 的 rpc 入口，发现它只挡两类名字：
+`fn.indexOf('svc_') === 0` 和那份 `SERVER_ONLY_FNS` 名单。
+而 `svcRpc()` 是**以 service_role 身份 EXECUTE** 目标函数的 ——
+所以 `ai_runtime_config` 上的 `REVOKE FROM anon, authenticated` **完全无效**：
+任何登录用户 `rpc('ai_runtime_config')` 就能把明文 API Key 读走。
+
+修法不是往名单里加一行（那份名单靠人工维护，下次再写一个读密钥的函数照样会漏），
+而是**改名成 `svc_ai_runtime_config`** —— `svc_rpc` 里 `left(p_fn,4)='svc_'` 是硬规则，
+提交前就生成层拦死。云函数自己走 PostgREST 直连、不经过 `svc_rpc`，照样读得到。
+
+实测（以 service_role 身份打 `svc_rpc`）：
+
+```
+svc_rpc('wx:attacker', 'svc_ai_runtime_config', '{}')
+→ ERROR: svc_rpc: 不允许调用内部函数 svc_ai_runtime_config
+```
+
+测试里另加一条通用断言：**`ai-api` 里所有 `/v1/rdb/rest/rpc/xxx` 的 xxx 必须以 `svc_` 开头**，
+以后再加读密钥的 RPC 一律拦得住。改名后重新验了一次 `dbRead: true`（489ms，冷启动）。
+
 #### 端到端实测
 
 临时给云函数加了个 `diag_r58` 分支验链路（**已删除并重新部署，`diag_r58` 现在返回 TOKEN_INVALID**）：
@@ -1404,10 +1426,10 @@ SECURITY DEFINER 函数，而那个函数只 GRANT 给 `service_role`。三条�
 `dbRead: true` 说明云函数真能经 `{env}.api.tcloudbasegateway.com/v1/rdb/rest/rpc/ai_runtime_config`
 读到库 —— 这条路径之前只有 `app-api` 用过，`ai-api` 是新接的，必须验。
 
-**校验**：新增 `tests/ai-channel.test.js` 14 条（RLS 零 policy、只 GRANT service_role、
-不回明文、NULL 语义、TTL、双条件、402、前端导出、password 输入框）。
+**校验**：新增 `tests/ai-channel.test.js` 15 条（RLS 零 policy、改名后只 GRANT service_role、
+`svc_` 前缀通用断言、不回明文、NULL 语义、TTL、双条件、402、前端导出、password 输入框）。
 `feedback-ui.test.js` 里 `builtin: true` 那条改成 `builtin: builtin`（自定义通道是 false，语义变了）。
-全量 **117 项通过**；四件套全绿，主包 **0.98 MB**（多了一张卡片）。
+全量 **118 项通过**；四件套全绿，主包 **0.98 MB**（多了一张卡片）。
 
 **待用户填**：后台「智能客服配置 → 大模型通道」填 Base URL + API Key 即可切过去。
 
@@ -1495,7 +1517,7 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 - **智能客服**：`list_faq_items` / `get_faq_settings` / `admin_list_faq_items` /
   `admin_upsert_faq_item` / `admin_delete_faq_item` / `admin_get_faq_settings` /
   `admin_update_faq_settings`(10 参数) /
-  `ai_runtime_config` / `admin_get_ai_channel` / `admin_set_ai_channel`（R58，密钥只在服务端）
+  `svc_ai_runtime_config`（**svc_ 前缀，防 svc_rpc 转发**）/ `admin_get_ai_channel` / `admin_set_ai_channel`（R58）
 - **订单分页与放弃接单（R39）**：`list_my_orders_v2`(5 参数) / `abandon_order`
 - **AI 配额（R39）**：`support_ai_usage` / `begin_support_ai` / `finish_support_ai` /
   `rate_support_answer`
@@ -1811,7 +1833,7 @@ node campus-errand/tools/style-lint.js campus-errand
 
 **当前状态（2026-10-30 01:50 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
 `check-mp.js` **0.98MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（33 wxss / 42 wxml）通过，
-`npm test` **117 项**全过。
+`npm test` **118 项**全过。
 
 > 主包从 1.41MB 降到 **0.95MB**，是 R52 删掉 WorkBuddy Cloud SDK 与 `miniprogram_npm/` 的结果。
 

@@ -1211,3 +1211,33 @@ R54 之后提现是**提交即自动打款**，后台那个页面只剩「重试
   全量 **158 项**通过；四件套全绿，主包 **1.00 MB / 180 文件**，迁移 62、函数 164。
 - **实测**（真实库，DO 块抛异常回滚）：余额 50 付 10 元单扣到 40、重复支付不扣第二次、
   余额不足分文不动、余额单取消退回 50、重复取消不重复退、微信单仍进 `refunding`。
+
+## R62 · 修三处资金漏洞（10-30 深夜）
+
+不是加功能，是补漏洞。三条都在线上真库跑过（`DO` 块 + 末尾抛异常回滚，零残留），不是推测。
+
+**① 确认完成发双份赏金** —— `confirm_order_done` 加了一次余额，`trg_order_notify` 的
+`waiting_confirm → done` 分支又加了一次。实测赏金 10 元到账 **20 元、流水 2 条**，从 R5 一直存在。
+修法：钱只在一个地方动，触发器降级为只发通知；函数用 `ROW_COUNT` 幂等，状态没改就不发钱。
+顺带补 `pay_status='paid'` 校验（以前未付款单也能确认完成）。
+
+**② 微信 + 余额双付** —— 回调晚到时用户又点余额支付，两笔都成功，`mark_order_paid`
+只认 `pay_status='paid'` 就返回幂等，钱收了不记账。现在回调侧返回 `DUPLICATE_PAY` 并写
+`dup_txn_id`，`pay-notify` 自动调微信退款（单号 `RD+订单号`，天然幂等）；
+余额侧遇到已有 `pay_txn_id` 的单返回 `already_wxpay`，分文不扣。
+
+**③ 券补贴看不见** —— 用券后用户实付变少，接单员仍按赏金结算（产品上定了是平台补贴），
+但库里没有字段记这笔成本。新增 `platform_subsidy`。
+
+**④ 抽成真正接上** —— `calc_settle_amount()` 从定义起就零调用，费率配了白配、平台收入为 0。
+现在结算走它，读 `pay_settings.commission_rate`（当前 0.05）。后台补入口：
+`pages/admin/settle` 顶部「结算与抽佣」卡片，可改抽佣 / 提现门槛 / 提现手续费 / 在线支付总闸。
+
+- **数据库**：`orders` 加 `settle_amount` / `platform_subsidy` / `dup_txn_id`；重写
+  `trg_order_notify` / `confirm_order_done` / `mark_order_paid` / `pay_order_with_balance`。
+- **云函数**：`pay-notify` 的 `wxpayRequest` 支持请求体，新增 `refundDuplicatePay`。
+- **前端**：`utils/api.js` 新增 `getPaySettings` / `adminUpdatePaySettings`；结算页新增费率卡片与
+  `settle.wxss`。
+- **校验**：新增 `tests/settle-pay.test.js` 10 条，全量 **168 项**通过；四件套全绿，
+  主包 **1.01 MB / 181 文件**，迁移 **63** 条。
+- **影响**：线上 `done` 订单 0 笔、赏金流水 0 元，**未造成真实资金损失**。

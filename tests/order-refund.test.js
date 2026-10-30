@@ -167,8 +167,9 @@ test('退款回调按 REFUND. 前缀分派，且排在支付判断之前', () =>
 
 test('回调落库失败返回 500 让微信重试，业务失败返回 200', () => {
   const seg = payNotify.slice(payNotify.indexOf('async function handleRefundNotify'))
-  assert.match(seg.slice(0, 1200), /return resp\(500, \{ code: 'FAIL', message: '落库失败' \}\)/)
-  assert.match(seg.slice(0, 1200), /return resp\(200, \{ code: 'SUCCESS', message: '成功' \}\)/)
+  // 窗口要盖住整个函数（R62 加了重复支付补退的分支，函数变长了）
+  assert.match(seg.slice(0, 2400), /return resp\(500, \{ code: 'FAIL', message: '落库失败' \}\)/)
+  assert.match(seg.slice(0, 2400), /return resp\(200, \{ code: 'SUCCESS', message: '成功' \}\)/)
 })
 
 test('前端退款走独立 target，实际打到 pay-create', () => {

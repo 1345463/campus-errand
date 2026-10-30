@@ -54,19 +54,26 @@ function sign(message) {
   return crypto.createSign('RSA-SHA256').update(message).sign(PRIVATE_KEY, 'base64')
 }
 
-function wxpayRequest(method, urlPath) {
+function wxpayRequest(method, urlPath, bodyObj) {
   const nonce = crypto.randomBytes(16).toString('hex')
   const ts = Math.floor(Date.now() / 1000)
-  const message = `${method}\n${urlPath}\n${ts}\n${nonce}\n\n`
+  const body = bodyObj ? JSON.stringify(bodyObj) : ''
+  // 签名串第五行是请求体；不带 body 时保持空行（拉证书用的是 GET）
+  const message = `${method}\n${urlPath}\n${ts}\n${nonce}\n${body}\n`
   const auth = `WECHATPAY2-SHA256-RSA2048 mchid="${MCHID}",` +
     `nonce_str="${nonce}",signature="${sign(message)}",` +
     `timestamp="${ts}",serial_no="${SERIAL_NO}"`
+  const headers = { Authorization: auth, Accept: 'application/json', 'User-Agent': 'campus-errand/1.0' }
+  if (body) {
+    headers['Content-Type'] = 'application/json'
+    headers['Content-Length'] = Buffer.byteLength(body)
+  }
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'api.mch.weixin.qq.com',
       path: urlPath,
       method,
-      headers: { Authorization: auth, Accept: 'application/json', 'User-Agent': 'campus-errand/1.0' },
+      headers,
       timeout: 8000,
     }, (res) => {
       let data = ''
@@ -79,7 +86,7 @@ function wxpayRequest(method, urlPath) {
     })
     req.on('timeout', () => req.destroy(new Error('请求微信超时')))
     req.on('error', reject)
-    req.end()
+    req.end(body || undefined)
   })
 }
 
@@ -177,12 +184,42 @@ function parseOrderId(outTradeNo) {
 }
 
 /**
+ * 重复支付自动退款
+ *
+ * 场景：用户点微信支付后，回调还没到又点了「余额支付」，两笔都成功。
+ * mark_order_paid 会把这类回调判成 DUPLICATE_PAY（订单已由余额付掉）。
+ * 钱既然真收了就必须原路退回 —— 用 out_refund_no = 'RD' + 订单号，
+ * 固定单号天然幂等，微信重试回调也不会退两次。
+ * 不传 notify_url：这是笔不需要业务状态流转的补退，微信不回调。
+ */
+async function refundDuplicatePay(orderId, plain) {
+  const amount = plain.amount || {}
+  const fen = Number(amount.payer_total || amount.total || 0)
+  const totalFen = Number(amount.total || fen)
+  if (!fen || !totalFen) {
+    console.error('dup refund bad amount', orderId, JSON.stringify(amount))
+    return { ok: false, why: '金额缺失' }
+  }
+  const r = await wxpayRequest('POST', '/v3/refund/domestic/refunds', {
+    transaction_id: String(plain.transaction_id || ''),
+    out_refund_no: 'RD' + orderId,
+    reason: '订单已完成支付，重复付款自动退回',
+    amount: { refund: fen, total: totalFen, currency: 'CNY' },
+  })
+  const st = String((r.body && r.body.status) || '')
+  if (r.status >= 200 && r.status < 300 && (st === 'SUCCESS' || st === 'PROCESSING')) {
+    console.log('dup refund accepted', orderId, r.body.refund_id, st)
+    return { ok: true }
+  }
+  console.error('dup refund failed', orderId, r.status, JSON.stringify(r.body).slice(0, 300))
+  return { ok: false, why: st || String(r.status) }
+}
+
+/**
  * R60 · 退款回调。
  *
  * 支付和退款共用同一个 notify_url（pay-create 里的 WXPAY_NOTIFY_URL），
  * 靠 event_type 前缀区分：TRANSACTION.* 是收款，REFUND.* 是退款。
- * 这样不用再加一条网关路由，也不用把 APIv3 密钥复制到新函数去。
- *
  * 三个状态怎么处理写在了 svc_finish_order_refund 里：
  *   SUCCESS  → 订单 refunded + canceled
  *   CLOSED   → 钱没出去，回滚成 paid，用户可重新发起
@@ -196,6 +233,11 @@ async function handleRefundNotify(plain) {
   if (!refundNo) {
     console.error('refund notify missing out_refund_no', JSON.stringify(plain).slice(0, 300))
     return resp(200, { code: 'SUCCESS', message: '无退款单号，已忽略' })
+  }
+  // 重复支付的补退单号是 RD+订单号，不经过业务表，收到回调只记日志
+  if (refundNo.indexOf('RD') === 0) {
+    console.log('dup-pay refund notify', refundNo, status)
+    return resp(200, { code: 'SUCCESS', message: '重复支付退款已记录' })
   }
   if (!TCB_ENV || !TCB_KEY) {
     console.error('TCB_ENV_ID / TCB_PUBLISHABLE_KEY 未配置，无法落库')
@@ -295,9 +337,19 @@ exports.main = async (event) => {
       return resp(500, { code: 'FAIL', message: '落库接口异常：' + r.status })
     }
     if (row.ok !== true) {
+      const reason = String(row.reason || '')
+      // 重复付款：订单已由余额付掉，但微信这笔钱真收了 → 自动原路退回
+      if (reason.indexOf('DUPLICATE_PAY') === 0) {
+        const rf = await refundDuplicatePay(orderId, plain)
+        if (!rf.ok) {
+          // 没受理成功就返 500 让微信重试；同单号幂等，不会退两次
+          return resp(500, { code: 'FAIL', message: '重复支付退款未受理：' + rf.why })
+        }
+        return resp(200, { code: 'SUCCESS', message: '重复支付已自动退款' })
+      }
       // 业务失败不重试，但要能被日志发现
-      console.error('mark_order_paid rejected:', row.reason)
-      return resp(200, { code: 'SUCCESS', message: '已接收（业务未通过：' + (row.reason || '') + '）' })
+      console.error('mark_order_paid rejected:', reason)
+      return resp(200, { code: 'SUCCESS', message: '已接收（业务未通过：' + reason + '）' })
     }
   } catch (e) {
     console.error('persist error', e.message)

@@ -509,6 +509,27 @@ function confirmOrderDone(id) {
   return callOrderRpc('confirm_order_done', id)
 }
 
+// 支付参数：抽佣 / 提现门槛 / 手续费率 / 在线支付总闸，只给超管
+async function getPaySettings() {
+  const result = await rpc('get_pay_settings', {})
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  const rows = Array.isArray(result.data) ? result.data : []
+  return rows.length ? rows[0] : null
+}
+
+async function adminUpdatePaySettings(patch) {
+  const p = patch || {}
+  const result = await rpc('admin_update_pay_settings', {
+    p_commission_rate: p.commissionRate === undefined ? null : Number(p.commissionRate),
+    p_min_withdraw: p.minWithdraw === undefined ? null : Number(p.minWithdraw),
+    p_fee_rate: p.feeRate === undefined ? null : Number(p.feeRate),
+    p_enabled: p.enabled === undefined ? null : !!p.enabled,
+  })
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  const rows = Array.isArray(result.data) ? result.data : []
+  return rows.length ? rows[0] : null
+}
+
 // 接单员：完成满 48 小时发布方仍未确认，可申请管理员核查
 async function submitSettleFeedback(id, text) {
   const result = await rpc('submit_settle_feedback', { p_order_id: id, p_text: text })
@@ -1767,6 +1788,8 @@ module.exports = {
   cancelOrder: cancelOrder,
   respondCancel: respondCancel,
   payOrderWithBalance: payOrderWithBalance,
+  getPaySettings: getPaySettings,
+  adminUpdatePaySettings: adminUpdatePaySettings,
   syncRefund: syncRefund,
   abandonOrder: abandonOrder,
   submitSettleFeedback: submitSettleFeedback,

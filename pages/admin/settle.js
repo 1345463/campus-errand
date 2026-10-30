@@ -12,6 +12,12 @@ Page({
     noteId: 0,
     note: '',
     errorText: '',
+    pay: null,
+    rateText: '',
+    minWithdrawText: '',
+    feeText: '',
+    payEnabled: false,
+    savingPay: false,
   },
 
   onLoad: function () {
@@ -47,6 +53,7 @@ Page({
               return
             }
             page.setData({ needLogin: false, denied: false })
+            page.loadPay()
             return page.load()
           })
       })
@@ -152,5 +159,101 @@ Page({
 
   goLogin: function () {
     wx.switchTab({ url: '/pages/mine/index' })
+  },
+
+  // ---------------- 结算与抽佣 ----------------
+  // 费率存的是小数（0.05），页面上按百分比显示（5），免得填 5 变成 500%
+  pctText: function (value) {
+    const n = Number(value || 0) * 100
+    return String(Math.round(n * 100) / 100)
+  },
+
+  loadPay: function () {
+    const page = this
+    return api
+      .getPaySettings()
+      .then(function (row) {
+        if (!row) {
+          page.setData({ pay: null })
+          return
+        }
+        page.setData({
+          pay: row,
+          rateText: page.pctText(row.commission_rate),
+          minWithdrawText: Number(row.min_withdraw || 0).toFixed(2),
+          feeText: page.pctText(row.withdraw_fee_rate),
+          payEnabled: !!row.enabled,
+        })
+      })
+      .catch(function () {
+        // 非超管拿不到这个接口，卡片直接不显示
+        page.setData({ pay: null })
+      })
+  },
+
+  onRateInput: function (event) {
+    this.setData({ rateText: event.detail.value })
+  },
+
+  onMinWithdrawInput: function (event) {
+    this.setData({ minWithdrawText: event.detail.value })
+  },
+
+  onFeeInput: function (event) {
+    this.setData({ feeText: event.detail.value })
+  },
+
+  onTogglePay: function (event) {
+    this.setData({ payEnabled: !!event.detail.value })
+  },
+
+  savePay: function () {
+    const page = this
+    if (page.data.savingPay) return
+    const rate = Number(page.data.rateText)
+    const minWithdraw = Number(page.data.minWithdrawText)
+    const fee = Number(page.data.feeText)
+    if (!isFinite(rate) || rate < 0 || rate > 50) {
+      ui.toast({ title: '抽佣比例要填 0 到 50 之间的数字', icon: 'none' })
+      return
+    }
+    if (!isFinite(minWithdraw) || minWithdraw < 0) {
+      ui.toast({ title: '提现门槛要填不小于 0 的数字', icon: 'none' })
+      return
+    }
+    if (!isFinite(fee) || fee < 0 || fee > 10) {
+      ui.toast({ title: '提现手续费要填 0 到 10 之间的数字', icon: 'none' })
+      return
+    }
+    const willDisable = page.data.pay && page.data.pay.enabled && !page.data.payEnabled
+    const ask = willDisable
+      ? ui.confirm({
+          title: '关闭在线支付？',
+          content: '关闭后新发布的订单不经过微信支付，直接视为已付款。确认要关吗？',
+          confirmText: '确认关闭',
+          cancelText: '再想想',
+        })
+      : Promise.resolve(true)
+    ask.then(function (go) {
+      if (!go) return null
+      page.setData({ savingPay: true })
+      return api
+        .adminUpdatePaySettings({
+          commissionRate: rate / 100,
+          minWithdraw: minWithdraw,
+          feeRate: fee / 100,
+          enabled: page.data.payEnabled,
+        })
+        .then(function () {
+          ui.toast({ title: '已保存', icon: 'success' })
+          return page.loadPay()
+        })
+        .catch(function (error) {
+          ui.toast({ title: api.getErrorMessage(error), icon: 'none' })
+        })
+        .then(function () {
+          page.setData({ savingPay: false })
+        })
+    })
   },
 })

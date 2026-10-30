@@ -19,6 +19,35 @@
       <view class="doc-btn" bindtap="load">刷新列表</view>
     </view>
 
+    <view class="card pay-card" wx:if="{{pay}}">
+      <view class="pay-title">结算与抽佣</view>
+      <view class="pay-hint">改完立即生效，只影响之后确认完成的订单；已结算的订单不受影响</view>
+
+      <view class="pay-row">
+        <view class="pay-label">平台抽佣</view>
+        <input class="pay-input" type="digit" value="{{rateText}}" bindinput="onRateInput" placeholder="0" />
+        <view class="pay-unit">%</view>
+      </view>
+      <view class="pay-row">
+        <view class="pay-label">提现门槛</view>
+        <input class="pay-input" type="digit" value="{{minWithdrawText}}" bindinput="onMinWithdrawInput" placeholder="10.00" />
+        <view class="pay-unit">元</view>
+      </view>
+      <view class="pay-row">
+        <view class="pay-label">提现手续费</view>
+        <input class="pay-input" type="digit" value="{{feeText}}" bindinput="onFeeInput" placeholder="0" />
+        <view class="pay-unit">%</view>
+      </view>
+
+      <view class="pay-switch-row">
+        <view class="pay-label">在线支付总闸</view>
+        <switch checked="{{payEnabled}}" color="#2E7CF6" bindchange="onTogglePay" />
+      </view>
+      <view class="pay-hint">关闭后新订单不走微信支付，直接视为已付款（线下收款模式）</view>
+
+      <view class="doc-btn pay-save" bindtap="savePay">{{savingPay ? '保存中…' : '保存设置'}}</view>
+    </view>
+
     <view wx:if="{{loading}}" class="empty">加载中…</view>
     <view wx:elif="{{list.length === 0 && !errorText}}" class="empty">
       <view>没有待核查的结算申请</view>

@@ -1,0 +1,58 @@
+.pay-card {
+  margin-bottom: 0;
+}
+
+.pay-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--t1);
+}
+
+.pay-hint {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: var(--t3);
+}
+
+.pay-row {
+  display: flex;
+  align-items: center;
+  margin-top: 20rpx;
+}
+
+.pay-label {
+  flex: 0 0 190rpx;
+  font-size: 26rpx;
+  color: var(--t2);
+}
+
+.pay-input {
+  flex: 1;
+  height: 64rpx;
+  padding: 0 16rpx;
+  background: var(--fill);
+  border-radius: var(--r-sm);
+  font-size: 28rpx;
+  text-align: right;
+  color: var(--t1);
+}
+
+.pay-unit {
+  flex: 0 0 44rpx;
+  margin-left: 10rpx;
+  font-size: 26rpx;
+  text-align: right;
+  color: var(--t3);
+}
+
+.pay-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20rpx;
+}
+
+.pay-save {
+  margin-top: 24rpx;
+}

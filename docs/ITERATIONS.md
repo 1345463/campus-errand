@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-10-30 16:45** ｜ 累计 **60 轮迭代**、**38 个页面**、**38 张表**、**164 个数据库函数**、**9 个触发器**、**61 个迁移脚本**、**150 项回归测试**、主包 **0.99 MB**
+> 统计截止：**2026-10-30 22:10** ｜ 累计 **61 轮迭代**、**38 个页面**、**38 张表**、**164 个数据库函数**、**9 个触发器**、**62 个迁移脚本**、**158 项回归测试**、主包 **1.00 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -1567,6 +1567,54 @@ accepted --申请取消---> cancel_requested --同意--> canceling --> canceled
 
 ---
 
+### R61 · 钱包余额支付（10-30 晚）
+
+**背景**：用户提的方案是「取消后退到钱包余额，下单再从余额里扣，这样能少退款」。
+查完规则与账之后，**只做前半段，砍掉后半段**：
+
+> 《微信小程序平台运营规范》2.14.6：用户发起退款申请后，**资金应当原路退回，
+> 不得强制退至账户余额、储值卡、积分、代金券等**。
+
+而且「退款进余额 + 余额可提现」等于开了一条 `信用卡付款 → 取消 → 提现` 的套现通道，
+微信对这类行为是直接封商户号的。算账也不划算：微信官方 FAQ 写明**商家转账没有手续费**，
+所以「退余额再提现」的成本和直接原路退款**完全一样**（都是损失那 0.6% 收款手续费），
+唯一真省钱的情况是余额被**消费掉** —— 那正好就是「余额支付」这件事本身。
+
+**做了什么**：
+
+- 迁移 `20261030220000_wallet_pay.sql`：`orders` 加 `pay_channel`（`wxpay` / `balance`）+
+  `pay_order_with_balance(bigint)`。余额支付不经过微信，**没有手续费**，也不需要交易号和回调。
+- `request_cancel_order` / `respond_cancel_request` 各加一个分支：`pay_channel='balance'`
+  的单子同步退回余额，直接落 `canceled` + `refunded`，**不进 `canceling` 锁态** —— 它的退款
+  是同库内两条 `UPDATE`，不存在「等回调」的中间态，所以不需要 `refund_no`。
+- 前端：下单页余额够时弹「余额支付 / 微信支付」二选一；「我发布的」里补付同样可选；
+  详情页把「立刻退回余额」和「1~3 个工作日」分开说，不让用户白等。
+
+**明确没做的**（写下来，免得以后又被提起）：
+
+- **不做「退款到余额」**：违反上面那条规范；且可提现余额一旦能由退款产生就是储值，
+  触碰支付牌照红线。
+- **不做「余额 + 微信混合支付」**：一笔订单两个资金来源，退款要按比例拆分，状态机复杂度翻倍，
+  而收益只是「余额不够时也能用掉一部分」。
+
+**实测**（真实库，`DO` 块末尾抛异常自动回滚，零残留）：
+
+| 场景 | 结果 |
+|---|---|
+| 余额 50 付 10 元单 | `ok`，扣到 40，订单 `paid` + `pay_channel=balance`，一条 `order_pay` 流水 |
+| 同一单再付一次 | 返回 `paid`，余额仍 40（没扣第二遍） |
+| 余额 40 付 100 元单 | `insufficient`，余额不动，订单仍 `unpaid` |
+| 余额单取消 | `canceled` + `refunded`，余额回到 50，一条 `refund_in` 流水 |
+| 再取消一次 | `bad_state`，不重复退款 |
+| 微信单取消 | 仍进 `canceling` + `refunding`，`refund_no=RF+订单号`，行为没被改坏 |
+| 微信单缺交易号 | `no_txn`，订单停在 `pending`，不进退款态 |
+
+**校验**：新增 `tests/wallet-pay.test.js` 8 条（其中 5 条在 PGlite 里跑真实 SQL）；
+全量 **158 项**通过；四件套全绿，主包 **1.00 MB / 180 个文件**。
+
+---
+
+
 ## 3. 数据库演进总览
 
 ### 数据表（38 张，全量 RLS）
@@ -1574,7 +1622,7 @@ accepted --申请取消---> cancel_requested --同意--> canceling --> canceled
 | 表 | 用途 | 引入轮次 |
 |---|---|---|
 | `profiles` | 用户资料、角色、认证状态、积分、信誉分 | R1 |
-| `orders` | 任务订单（含租赁工单、42 列；R60 起含退款与取消协商字段） | R1 / R60 |
+| `orders` | 任务订单（含租赁工单、43 列；R60 起含退款与取消协商字段，R61 起含支付渠道） | R1 / R60 / R61 |
 | `addresses` | 我的常用地址 | R1 |
 | `runner_applications` | 接单员实名认证申请（证件照脱敏） | R1 |
 | `rental_requests` | 相机租赁预填申请 | R11 |
@@ -1624,6 +1672,7 @@ R28  结构化地址 + 送达佐证 + 抵扣：pickup_building / pickup_floor /
      discount_code / discount_amount
 R60  取消与退款：refund_no（RF+订单号，微信幂等键）/ refund_id / refund_amount /
      refund_error / refunded_at / cancel_reason / cancel_requested_at
+R61  支付渠道：pay_channel（wxpay / balance）
 ```
 
 ### 订单状态机（R60 之后）
@@ -1646,6 +1695,11 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 只有退款回调 `SUCCESS` 才落到 `canceled`；同步失败会被 `svc_fail_order_refund` 回滚成
 `paid` + `pending`/`accepted`，让用户能重新点一次 —— **绝不能点一下就 `canceled`**。
 
+⚠️ **余额支付的单不走上面这条路**（R61）：它的退款是同库内两条 `UPDATE`，
+`request_cancel_order` 直接落 `canceled` + `refunded`，既不进 `canceling` 也不写 `refund_no`、
+不查微信交易号 —— 钱从没进过商户号，也就没有回调可等。只有 `pay_channel='wxpay'` 的单
+才需要那套异步状态机。
+
 ### 数据库函数（164 个，现役 CloudBase 库）
 按职能分：
 - **订单**：`create_order`(17参) / `accept_order` / `complete_order` / `cancel_order` / `confirm_order_done` / `get_order_detail` / `order_relation` / `list_my_orders` / `search_my_orders` / `hide_my_order` / `order_hidden` …
@@ -1653,6 +1707,8 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
   `respond_cancel_request`（接单员同意或拒绝）/ `svc_finish_order_refund`（回调收尾，幂等）/
   `svc_fail_order_refund`（同步失败回滚）。后两个是 `svc_` 前缀，**只 GRANT `service_role`**，
   客户端调用实测 42501。
+- **余额支付（R61）**：`pay_order_with_balance`（全额抵扣；先看 `pay_status` 再扣钱，
+  重复调用只扣一次；余额不足返回 `insufficient` 且分文不动）
 - **图片**：`save_media_asset` / `get_media_asset` / `get_public_asset` / **`get_order_asset`**
 - **租赁**：`submit_rental_request` / `admin_set_rental_price` / `admin_create_rental_order` / `list_rental_items` / `admin_*_rental_item`
 - **结算与争议**：`submit_settle_feedback` / `admin_list_feedbacks` / `admin_resolve_feedback`

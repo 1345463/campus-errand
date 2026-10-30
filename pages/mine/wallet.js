@@ -17,6 +17,8 @@ const APP_ID = 'wxaab192c68e403292'
 // 长串英文会把右侧金额挤到重叠 —— 兜底成「其他」就不会破坏布局。
 const KIND_TEXT = {
   order_reward: '订单赏金',
+  order_pay: '余额支付',
+  refund_in: '退款入账',
   withdraw: '提现',
   withdraw_refund: '提现退回',
   refund: '退款',
@@ -88,7 +90,7 @@ Page({
             balance: Number((profile && profile.balance) || 0).toFixed(2),
             nickname: (profile && profile.nickname) || '同学',
             notes: [
-              '钱包余额用于平台内的赏金结算',
+              '余额可直接用于发布任务，发单时选择「钱包余额支付」即可',
               '接单员标记送达后，需要发布方确认，赏金才会计入余额',
               '发布方超 48 小时未确认，可在订单详情申请管理员核查',
               'R52 起已接入微信支付，可申请提现到微信零钱',

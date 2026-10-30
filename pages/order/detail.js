@@ -282,7 +282,12 @@ Page({
                 if (isOwner) {
                   primary = {
                     key: 'cancel',
-                    label: order.pay_status === 'paid' ? '取消并退款 ¥' + payAmount : '取消任务',
+                    label:
+                      order.pay_status === 'paid'
+                        ? order.pay_channel === 'balance'
+                          ? '取消，退回余额 ¥' + payAmount
+                          : '取消并退款 ¥' + payAmount
+                        : '取消任务',
                   }
                 } else {
                   primary = { key: 'accept', label: '接单赚 ¥' + order.reward }
@@ -305,11 +310,18 @@ Page({
               // canceling（退款中）谁都没有按钮：钱在路上，改不了也拦不住
 
               if (order.status === 'pending' && isOwner) {
-                cancelHint = order.pay_status === 'paid'
-                  ? '取消后全额退回 ¥' + payAmount + '，1~3 个工作日到账'
-                  : '取消后任务会从大厅撤下，需要重新发布'
+                if (order.pay_status !== 'paid') {
+                  cancelHint = '还没付款，任务不会出现在大厅；可在「我发布的」里继续支付'
+                } else if (order.pay_channel === 'balance') {
+                  // 余额支付的退款是同库内两条 UPDATE，没有微信那一趟，秒到
+                  cancelHint = '取消后 ¥' + payAmount + ' 立刻退回钱包余额'
+                } else {
+                  cancelHint = '取消后全额退回 ¥' + payAmount + '，1~3 个工作日到账'
+                }
               } else if (order.status === 'accepted' && isOwner) {
-                cancelHint = '已接单，取消需接单员同意；他同意后全额退回 ¥' + payAmount
+                cancelHint = order.pay_channel === 'balance'
+                  ? '已接单，取消需接单员同意；他同意后 ¥' + payAmount + ' 立刻退回余额'
+                  : '已接单，取消需接单员同意；他同意后全额退回 ¥' + payAmount
               } else if (order.status === 'cancel_requested') {
                 cancelHint = isRunner
                   ? '发布方申请取消，同意后全额退款给他，本单结束'

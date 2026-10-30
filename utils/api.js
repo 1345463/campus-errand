@@ -493,6 +493,17 @@ function syncRefund(id) {
   return tcb.callTarget('refund', { action: 'sync', orderId: id })
 }
 
+// 用钱包余额付这一单：全额抵扣，不经过微信，也就没有手续费
+async function payOrderWithBalance(id) {
+  const result = await rpc('pay_order_with_balance', { p_order_id: Number(id) })
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  const rows = Array.isArray(result.data) ? result.data : []
+  const row = rows.length ? rows[0] : null
+  if (!row) throw new Error('支付失败，请重试')
+  if (row.result !== 'ok') throw new Error(row.message || '余额支付失败')
+  return row
+}
+
 // 发布方确认：赏金才真正打进接单员钱包
 function confirmOrderDone(id) {
   return callOrderRpc('confirm_order_done', id)
@@ -1755,6 +1766,7 @@ module.exports = {
   confirmOrderDone: confirmOrderDone,
   cancelOrder: cancelOrder,
   respondCancel: respondCancel,
+  payOrderWithBalance: payOrderWithBalance,
   syncRefund: syncRefund,
   abandonOrder: abandonOrder,
   submitSettleFeedback: submitSettleFeedback,

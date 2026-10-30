@@ -521,6 +521,8 @@ Page({
               page.setData({ submitting: false })
               return null
             }
+            // 余额留一份给支付环节：够了就多给一个「用余额付」的选项
+            page._balance = Number((profile && profile.balance) || 0)
             return api.createOrder({
           service_type: service.type,
           service_name: service.name,
@@ -570,6 +572,80 @@ Page({
   payAndFinish: function (order) {
     const page = this
     const amount = pay.payableOf(order)
+    return page
+      .choosePayChannel(amount)
+      .then(function (channel) {
+        if (channel === 'later') {
+          page.setData({ submitting: false })
+          ui.toast({
+            title: '任务已保存为待付款，可在「我发布的」里继续支付',
+            icon: 'none',
+            duration: 2600,
+          })
+          setTimeout(function () {
+            wx.switchTab({ url: '/pages/orders/list' })
+          }, 900)
+          return null
+        }
+        if (channel === 'balance') return page.payByBalance(order, amount)
+        return page.payByWechat(order, amount)
+      })
+      .catch(function (error) {
+        page.setData({ submitting: false })
+        guard.toastError(error)
+      })
+  },
+
+  // 余额够才问一句；不够就直接走微信，不多弹一层。
+  // 余额是接单赚的赏金，本来就在平台里，用它付款不产生任何手续费。
+  choosePayChannel: function (amount) {
+    const page = this
+    const need = Number(amount || 0)
+    const bal = Number(page._balance || 0)
+    if (!(need > 0) || bal < need) return Promise.resolve('wxpay')
+    return new Promise(function (resolve) {
+      wx.showActionSheet({
+        itemList: [
+          '钱包余额支付 ¥' + need.toFixed(2) + '（余额 ¥' + bal.toFixed(2) + '）',
+          '微信支付',
+        ],
+        success: function (res) {
+          resolve(res.tapIndex === 0 ? 'balance' : 'wxpay')
+        },
+        fail: function () {
+          // 关掉菜单等于「稍后再付」，不替他选一个
+          resolve('later')
+        },
+      })
+    })
+  },
+
+  payByBalance: function (order, amount) {
+    const page = this
+    ui.loading('支付中')
+    return api.payOrderWithBalance(order.id).then(
+      function () {
+        ui.hideLoading()
+        page.setData({ submitting: false })
+        page._balance = Math.max(0, Number(page._balance || 0) - Number(amount || 0))
+        ui.toast({ title: '余额支付成功，任务已发布', icon: 'success' })
+        setTimeout(function () {
+          wx.switchTab({ url: '/pages/orders/list' })
+        }, 900)
+        return null
+      },
+      function (error) {
+        ui.hideLoading()
+        // 余额不足 / 订单已付过 —— 服务端已经把原因写成人话了，直接透出去
+        page.setData({ submitting: false })
+        guard.toastError(error)
+        return null
+      }
+    )
+  },
+
+  payByWechat: function (order, amount) {
+    const page = this
     return ui
       .confirm({
         title: '支付赏金',

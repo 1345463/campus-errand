@@ -331,29 +331,34 @@ Page({
     pay
       .orderPayState(id)
       .then(function (row) {
-        ui.hideLoading()
         if (!row) throw new Error('读不到订单支付状态，请稍后再试')
         if (row.pay_status === 'paid') {
+          ui.hideLoading()
           page.load(true)
           return null
         }
-        return ui
-          .confirm({
-            title: '支付赏金',
-            content: '需支付 ¥' + page.payableOf(row) + '，支付成功后任务才会进入大厅。',
-            confirmText: '去支付',
-            cancelText: '取消',
+        const amount = Number(page.payableOf(row))
+        // 余额够就多给一个选项：走余额不经过微信，平台也不用再付手续费
+        return api.getProfile().then(function (profile) {
+          const bal = Number((profile && profile.balance) || 0)
+          if (!(amount > 0) || bal < amount) {
+            ui.hideLoading()
+            return page.confirmWechat(row, amount, id)
+          }
+          return page.chooseChannel(amount, bal).then(function (channel) {
+            ui.hideLoading()
+            if (channel === 'later') return null
+            if (channel === 'balance') return page.payWithBalance(id)
+            return page.confirmWechat(row, amount, id)
           })
-          .then(function (go) {
-            if (!go) return null
-            return pay.payOrder({ id: id, reward: row.reward, discount_amount: row.discount_amount })
-          })
+        })
       })
       .then(function (result) {
-        if (result && result.paid) {
+        if (!result) return
+        if (result.paid) {
           ui.toast({ title: '支付成功，任务已发布', icon: 'success' })
           page.load(true)
-        } else if (result) {
+        } else {
           ui.toast({ title: '已收到支付，正在确认，下拉刷新看看', icon: 'none', duration: 2400 })
         }
       })
@@ -364,6 +369,44 @@ Page({
       })
       .then(function () {
         page._paying = false
+      })
+  },
+
+  // 余额 / 微信二选一；关掉菜单当作「稍后再付」，不替用户做决定
+  chooseChannel: function (amount, balance) {
+    return new Promise(function (resolve) {
+      wx.showActionSheet({
+        itemList: [
+          '钱包余额支付 ¥' + Number(amount).toFixed(2) + '（余额 ¥' + Number(balance).toFixed(2) + '）',
+          '微信支付',
+        ],
+        success: function (res) {
+          resolve(res.tapIndex === 0 ? 'balance' : 'wxpay')
+        },
+        fail: function () {
+          resolve('later')
+        },
+      })
+    })
+  },
+
+  payWithBalance: function (id) {
+    return api.payOrderWithBalance(id).then(function () {
+      return { paid: true }
+    })
+  },
+
+  confirmWechat: function (row, amount, id) {
+    return ui
+      .confirm({
+        title: '支付赏金',
+        content: '需支付 ¥' + Number(amount).toFixed(2) + '，支付成功后任务才会进入大厅。',
+        confirmText: '去支付',
+        cancelText: '取消',
+      })
+      .then(function (go) {
+        if (!go) return null
+        return pay.payOrder({ id: id, reward: row.reward, discount_amount: row.discount_amount })
       })
   },
 

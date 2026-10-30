@@ -377,9 +377,15 @@ async function doCancel(uid, payload) {
       status: row.order_status || '',
     }
   }
-  if (row.order_status !== 'canceling') {
-    // 未付款直接取消、或已接单转协商，都不需要退款
-    return { ok: true, status: row.order_status, refunding: false, message: row.message || '' }
+  // 余额支付的单在库里已经同步退完（钱没进过商户号），状态直接是 canceled。
+  // need_wxpay 只有「微信付 + 原路退」才是 true；老库没这列时退回按状态判断。
+  if (row.order_status !== 'canceling' || row.need_wxpay === false) {
+    return {
+      ok: true,
+      status: row.order_status,
+      refunding: false,
+      message: row.message || '',
+    }
   }
   return doRefund(orderId, row)
 }
@@ -399,8 +405,13 @@ async function doRespond(uid, payload) {
       status: row.order_status || '',
     }
   }
-  if (row.order_status !== 'canceling') {
-    return { ok: true, status: row.order_status, refunding: false, message: row.message || '' }
+  if (row.order_status !== 'canceling' || row.need_wxpay === false) {
+    return {
+      ok: true,
+      status: row.order_status,
+      refunding: false,
+      message: row.message || '',
+    }
   }
   return doRefund(orderId, row)
 }

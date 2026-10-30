@@ -109,6 +109,14 @@
   background: var(--brand-100);
   color: var(--brand);
 }
+.status-pill.status-cancel_requested {
+  background: var(--warn-100);
+  color: var(--warn);
+}
+.status-pill.status-canceling {
+  background: var(--brand-100);
+  color: var(--brand);
+}
 .status-pill.status-waiting_confirm {
   background: var(--accent-100);
   color: var(--accent);

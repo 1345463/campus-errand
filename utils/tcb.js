@@ -20,6 +20,9 @@ const PATHS = {
   api: '/api/app-api',
   withdraw: '/api/withdraw',
   'ai-api': '/api/ai-api',
+  // 取消与退款：和下单是同一个云函数（商户私钥只配在它上面），
+  // 这里用独立名字是为了让页面层看起来仍是「退款通道」，别混进下单逻辑
+  refund: '/api/pay-create',
 }
 
 // true = 网关可用；false = 本次启动只走云函数通道

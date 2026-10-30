@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-10-30 15:55** ｜ 累计 **59 轮迭代**、**38 个页面**、**38 张表**、**159 个数据库函数**、**9 个触发器**、**60 个迁移脚本**、**125 项回归测试**、主包 **0.98 MB**
+> 统计截止：**2026-10-30 16:45** ｜ 累计 **60 轮迭代**、**38 个页面**、**38 张表**、**164 个数据库函数**、**9 个触发器**、**61 个迁移脚本**、**150 项回归测试**、主包 **0.99 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -1507,6 +1507,66 @@ R54 把提现改成**提交即自动打款**之后，`pages/admin/withdraw` 的�
 
 ---
 
+### R60 · 取消订单走微信退款（10-30 下午）
+
+**问题**：`cancel_order` 只把 `status` 改成 `canceled`，一分钱不动。发单流程是「先付钱、付完才进大厅」，
+所以「待接单」= 已经付过款、只是还没人接。发布方在这个状态点「取消任务」，订单变已取消，
+**钱留在商户号，用户余额没变，界面上也没有任何入口能退** —— 只能线下找管理员。
+`pay_status` 的枚举里早有 `refunding` / `refunded`，但全仓库没有一行代码写过这两个值。
+
+两条业务规则（用户定）：
+
+1. **全额退**：付多少退多少，0.6% 手续费平台承担（10 元的单子亏 0.06 元，换来零争议）。
+2. **已接单不能单方面取消**：接单员可能已经在路上，得他同意。
+
+**状态机**（`orders.status` 新增 `cancel_requested` / `canceling` 两个值）：
+
+```
+pending  --取消(已付)--> canceling --退款成功--> canceled
+pending  --取消(未付)-------------------------> canceled
+accepted --申请取消---> cancel_requested --同意--> canceling --> canceled
+                                       --拒绝--> accepted
+```
+
+**三个关键决策**：
+
+| 决策 | 为什么 |
+|---|---|
+| 退款成功前不进 `canceled` | 微信退款是异步的（先受理、后回调）。若先标 canceled 再调退款，一旦同步失败（商户余额不足最常见），订单已取消、钱却没退，用户界面没有任何入口能重试，只能人工捞 |
+| `out_refund_no` 固定 `RF + 订单号` | 微信侧同一单号重复提交返回同一笔。用户连点、网络重试、回调重试都不会退两次钱，不需要自己建去重表 |
+| 退款编排放进 `pay-create`，回调并入 `pay-notify` | CloudBase 的环境变量在控制台**只能看到打码值**，新建一个 `refund-api` 根本没法把商户私钥配进去（`updateFunctionCode` 也不接受 env）。退款和下单用的是同一套凭据，合并是唯一能真正跑通的方案，也省掉两条网关路由。前端仍按语义调 `callTarget('refund')`，路径指向 `/api/pay-create` |
+
+**新增的东西**：
+
+- 迁移 `20261030170000_order_refund.sql`：`orders` 加 7 列（`refund_no` / `refund_id` / `refund_amount` /
+  `refund_error` / `refunded_at` / `cancel_reason` / `cancel_requested_at`）+ `refund_no` 唯一索引 +
+  4 个函数：`request_cancel_order`（发布方发起）、`respond_cancel_request`（接单员回应）、
+  `svc_finish_order_refund`（回调收尾，幂等）、`svc_fail_order_refund`（同步失败回滚）。
+  两个 `svc_` 只 GRANT `service_role` —— 已实测 `authenticated` 调用报 42501。
+- `pay-create` 加 `action` 分派（`cancel` / `respond` / `sync`），不传 action 仍走老下单逻辑。
+  退款前必须先验会话令牌（HMAC + `timingSafeEqual`），金额与交易号**只从库里读**，前端传不进来。
+- `pay-notify` 按 `event_type` 分派：`REFUND.*` 走退款收尾，其余仍是收款。分派必须排在
+  `callRpc('mark_order_paid')` 之前，否则退款回调会被当成「非支付事件」直接 200 忽略掉。
+- 前端 `detail` 页四种入口：已付款取消（弹窗写明「全额退回 ¥X，1~3 个工作日到账」）、
+  已接单申请取消（可填理由）、接单员同意 / 拒绝（次按钮）。
+- 状态文案补 `cancel_requested: '取消申请中'` / `canceling: '退款中'`，配色沿用告警橙与中性蓝。
+
+**端到端实测**（真实网关 + 真实微信接口，非本地模拟）：
+
+| 场景 | 结果 |
+|---|---|
+| 待接单已付 → 取消 | `canceling`，退款 1000 分，`refund_no=RF5`，`refund_amount=10.00` |
+| 已接单 → 申请取消 | `cancel_requested`，`pay_status` 仍是 `paid`（钱没提前动） |
+| 接单员同意 | `canceling`，`refund_no=RF6` |
+| 回调 SUCCESS | `canceled` + `refunded`，`refund_id` 落库 |
+| 同一回调重复到达 | 幂等返回，不重复处理 |
+| 真实调微信退款（故意用假交易号） | 微信回 `PARAM_ERROR` → 翻译成「退款参数有误」→ 订单回滚成 `paid` + `pending`/`accepted`，`refund_error` 留痕 |
+
+**校验**：新增 `tests/order-refund.test.js` 25 条；全量 **150 项**通过；四件套全绿，
+主包 **0.99 MB / 180 个文件**（云函数不进包）。
+
+---
+
 ## 3. 数据库演进总览
 
 ### 数据表（38 张，全量 RLS）
@@ -1514,7 +1574,7 @@ R54 把提现改成**提交即自动打款**之后，`pages/admin/withdraw` 的�
 | 表 | 用途 | 引入轮次 |
 |---|---|---|
 | `profiles` | 用户资料、角色、认证状态、积分、信誉分 | R1 |
-| `orders` | 任务订单（含租赁工单、35+ 列） | R1 |
+| `orders` | 任务订单（含租赁工单、42 列；R60 起含退款与取消协商字段） | R1 / R60 |
 | `addresses` | 我的常用地址 | R1 |
 | `runner_applications` | 接单员实名认证申请（证件照脱敏） | R1 |
 | `rental_requests` | 相机租赁预填申请 | R11 |
@@ -1562,22 +1622,37 @@ R19  违规下架：takedown boolean
 R28  结构化地址 + 送达佐证 + 抵扣：pickup_building / pickup_floor /
      deliver_building / deliver_floor / deliver_images text[] /
      discount_code / discount_amount
+R60  取消与退款：refund_no（RF+订单号，微信幂等键）/ refund_id / refund_amount /
+     refund_error / refunded_at / cancel_reason / cancel_requested_at
 ```
 
-### 订单状态机（R11 之后确定）
+### 订单状态机（R60 之后）
 ```
 pending ──accept_order──> accepted ──complete_order(+佐证照片)──> waiting_confirm
    │                          │                                        │
-   │                     cancel_order                          confirm_order_done
-   └──cancel_order──> canceled                                         ↓
-                                                        done（钱包入账 + 下单人积分 + 评价待办）
+   │                  request_cancel_order                     confirm_order_done
+   │                          ↓                                        ↓
+   │                  cancel_requested ──respond_cancel_request     done（钱包入账 +
+   │                          └──(拒绝)──> accepted                  下单人积分 + 评价待办）
+   │
+   ├── request_cancel_order（已付）──> canceling ──svc_finish_order_refund──> canceled
+   └── request_cancel_order（未付）────────────────────────────────────────> canceled
 
 waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（管理员判定结算）
 ```
 
-### 数据库函数（159 个，现役 CloudBase 库）
+⚠️ **`canceling` 是一个「锁」**：它从大厅撤下（`list_hall_orders` 只查 `pending`）、挡住接单
+（`accept_order` 只接 `pending`）、也挡住再次取消（`request_cancel_order` 只收 `pending`/`accepted`）。
+只有退款回调 `SUCCESS` 才落到 `canceled`；同步失败会被 `svc_fail_order_refund` 回滚成
+`paid` + `pending`/`accepted`，让用户能重新点一次 —— **绝不能点一下就 `canceled`**。
+
+### 数据库函数（164 个，现役 CloudBase 库）
 按职能分：
 - **订单**：`create_order`(17参) / `accept_order` / `complete_order` / `cancel_order` / `confirm_order_done` / `get_order_detail` / `order_relation` / `list_my_orders` / `search_my_orders` / `hide_my_order` / `order_hidden` …
+- **取消与退款（R60）**：`request_cancel_order`（发布方发起，已付直接进退款、已接单转协商）/
+  `respond_cancel_request`（接单员同意或拒绝）/ `svc_finish_order_refund`（回调收尾，幂等）/
+  `svc_fail_order_refund`（同步失败回滚）。后两个是 `svc_` 前缀，**只 GRANT `service_role`**，
+  客户端调用实测 42501。
 - **图片**：`save_media_asset` / `get_media_asset` / `get_public_asset` / **`get_order_asset`**
 - **租赁**：`submit_rental_request` / `admin_set_rental_price` / `admin_create_rental_order` / `list_rental_items` / `admin_*_rental_item`
 - **结算与争议**：`submit_settle_feedback` / `admin_list_feedbacks` / `admin_resolve_feedback`
@@ -1903,9 +1978,9 @@ node campus-errand/tools/style-lint.js campus-errand
 | `check-mp.js` | **工作区根目录** | ① ESM 严格解析（抓重复声明）② JSON 可解析 ③ WXML 标签配对 + id 唯一 ④ app.json 页面文件齐全 ⑤ usingComponents 指向存在 ⑥ 按 packOptions.ignore 算真实上传体积 ⑦ 裸包名能在 miniprogram_npm 解析 |
 | `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
-**当前状态（2026-10-30 15:55 复核）**：57 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
-`check-mp.js` **0.98MB / 2.00MB**（180 个文件，扫描 JS 72 个）通过，`style-lint.js`（33 wxss / 41 wxml）通过，
-`npm test` **125 项**全过。
+**当前状态（2026-10-30 16:45 复核）**：57 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
+`check-mp.js` **0.99MB / 2.00MB**（180 个文件，扫描 JS 72 个）通过，`style-lint.js`（33 wxss / 41 wxml）通过，
+`npm test` **150 项**全过。
 
 > 主包从 1.41MB 降到 **0.95MB**，是 R52 删掉 WorkBuddy Cloud SDK 与 `miniprogram_npm/` 的结果。
 

@@ -1,5 +1,5 @@
 /**
- * pay-create · 微信支付 JSAPI 下单
+ * pay-create · 微信支付下单 + 取消退款
  *
  * 双入口兼容：
  *   ① wx.cloud.callFunction（微信云开发环境）—— 自动带 OPENID
@@ -9,9 +9,22 @@
  * 本项目数据层是腾讯云 CloudBase 的 PostgreSQL，两者不是一回事，
  * 所以小程序端走普通 HTTPS 请求。
  *
+ * 为什么退款也放在这个函数里（R60）：
+ *   退款要用商户私钥做 RSA 签名，而私钥在 CloudBase 上只能看到打码值 ——
+ *   新建一个 refund-api 根本没法把密钥配进去。退款和下单用的是同一套凭据，
+ *   所以合并进来是唯一能真正跑通的方案，也少一条网关路由。
+ *   前端仍按语义调用（PATHS 里 'refund' 指向同一地址），代码里不混。
+ *
+ * action（不传 = 下单，保持老调用兼容）：
+ *   create   下单（= 老行为，参数 code / orderId / amount / notifyUrl）
+ *   cancel   发布方取消：待接单直接退款，已接单转协商
+ *   respond  接单员回应取消申请
+ *   sync     主动查退款结果（回调没到时的兜底）
+ *
  * 环境变量：
  *   WXPAY_MCHID / WXPAY_APPID / WXPAY_SERIAL_NO / WXPAY_PRIVATE_KEY / WXPAY_NOTIFY_URL
- *   WX_APP_SECRET  小程序 AppSecret（code 换 openid 用）
+ *   WX_APP_SECRET  小程序 AppSecret（code 换 openid、验会话令牌）
+ *   TCB_ENV_ID / TCB_PUBLISHABLE_KEY  读库
  */
 const crypto = require('crypto')
 const https = require('https')
@@ -145,6 +158,299 @@ function jscode2session(code) {
   })
 }
 
+// ============================================================
+// R60 · 取消订单与退款
+//
+// 金额口径：全额退。下单付款时 mark_order_paid 校验的是
+//   round((reward - discount_amount) * 100) 分，这里用同一个数，不多退不少退。
+// 幂等：out_refund_no 固定为 RF + 订单号，微信侧同一单号重复提交返回同一笔，
+//   所以网络抖动、用户连点、回调重试都不会退两次钱。
+// 回调：复用 WXPAY_NOTIFY_URL（pay-notify 里按 event_type 分派 REFUND.*），
+//   这样不用再加一条网关路由，也不用把 APIv3 密钥复制到新函数。
+// ============================================================
+
+function b64url(buf) {
+  return Buffer.from(buf)
+    .toString('base64')
+    .replace(/=+$/, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+}
+
+/** 校验 app-api 签发的那套会话令牌（HMAC-SHA256，密钥同 WX_APP_SECRET） */
+function verifyToken(token) {
+  const raw = String(token || '')
+  const parts = raw.split('.')
+  if (parts.length !== 3 || parts[0] !== 'v1' || !APP_SECRET) return ''
+  const expect = b64url(crypto.createHmac('sha256', APP_SECRET).update(parts[1]).digest())
+  const a = Buffer.from(expect)
+  const b = Buffer.from(parts[2])
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return ''
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'))
+    if (!payload || !payload.uid) return ''
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return ''
+    return String(payload.uid)
+  } catch (e) {
+    return ''
+  }
+}
+
+function httpsJson(host, path, method, body, headers) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      { hostname: host, path: path, method: method, timeout: 12000, headers: headers },
+      (res) => {
+        let d = ''
+        res.on('data', (c) => {
+          d += c
+        })
+        res.on('end', () => {
+          let json = null
+          try {
+            json = d ? JSON.parse(d) : null
+          } catch (e) {
+            json = null
+          }
+          resolve({ status: res.statusCode, body: json, raw: d })
+        })
+      }
+    )
+    req.on('timeout', () => {
+      req.destroy(new Error('读库超时'))
+    })
+    req.on('error', reject)
+    if (body) req.write(body)
+    req.end()
+  })
+}
+
+/** 带身份调业务 RPC（走 svc_rpc 代持 auth.uid()，函数里的行级校验照常生效） */
+async function svcRpc(uid, fn, args) {
+  const r = await httpsJson(
+    TCB_ENV + '.api.tcloudbasegateway.com',
+    '/v1/rdb/rest/rpc/svc_rpc',
+    'POST',
+    JSON.stringify({ p_uid: uid, p_fn: fn, p_args: args || {} }),
+    { Authorization: 'Bearer ' + TCB_KEY, 'Content-Type': 'application/json' }
+  )
+  if (r.status >= 400) {
+    const b = r.body || {}
+    throw new Error(b.message || b.hint || b.details || b.error || '调用失败（HTTP ' + r.status + '）')
+  }
+  return unwrapRpc(r.body)
+}
+
+/**
+ * 直接调内部函数（svc_ 前缀）：svc_rpc 明确拒绝 svc_ 前缀，
+ * 所以这两个只能服务端直连，客户端拿到 publishable key 也调不到。
+ */
+async function directRpc(fn, args) {
+  const r = await httpsJson(
+    TCB_ENV + '.api.tcloudbasegateway.com',
+    '/v1/rdb/rest/rpc/' + fn,
+    'POST',
+    JSON.stringify(args || {}),
+    { Authorization: 'Bearer ' + TCB_KEY, 'Content-Type': 'application/json' }
+  )
+  if (r.status >= 400) {
+    const b = r.body || {}
+    throw new Error(b.message || b.hint || b.details || b.error || '调用失败（HTTP ' + r.status + '）')
+  }
+  return unwrapRpc(r.body)
+}
+
+function unwrapRpc(body) {
+  if (Array.isArray(body)) {
+    const first = body.length ? body[0] : null
+    if (first && typeof first === 'object' && first !== null && 'svc_rpc' in first) return first.svc_rpc
+    return body
+  }
+  if (body && typeof body === 'object' && 'svc_rpc' in body) return body.svc_rpc
+  return body
+}
+
+/** 把微信的错误码翻成人话；前端弹窗只认这一层 */
+function describeWxError(status, body) {
+  const b = body || {}
+  const code = String(b.code || '')
+  const map = {
+    NOT_ENOUGH: '商户号可用余额不足，退款暂时发不出去，请稍后重试或联系客服',
+    PARAM_ERROR: '退款参数有误，请把这条提示发给管理员',
+    INVALID_REQUEST: '微信拒绝了这次退款请求，请联系客服',
+    ORDERNOTEXIST: '微信侧查不到这笔支付，请联系客服',
+    ORDER_CLOSED: '这笔订单已关闭，无法退款',
+    ORDER_PAID_ERROR: '订单支付状态异常，无法退款',
+    REFUND_FEE_INVALID: '退款金额与原订单对不上，请联系客服',
+    REFUND_NOT_EXIST: '微信侧没有这笔退款记录',
+    FREQUENCY_LIMITED: '操作太频繁了，停一会儿再试',
+    SYSTEMERROR: '微信支付系统繁忙，请稍后重试',
+    NOT_ENABLED: '商户号没有退款权限',
+  }
+  if (map[code]) return map[code]
+  const msg = String(b.message || b.detail || '')
+  if (code) return '微信退款失败（' + code + '）' + (msg ? '：' + msg : '')
+  return '微信退款失败（HTTP ' + status + '）'
+}
+
+function toOrderId(v) {
+  const n = Number(v)
+  if (!isFinite(n) || n <= 0 || Math.floor(n) !== n) return 0
+  if (n > 9007199254740991) return 0
+  return n
+}
+
+async function markRefundFail(refundNo, reason) {
+  try {
+    await directRpc('svc_fail_order_refund', { p_refund_no: refundNo, p_reason: reason })
+  } catch (e) {
+    // 回滚失败也不能把原始错误吞掉；订单会停在 refunding，客服可人工收尾
+    console.error('svc_fail_order_refund failed', refundNo, String((e && e.message) || e))
+  }
+}
+
+/** 真正发起退款：金额与交易号都来自库里刚锁过的那一行，前端传不进来 */
+async function doRefund(orderId, row) {
+  const fen = Number(row.refund_fen) || 0
+  const txn = String(row.txn_id || '')
+  const refundNo = 'RF' + orderId
+  if (!fen || !txn) {
+    return { ok: false, code: 'BAD_REFUND', error: '退款信息不完整（缺金额或微信交易号），请联系客服' }
+  }
+  if (!NOTIFY_URL) {
+    return { ok: false, code: 'NO_NOTIFY_URL', error: '退款回调地址没配置，自动退款暂不可用，请联系客服' }
+  }
+
+  let r
+  try {
+    r = await wxpayRequest('POST', '/v3/refund/domestic/refunds', {
+      transaction_id: txn,
+      out_refund_no: refundNo,
+      reason: '发布方取消订单',
+      notify_url: NOTIFY_URL,
+      amount: { refund: fen, total: fen, currency: 'CNY' },
+    })
+  } catch (e) {
+    const msg = String((e && e.message) || e || '发起退款失败')
+    await markRefundFail(refundNo, msg)
+    return { ok: false, code: 'REFUND_FAILED', error: msg }
+  }
+
+  if (r.status < 200 || r.status >= 300) {
+    const msg = describeWxError(r.status, r.body)
+    await markRefundFail(refundNo, msg)
+    return {
+      ok: false,
+      code: 'REFUND_FAILED',
+      error: msg,
+      wxCode: String((r.body && r.body.code) || ''),
+    }
+  }
+
+  // 微信状态：SUCCESS 已完成、PROCESSING 已受理。两者都算发起成功，
+  // 最终以回调为准 —— 不在这里直接把订单标成 refunded。
+  const wxStatus = String((r.body && r.body.status) || '')
+  return {
+    ok: true,
+    status: 'canceling',
+    refunding: true,
+    refundNo: refundNo,
+    wxStatus: wxStatus,
+    message: '退款已受理，1~3 个工作日到账',
+  }
+}
+
+async function doCancel(uid, payload) {
+  const orderId = toOrderId(payload.orderId)
+  if (!orderId) return { ok: false, code: 'BAD_PARAM', error: '订单号有误' }
+
+  const rows = await svcRpc(uid, 'request_cancel_order', {
+    p_order_id: orderId,
+    p_reason: String(payload.reason || '').slice(0, 100),
+  })
+  const row = (rows && rows[0]) || {}
+  if (row.result !== 'ok') {
+    return {
+      ok: false,
+      code: 'CANCEL_REJECTED',
+      error: row.message || '取消失败',
+      status: row.order_status || '',
+    }
+  }
+  if (row.order_status !== 'canceling') {
+    // 未付款直接取消、或已接单转协商，都不需要退款
+    return { ok: true, status: row.order_status, refunding: false, message: row.message || '' }
+  }
+  return doRefund(orderId, row)
+}
+
+async function doRespond(uid, payload) {
+  const orderId = toOrderId(payload.orderId)
+  if (!orderId) return { ok: false, code: 'BAD_PARAM', error: '订单号有误' }
+  const agree = payload.agree === true || payload.agree === 'true' || payload.agree === 1
+
+  const rows = await svcRpc(uid, 'respond_cancel_request', { p_order_id: orderId, p_agree: agree })
+  const row = (rows && rows[0]) || {}
+  if (row.result !== 'ok') {
+    return {
+      ok: false,
+      code: 'RESPOND_REJECTED',
+      error: row.message || '操作失败',
+      status: row.order_status || '',
+    }
+  }
+  if (row.order_status !== 'canceling') {
+    return { ok: true, status: row.order_status, refunding: false, message: row.message || '' }
+  }
+  return doRefund(orderId, row)
+}
+
+/** 主动查一次退款结果：回调丢了 / 用户等不及时的兜底 */
+async function doSync(uid, payload) {
+  const orderId = toOrderId(payload.orderId)
+  if (!orderId) return { ok: false, code: 'BAD_PARAM', error: '订单号有误' }
+  const refundNo = 'RF' + orderId
+
+  let r
+  try {
+    r = await wxpayRequest('GET', '/v3/refund/domestic/refunds/' + refundNo, null)
+  } catch (e) {
+    return { ok: false, code: 'SYNC_FAILED', error: String((e && e.message) || e || '查询退款结果失败') }
+  }
+  if (r.status === 404) return { ok: false, code: 'REFUND_NOT_EXIST', error: '微信侧还没有这笔退款' }
+  if (r.status < 200 || r.status >= 300) {
+    return { ok: false, code: 'SYNC_FAILED', error: describeWxError(r.status, r.body) }
+  }
+
+  const wxStatus = String((r.body && r.body.status) || '')
+  const refundId = String((r.body && r.body.refund_id) || '')
+  if (wxStatus === 'SUCCESS' || wxStatus === 'CLOSED') {
+    await directRpc('svc_finish_order_refund', {
+      p_refund_no: refundNo,
+      p_refund_id: refundId,
+      p_state: wxStatus,
+    })
+  }
+  return { ok: true, wxStatus: wxStatus, refundId: refundId }
+}
+
+async function runRefund(action, payload) {
+  const uid = verifyToken(payload.token)
+  // 退款是花真金白银的操作，没有有效会话一律不往下走
+  if (!uid) return { ok: false, code: 'TOKEN_INVALID', error: '登录状态已失效，请重新进入小程序' }
+  if (!TCB_ENV || !TCB_KEY) {
+    return { ok: false, code: 'NOT_CONFIGURED', error: '读库配置缺失（TCB_ENV_ID / TCB_PUBLISHABLE_KEY）' }
+  }
+
+  try {
+    if (action === 'cancel') return await doCancel(uid, payload)
+    if (action === 'respond') return await doRespond(uid, payload)
+    return await doSync(uid, payload)
+  } catch (err) {
+    return { ok: false, code: 'REFUND_ERROR', error: String((err && err.message) || err || '退款处理异常') }
+  }
+}
+
 exports.main = async (event) => {
   const isHttp = !!(event && (event.httpMethod || event.requestContext))
   let payload = event || {}
@@ -162,6 +468,13 @@ exports.main = async (event) => {
   }
 
   try {
+    // R60：取消与退款走另一条分支，和下单共用同一套商户凭据。
+    // 不传 action 的老调用照旧走下单，前端不用改。
+    const action = String(payload.action || '')
+    if (action === 'cancel' || action === 'respond' || action === 'sync') {
+      return done(await runRefund(action, payload))
+    }
+
     const miss = missingEnv()
     if (miss.length) {
       return done({ ok: false, code: 'ENV_MISSING', error: '云函数环境变量缺失：' + miss.join(', ') })

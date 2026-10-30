@@ -240,15 +240,17 @@
     <view class="btn-ghost" bindtap="chooseDeliverPhotos">重新选择照片</view>
   </view>
   </block>
-  <view class="footer-bar" wx:if="{{primary}}">
-    <view class="btn-primary {{busy ? 'disabled' : ''}} {{armKey ? 'btn-armed' : ''}}" bindtap="onPrimary">
+  <view class="footer-bar" wx:if="{{primary || secondary}}">
+    <!-- 次要操作只有一种：接单员拒绝取消申请 -->
+    <view class="btn-ghost" wx:if="{{secondary}}" bindtap="onSecondary">{{secondary.label}}</view>
+    <view class="btn-primary {{busy ? 'disabled' : ''}} {{armKey ? 'btn-armed' : ''}}" wx:if="{{primary}}" bindtap="onPrimary">
       {{armKey && armKey !== 'abandon' ? armLabel : primary.label}}
     </view>
-    <view class="hint" wx:if="{{armKey === 'cancel'}}">再点一次立即取消，4 秒内不点会自动撤销</view>
+    <!-- 退款相关说明优先：金额和到账时间必须写在按钮下面 -->
+    <view class="hint" wx:if="{{cancelHint}}">{{cancelHint}}</view>
     <view class="hint" wx:if="{{armKey === 'complete'}}">再点一次即提交完成，赏金要等发布方确认</view>
     <view class="hint" wx:if="{{armKey === 'confirm'}}">再点一次即把赏金打给接单员，请确认物品已送达</view>
     <view class="hint" wx:if="{{!armKey && primary.key === 'accept'}}">接单后请尽快送达，送达后由发布方确认</view>
-    <view class="hint" wx:if="{{!armKey && primary.key === 'cancel'}}">取消后任务会从大厅撤下，需要重新发布</view>
     <view class="hint" wx:if="{{!armKey && primary.key === 'complete'}}">送达后点这里，赏金不会立刻结算</view>
     <view class="hint" wx:if="{{!armKey && primary.key === 'confirm'}}">确认后赏金立刻打进接单员钱包</view>
   </view>

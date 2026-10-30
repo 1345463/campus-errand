@@ -252,6 +252,11 @@ const TAGGED_RENTAL = withDormPicker([RENTAL_SERVICE])[0]
 const STATUS_TEXT = {
   pending: '待接单',
   accepted: '进行中',
+  // 已接单后发布方想取消，要接单员点头 —— 接单员可能已经在路上，
+  // 单方面退款会让人白跑一趟
+  cancel_requested: '取消申请中',
+  // 退款已发起、等微信回调；此时订单已从大厅撤下，谁也不能接
+  canceling: '退款中',
   waiting_confirm: '待发布方确认',
   done: '已完成',
   canceled: '已取消',

@@ -29,6 +29,7 @@ const ALLOW = {
   api: '/api/app-api',
   withdraw: '/api/withdraw',
   'ai-api': '/api/ai-api',
+  refund: '/api/pay-create',
 }
 
 function postJson(path, bodyObj) {

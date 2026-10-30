@@ -699,6 +699,14 @@ page {
 .status-pending {
   color: var(--warn);
 }
+/* 取消协商中：卡在「等对方点头」，用告警色提示有人要动 */
+.status-cancel_requested {
+  color: var(--warn);
+}
+/* 退款中：钱在路上，既不是错误也不是成功，用中性蓝 */
+.status-canceling {
+  color: #3B82F6;
+}
 .status-accepted {
   color: #3B82F6;
 }

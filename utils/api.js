@@ -460,8 +460,37 @@ function abandonOrder(id) {
   return callOrderRpc('abandon_order', id)
 }
 
-function cancelOrder(id) {
-  return callOrderRpc('cancel_order', id)
+// 取消订单：不再直接改状态，而是走 refund-api。
+//
+// 老实现调 cancel_order，只把 status 改成 canceled，钱一动不动 ——
+// 已付款的订单取消后，钱就留在商户号里，用户没有任何入口能拿回来。
+// 现在由云函数根据库里那一行的真实金额发起微信退款（全额退），
+// 前端只传订单号和理由，金额、交易号一律不从端上传。
+//
+// 返回 { ok, status, refunding, message }：
+//   refunding=true  → 正在退款，等回调
+//   status=cancel_requested → 已接单，等接单员同意
+//   status=canceled → 未付款，直接取消
+function cancelOrder(id, reason) {
+  return tcb.callTarget('refund', {
+    action: 'cancel',
+    orderId: id,
+    reason: reason || '',
+  })
+}
+
+// 接单员回应取消申请：同意才进退款，拒绝则订单回到进行中
+function respondCancel(id, agree) {
+  return tcb.callTarget('refund', {
+    action: 'respond',
+    orderId: id,
+    agree: !!agree,
+  })
+}
+
+// 回调迟迟不到时的兜底：主动查一次微信退款结果
+function syncRefund(id) {
+  return tcb.callTarget('refund', { action: 'sync', orderId: id })
 }
 
 // 发布方确认：赏金才真正打进接单员钱包
@@ -1725,6 +1754,8 @@ module.exports = {
   completeOrder: completeOrder,
   confirmOrderDone: confirmOrderDone,
   cancelOrder: cancelOrder,
+  respondCancel: respondCancel,
+  syncRefund: syncRefund,
   abandonOrder: abandonOrder,
   submitSettleFeedback: submitSettleFeedback,
   adminListFeedbacks: adminListFeedbacks,

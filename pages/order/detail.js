@@ -11,6 +11,9 @@ const ARM_TEXT = {
   complete: '再点一次，确认已送达',
   confirm: '再点一次，确认完成并支付',
   abandon: '再点一次，确认放弃接单',
+  // 这两个不会走到二次确认（都用弹窗），留着是为了别的地方复用时不至于显示默认文案
+  request_cancel: '再点一次，提交取消申请',
+  respond_cancel: '再点一次，同意取消并退款',
 }
 const ARM_TIMEOUT = 4000
 const SETTLE_WAIT_HOURS = 48
@@ -136,6 +139,8 @@ Page({
     reportBusy: false,
     reportStatusText: '',
     primary: null,
+    secondary: null,
+    cancelHint: '',
     busy: false,
     armKey: '',
     armLabel: '',
@@ -201,7 +206,8 @@ Page({
     return api.getSession().then(function (session) {
       if (!session) {
         page.setData({ needLogin: true, hidden: false, order: {}, images: [], deliverImageUrls: [],
-          primary: { key: 'login', label: '登录后查看或接单' }, errorText: '', canReport: false })
+          primary: { key: 'login', label: '登录后查看或接单' }, secondary: null, cancelHint: '',
+          errorText: '', canReport: false })
         return null
       }
       // 身份判定只决定「显示哪些按钮」，它单点失败不该让整页进错误态
@@ -229,6 +235,8 @@ Page({
               ? '订单不存在或已被删除'
               : '该任务仅对接单员开放，完成接单员认证后即可查看',
             primary: null,
+            secondary: null,
+            cancelHint: '',
             order: {}, images: [], canReport: false,
           })
           return null
@@ -237,7 +245,7 @@ Page({
         page.setData({ phoneBound: !!(result[5] && result[5].bound) })
 
         if (result[3]) {
-          page.setData({ hidden: true, order: {}, images: [], primary: null, canReport: false })
+          page.setData({ hidden: true, order: {}, images: [], primary: null, secondary: null, cancelHint: '', canReport: false })
           return null
         }
         page.setData({ hidden: false })
@@ -263,17 +271,53 @@ Page({
             const canReport = !!session
 
             let primary = session ? null : { key: 'login', label: '登录后接单' }
+            // 次要操作只有一个场景：接单员收到取消申请，可以「拒绝」
+            let secondary = null
+            // 底部说明：退款相关的话必须写清楚金额与到账时间，
+            // 不然用户点完以为钱立刻回来，结果三天没到就来找客服
+            let cancelHint = ''
+            const payAmount = (Number(order.reward || 0) - Number(order.discount_amount || 0)).toFixed(2)
             if (session) {
               if (order.status === 'pending') {
                 if (isOwner) {
-                  primary = { key: 'cancel', label: '取消任务' }
+                  primary = {
+                    key: 'cancel',
+                    label: order.pay_status === 'paid' ? '取消并退款 ¥' + payAmount : '取消任务',
+                  }
                 } else {
                   primary = { key: 'accept', label: '接单赚 ¥' + order.reward }
                 }
-              } else if (order.status === 'accepted' && isRunner) {
-                primary = { key: 'complete', label: '我已送达，提交完成' }
+              } else if (order.status === 'accepted') {
+                if (isRunner) {
+                  primary = { key: 'complete', label: '我已送达，提交完成' }
+                } else if (isOwner) {
+                  // 已接单不能单方面取消：接单员可能已经在路上
+                  primary = { key: 'request_cancel', label: '申请取消' }
+                }
+              } else if (order.status === 'cancel_requested') {
+                if (isRunner) {
+                  primary = { key: 'respond_cancel', label: '同意取消并退款' }
+                  secondary = { key: 'reject_cancel', label: '拒绝，继续完成' }
+                }
               } else if (order.status === 'waiting_confirm' && isOwner) {
                 primary = { key: 'confirm', label: '确认完成并支付 ¥' + order.reward }
+              }
+              // canceling（退款中）谁都没有按钮：钱在路上，改不了也拦不住
+
+              if (order.status === 'pending' && isOwner) {
+                cancelHint = order.pay_status === 'paid'
+                  ? '取消后全额退回 ¥' + payAmount + '，1~3 个工作日到账'
+                  : '取消后任务会从大厅撤下，需要重新发布'
+              } else if (order.status === 'accepted' && isOwner) {
+                cancelHint = '已接单，取消需接单员同意；他同意后全额退回 ¥' + payAmount
+              } else if (order.status === 'cancel_requested') {
+                cancelHint = isRunner
+                  ? '发布方申请取消，同意后全额退款给他，本单结束'
+                  : '已提交取消申请，等接单员回应'
+              } else if (order.status === 'canceling') {
+                cancelHint = order.refund_error
+                  ? '退款异常：' + order.refund_error + '。请联系客服处理'
+                  : '退款处理中，1~3 个工作日到账；到账后本单自动结束'
               }
             }
 
@@ -334,6 +378,8 @@ Page({
               feedbackWaitText: feedbackWaitText,
               feedbackStatusText: feedbackStatusText,
               primary: primary,
+              secondary: secondary,
+              cancelHint: cancelHint,
               errorText: '',
               canReport: canReport,
               // 接单员真实姓名只对「这单的参与方 + 管理员」展示。
@@ -500,7 +546,89 @@ Page({
       return
     }
 
+    // 取消 / 退款类全部走弹窗：金额、到账时间必须在动手前讲明白。
+    // 不用 armOrRun 的二次点按，是因为「再点一次」写不清退多少钱。
+    if (action.key === 'cancel') {
+      page.doCancel()
+      return
+    }
+    if (action.key === 'request_cancel') {
+      page.doRequestCancel()
+      return
+    }
+    if (action.key === 'respond_cancel') {
+      page.doRespondCancel(true)
+      return
+    }
+
     page.armOrRun(action.key, undefined)
+  },
+
+  onSecondary: function () {
+    const action = this.data.secondary
+    if (!action) return
+    if (this.data.busy) {
+      ui.toast({ title: '正在处理，请稍候', icon: 'none' })
+      return
+    }
+    if (action.key === 'reject_cancel') this.doRespondCancel(false)
+  },
+
+  /** 取消订单：待接单且已付款 → 直接全额退款；未付款 → 纯取消 */
+  doCancel: function () {
+    const page = this
+    const order = page.data.order || {}
+    const paid = order.pay_status === 'paid'
+    const amount = (Number(order.reward || 0) - Number(order.discount_amount || 0)).toFixed(2)
+    wx.showModal({
+      title: paid ? '取消并退款' : '取消任务',
+      content: paid
+        ? '确认取消这一单？¥' + amount + ' 将全额退回微信，1~3 个工作日到账。'
+        : '确认取消这一单？取消后任务会从大厅撤下，需要重新发布。',
+      confirmText: paid ? '取消并退款' : '确认取消',
+      confirmColor: '#E5484D',
+      success: function (res) {
+        if (!res.confirm) return
+        page.runRpc('cancel')
+      },
+    })
+  },
+
+  /** 已接单：只能申请取消，等接单员同意 */
+  doRequestCancel: function () {
+    const page = this
+    const order = page.data.order || {}
+    const amount = (Number(order.reward || 0) - Number(order.discount_amount || 0)).toFixed(2)
+    wx.showModal({
+      title: '申请取消',
+      content: '接单员可能已经在路上，需要他同意才能退款（¥' + amount + ' 全额退回）。',
+      editable: true,
+      placeholderText: '取消原因（选填，接单员能看到）',
+      confirmText: '提交申请',
+      success: function (res) {
+        if (!res.confirm) return
+        page.runRpc('request_cancel', undefined, String(res.content || ''))
+      },
+    })
+  },
+
+  /** 接单员回应取消申请 */
+  doRespondCancel: function (agree) {
+    const page = this
+    const order = page.data.order || {}
+    const amount = (Number(order.reward || 0) - Number(order.discount_amount || 0)).toFixed(2)
+    wx.showModal({
+      title: agree ? '同意取消' : '拒绝取消',
+      content: agree
+        ? '同意后 ¥' + amount + ' 将全额退回发布方，本单结束。'
+        : '拒绝后订单继续，你需要按约完成并送达。',
+      confirmText: agree ? '同意并退款' : '拒绝',
+      confirmColor: agree ? '#E5484D' : '#2E7CF6',
+      success: function (res) {
+        if (!res.confirm) return
+        page.runRpc(agree ? 'respond_cancel' : 'reject_cancel')
+      },
+    })
   },
 
   // 二次确认：第一次点上膛并改按钮文案，ARM_TIMEOUT 内再点一次才真提交。
@@ -754,7 +882,24 @@ Page({
     ui.toast({ title: message, icon: 'none', duration: 2200 })
   },
 
-  runRpc: function (kind, images) {
+  // 每种操作成功后的提示语。
+  // 取消这一条要看服务端回来的状态：已付款是「退款已发起」，
+  // 已接单是「申请已提交」，未付款才是「已取消」—— 三句话含义完全不同。
+  resultText: function (kind, res) {
+    const r = res || {}
+    if (kind === 'accept') return '接单成功'
+    if (kind === 'complete') return '已提交，等发布方确认'
+    if (kind === 'confirm') return '已确认，赏金已打给接单员'
+    if (kind === 'abandon') return '已放弃，任务重新开放'
+    if (kind === 'request_cancel') return '已提交取消申请，等接单员回应'
+    if (kind === 'respond_cancel') return '已同意，退款处理中'
+    if (kind === 'reject_cancel') return '已拒绝，订单继续'
+    if (r.refunding) return '已发起退款，1~3 个工作日到账'
+    if (r.status === 'cancel_requested') return '已提交取消申请，等接单员回应'
+    return '已取消'
+  },
+
+  runRpc: function (kind, images, reason) {
     const page = this
     const id = page.data.id
     page.setData({ busy: true, errorText: '' })
@@ -767,20 +912,14 @@ Page({
           ? api.completeOrder(id, images)
           : kind === 'confirm'
             ? api.confirmOrderDone(id)
-            : api.cancelOrder(id)
+            : kind === 'respond_cancel'
+              ? api.respondCancel(id, true)
+              : kind === 'reject_cancel'
+                ? api.respondCancel(id, false)
+                : api.cancelOrder(id, reason)
     return call
-      .then(function () {
-        ui.toast({
-          title:
-            kind === 'accept'
-              ? '接单成功'
-              : kind === 'complete'
-                ? '已提交，等发布方确认'
-                : kind === 'confirm'
-                  ? '已确认，赏金已打给接单员'
-                  : kind === 'abandon' ? '已放弃，任务重新开放' : '已取消',
-          icon: 'success',
-        })
+      .then(function (res) {
+        ui.toast({ title: page.resultText(kind, res), icon: 'success' })
         page.setData({ busy: false, deliverPhotos: [], deliverPreviews: [] })
         return page.load()
       })
@@ -796,6 +935,11 @@ Page({
           return page.load()
         }
         page.fail(error)
+        // 退款发起失败时服务端已经把订单回滚成原状态（paid + pending/accepted），
+        // 页面必须跟着刷新，否则按钮还停在「退款中」，用户以为钱在路上了
+        if (kind === 'cancel' || kind === 'request_cancel' || kind === 'respond_cancel' || kind === 'reject_cancel') {
+          return page.load()
+        }
       })
   },
 })

@@ -11,12 +11,12 @@
 |---|---|
 | 页面 | **39** |
 | 前端代码 | **17,137** 行 JS / **5,048** 行 WXML / **5,041** 行 WXSS |
-| 数据库 | **38** 表 / **159** 个函数 / **9** 个触发器 |
+| 数据库 | **38** 表 / **164** 个函数 / **9** 个触发器 |
 | 云函数 | **8** 个 |
 | 云托管 | **1** 个（固定出口 IP，专门对接商家转账） |
-| 迁移脚本 | **60** 条（全部可重放） |
+| 迁移脚本 | **61** 条（全部可重放） |
 | 灰度开关 / 违规词 | **23** 个 / **292** 条（13 大类 + 4 条白名单） |
-| 回归测试 | **125** 项（含真实 PostgreSQL 执行） |
+| 回归测试 | **150** 项（含真实 PostgreSQL 执行） |
 | 小程序包体积 | **0.99 MB** / 上限 2 MB |
 
 ---
@@ -181,7 +181,7 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
     │              │
 ┌───▼──────────────▼─────┐
 │ CloudBase PostgreSQL    │
-│ 38 表 / 159 函数 / 9 触发器 │
+│ 38 表 / 164 函数 / 9 触发器 │
 │ RLS + SECURITY DEFINER  │
 └─────────────────────────┘
 ```
@@ -303,7 +303,7 @@ campus-errand/
 ├── cloudfunctions/   8 个：app-api / ai-api / pay-create / pay-notify /
 │                     tcb-proxy / transfer / transfer-notify / withdraw-api
 ├── cloudrun/         云托管 transfer-svc（固定出口 IP，对接商家转账）
-├── tests/            125 项回归测试（含 PGlite 真实 PostgreSQL）
+├── tests/            150 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 └── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅 / 支付方案
 ```
@@ -316,9 +316,9 @@ campus-errand/
 
 - **38 张表**：`pay_settings` / `withdraw_requests` / `phone_codes` / `wx_phone_tickets` /
   `media_uploads` / `media_upload_parts` 等；`profile_phones` / `account_deletions` 不开 policy，只给函数访问
-- **159 个函数**，命名约定 `p_` 前缀参数
+- **164 个函数**，命名约定 `p_` 前缀参数
 - **9 个触发器**：订单消息推送、图片归属校验、手机号闸门 ×3 等
-- **60 条迁移脚本**，全部幂等 —— 在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，
+- **61 条迁移脚本**，全部幂等 —— 在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，
   **不在本仓库内**）。完整清单见 [`docs/ITERATIONS.md` 第 3 章](docs/ITERATIONS.md)
 - 包内 `sql/` 还有 28 个早期脚本，属已退役旧库的结构参考，不再对现役库执行
 
@@ -342,7 +342,7 @@ pending ──accept──> accepted ──complete──> waiting_confirm ─�
 
 ```bash
 npm ci --ignore-scripts
-npm test        # 125 项回归测试
+npm test        # 150 项回归测试
 npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预检
 ```
 
@@ -355,7 +355,7 @@ npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预�
 没有 AppSecret、14 天不转正即注销。正式提审前需准备：小程序备案、用户隐私保护指引
 （手机号 / 证件照 / 地址 / 图片）、UGC 信息安全声明。
 
-1. 微信开发者工具打开本目录；主包需 ≤ 2 MB，当前 **0.98 MB / 2.00 MB**（180 个文件）。
+1. 微信开发者工具打开本目录；主包需 ≤ 2 MB，当前 **0.99 MB / 2.00 MB**（180 个文件）。
 2. **云函数 8 个**已部署到 `ceshi`（`tcb-proxy` 在小程序自有环境 `baozi-d2gbl784gd773f8b6`，
    需由开发者工具上传）。密钥只在云函数控制台的环境变量里配，不进代码与仓库。
 3. **云托管 `cloudrun/transfer-svc`**：函数型服务，端口 3000，9 个环境变量

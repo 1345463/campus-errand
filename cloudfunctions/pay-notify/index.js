@@ -176,6 +176,46 @@ function parseOrderId(outTradeNo) {
   return m ? Number(m[1]) : 0
 }
 
+/**
+ * R60 · 退款回调。
+ *
+ * 支付和退款共用同一个 notify_url（pay-create 里的 WXPAY_NOTIFY_URL），
+ * 靠 event_type 前缀区分：TRANSACTION.* 是收款，REFUND.* 是退款。
+ * 这样不用再加一条网关路由，也不用把 APIv3 密钥复制到新函数去。
+ *
+ * 三个状态怎么处理写在了 svc_finish_order_refund 里：
+ *   SUCCESS  → 订单 refunded + canceled
+ *   CLOSED   → 钱没出去，回滚成 paid，用户可重新发起
+ *   ABNORMAL → 保持 refunding 留人工，不擅自回滚
+ */
+async function handleRefundNotify(plain) {
+  const refundNo = String(plain.out_refund_no || '')
+  const refundId = String(plain.refund_id || '')
+  const status = String(plain.refund_status || plain.status || '').toUpperCase()
+
+  if (!refundNo) {
+    console.error('refund notify missing out_refund_no', JSON.stringify(plain).slice(0, 300))
+    return resp(200, { code: 'SUCCESS', message: '无退款单号，已忽略' })
+  }
+  if (!TCB_ENV || !TCB_KEY) {
+    console.error('TCB_ENV_ID / TCB_PUBLISHABLE_KEY 未配置，无法落库')
+    return resp(500, { code: 'FAIL', message: '落库配置缺失' })
+  }
+
+  const r = await callRpc('svc_finish_order_refund', {
+    p_refund_no: refundNo,
+    p_refund_id: refundId,
+    p_state: status,
+  })
+  if (r.status >= 400) {
+    console.error('svc_finish_order_refund failed', refundNo, r.status, JSON.stringify(r.body).slice(0, 300))
+    // 返回 500 让微信重试：这次是库的问题，不是业务问题
+    return resp(500, { code: 'FAIL', message: '落库失败' })
+  }
+  console.log('refund notify', refundNo, status, JSON.stringify(r.body).slice(0, 200))
+  return resp(200, { code: 'SUCCESS', message: '成功' })
+}
+
 exports.main = async (event) => {
   const rawBody = typeof event.body === 'string' ? event.body : JSON.stringify(event.body || {})
   const headers = event.headers || {}
@@ -203,15 +243,20 @@ exports.main = async (event) => {
     return resp(401, { code: 'FAIL', message: '签名验证失败', detail: v.why })
   }
 
-  // 2. 解密
+  // 2. 解密 + 按事件类型分派
   let plain
   try {
     const payload = JSON.parse(rawBody)
-    if (payload.event_type !== 'TRANSACTION.SUCCESS') {
+    const et = String(payload.event_type || '')
+    const isRefund = et.indexOf('REFUND.') === 0
+    // 只处理收款成功与退款两类；其余事件别去解密（白费一次 AES 还可能报错）
+    if (!isRefund && et !== 'TRANSACTION.SUCCESS') {
       return resp(200, { code: 'SUCCESS', message: '非支付成功事件，忽略' })
     }
     const r = payload.resource || {}
     plain = JSON.parse(gcmDecrypt(r.ciphertext, r.nonce, r.associated_data))
+    // 退款回调必须排在支付逻辑之前，否则会被当成「非支付事件」直接忽略掉
+    if (isRefund) return await handleRefundNotify(plain)
   } catch (e) {
     console.error('decrypt error', e.message)
     return resp(500, { code: 'FAIL', message: '解密失败' })

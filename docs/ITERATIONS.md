@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-10-30 01:50** ｜ 累计 **57 轮迭代**、**39 个页面**、**37 张表**、**156 个数据库函数**、**9 个触发器**、**58 个迁移脚本**、**97 项回归测试**、主包 **0.98 MB**
+> 统计截止：**2026-10-30 01:50** ｜ 累计 **57 轮迭代**、**39 个页面**、**37 张表**、**156 个数据库函数**、**9 个触发器**、**58 个迁移脚本**、**97 项回归测试**、主包 **0.97 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -1331,7 +1331,7 @@ R52 迁库时 `cloud.llm.*` 整体失效，当时的处理是「`llmModels()` �
 #### 校验
 新增 `tests/feedback-ui.test.js` 13 条（类名前缀、scroll-view 高度、列表布局、SQL 双写、排除自己、
 大模型非占位、密钥不下发、令牌校验、内置目录、空正文、网关与转发白名单）。
-全量 **97 项通过**；四件套全绿，主包 **0.98 MB**。`ai-api` 已部署并建好网关路由。
+全量 **97 项通过**；四件套全绿，主包 **0.97 MB**。`ai-api` 已部署并建好网关路由。
 
 ---
 
@@ -1717,7 +1717,7 @@ node campus-errand/tools/style-lint.js campus-errand
 | `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
 **当前状态（2026-10-30 01:50 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
-`check-mp.js` **0.98MB / 2.00MB**（183 个文件，扫描 JS 72 个）通过，`style-lint.js`（33 wxss / 42 wxml）通过，
+`check-mp.js` **0.97MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（33 wxss / 42 wxml）通过，
 `npm test` **97 项**全过。
 
 > 主包从 1.41MB 降到 **0.95MB**，是 R52 删掉 WorkBuddy Cloud SDK 与 `miniprogram_npm/` 的结果。
@@ -1740,10 +1740,16 @@ node campus-errand/tools/style-lint.js campus-errand
 ## 7. 遗留事项与风险
 
 ### 🔴 待用户操作
-1. **`DROP POLICY orders_write_own` 已执行，但仍在观察窗口内**。按原计划应等「新版正式发布 + 48 小时」。触发条件是旧版客户端还能直接 UPDATE 自己的订单（可绕过 accept/complete 改状态）—— 这是**已知残留风险**。一旦有用户反馈立刻回滚策略（回滚语句在 `sql/drop-orders-write-own.sql` 末尾注释里），`add-order-write-guard.sql` 的 INSERT 守卫可独立留着继续兜底。
+1. ~~**`DROP POLICY orders_write_own` 观察窗口**~~ ✅ **R52 迁库后已随之失效**（2026-10-30 复核）：
+   CloudBase 的 `public.orders` 只有 `orders_read_all`（只读），`orders_write_own` 在两条迁移里
+   都写了 `DROP POLICY IF EXISTS`，**线上根本没有可直连的 UPDATE 通路**，绕 accept/complete 改状态这条路已消失。
+   前端也不直连表（统一 `svc_rpc`），INSERT 守卫可继续留着兜底。
 
 ### 🟡 已知但未处理（2026-10-26 复核更新）
-2. **旧对象存储的证件照永久不可读**：`runner_applications` 里 id=12/13 存的是旧路径，需让相应用户重新提交。管理员点开时会收到明确提示。
+2. ~~**旧对象存储的证件照永久不可读**（`runner_applications` id=12/13 存旧路径）~~ ✅ **随 R52 迁库失效**（2026-10-30 复核）：
+   旧对象存储（WorkBuddy Cloud Storage）通道已随双库期结束废弃，业务代码只走
+   `media_assets` 三条读图通道（`get_media_asset` / `get_order_asset` / `get_public_asset`），
+   没有任何路径再去读旧路径；若历史申请单确实缺图，按「让用户重新提交」处理即可。
 3. ~~**`utils/config.js` 的 `rememberPassword / autoLogin / presetAccount` 仍为调试态**~~
    ✅ **R39 起已解决**（2026-10-26 复核确认）：现值 `rememberPassword: false`、`autoLogin: false`、
    `presetAccount: { phone:'', password:'' }`，且注释明确「发布配置门禁会强制这两个开关为 false、
@@ -1791,7 +1797,7 @@ node campus-errand/tools/style-lint.js campus-errand
     前端整体切到 CloudBase（`utils/cloud.js` 与 `miniprogram_npm/` 已删除，
     换为 `utils/tcb.js` + `svc_rpc` 代持身份），WorkBuddy Cloud 退役，**现役库只剩一套**，
     不再有「只改一边对不上账」的问题。
-13. **`cloudbase/` 不在 git 仓库内** ⚠️ **仍是未决项**：56 批迁库脚本在工作区根下
+13. **`cloudbase/` 不在 git 仓库内** ⚠️ **仍是未决项**：58 批迁库脚本在工作区根下
     `cloudbase/migrations/`，与 `campus-errand/` 同级，目前**不受版本控制**（工作区根不是 git 仓库）。
     现役库的完整结构只存在于这些脚本 + 线上库本身，**没有异地留档**；
     若要长期留档，需单独入仓库或另建一个仓库。
@@ -1802,13 +1808,15 @@ node campus-errand/tools/style-lint.js campus-errand
 - **`hall_page` 开关被主动删除** —— 大厅是任务列表唯一入口，关掉等于直接下掉功能、没有回滚路径。
 - **租赁下架 ≠ 删除**（历史租赁申请仍引用 item_id）；**改价要点保存才生效**（金额敏感，不做失焦即改）。
 - **前台积分14个新开关默认全 false**，只有 super 能切。
-- **智能客服暂时只能走 WorkBuddy Cloud 的免密钥 LLM 通道**：不支持在后台填自己的第三方
-  API Key / Base URL。要接第三方模型得另做一条通道，且小程序端不能明文放 Key、还要配 request 合法域名。
+- **智能客服的模型通道（R57 已重建）**：走 CloudBase 的 OpenAI 兼容接口，密钥 `TCB_AI_KEY` 只在
+  `ai-api` 云函数里、由云函数代持调用；端上只带会话令牌，**拿不到 Key**。
+  仍不支持在后台填自己的第三方 API Key / Base URL —— 要接第三方模型得改 `ai-api` 的上游地址，
+  可用环境变量 `TCB_AI_MODELS` 扩展模型清单（先把对应 Token 资源包买上，否则 403）。
 - ~~AI 每日配额记在本地 `storage`~~ **R39 起改为服务端按账号记账**：
   `begin_support_ai` 先预留、`finish_support_ai` 成功计入 / 失败释放，
   记录落在 `support_ai_requests`（按 Asia/Singapore 日期切分，预占 130 秒自动过期）。
-  局限：模型仍走客户端直连，绕过端上代码仍可直接调 `llmChat`，
-  所以它是**端上路径的配额**，不是严格的成本网关。
+  R57 起调用也已在服务端（`ai-api` 验令牌后才转发），**端上不再直连模型**，
+  所以这套配额从「端上路径的配额」升级为真正的服务端限额（只在令牌有效的前提下成立）。
 - **客服会话的上下文靠端上拼 history 携带**：目前最多带 `history_turns` 轮（默认 3），
   更早的内容模型看不到；也没有做会话长度裁剪，超长对话理论上会顶到模型上限。
 

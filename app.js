@@ -3,17 +3,25 @@ App({
     session: null,
     profile: null,
     logged: false,
+    cloudReady: false,
   },
 
   onLaunch() {
     const app = this
-    // 微信云开发初始化：env 必须是「小程序自己的云开发环境」。
-    // 这里用 baozi（在小程序后台开通的），wx.cloud 只认这类环境；
-    // 数据库所在的腾讯云 CloudBase 环境 ceshi-xxx 是另一回事，由云函数侧访问。
+    // 微信云开发（小程序自己的环境 baozi-xxx）只承担「免域名的兜底通道」。
+    // ⚠️ 小程序一旦把云开发资源授权给服务商（如 WorkBuddy 托管），管理员在开发者工具里
+    //    就用不了云开发，这个 env 随之不可用；此时全靠主通道：直连 CloudBase 网关，
+    //    前提是网关域名已加进「request 合法域名」。
+    // 所以这里**初始化失败绝不能挡住启动** —— 包一层 try，失败只关掉兜底通道。
     if (wx.cloud) {
-      wx.cloud.init({ env: 'baozi-d2gbl784gd773f8b6', traceUser: true })
+      try {
+        wx.cloud.init({ env: 'baozi-d2gbl784gd773f8b6', traceUser: true })
+        app.globalData.cloudReady = true
+      } catch (e) {
+        console.warn('[cloud] 云开发环境初始化失败，兜底通道不可用：', (e && e.message) || e)
+      }
     } else {
-      console.warn('[cloud] 基础库低于 2.2.3，wx.cloud 不可用，支付功能将无法使用')
+      console.warn('[cloud] 基础库低于 2.2.3，wx.cloud 不可用，只走网关直连')
     }
     const api = require('./utils/api')
     require('./utils/ui').removeStorage('savedAccount')

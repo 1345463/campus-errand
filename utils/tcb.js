@@ -110,6 +110,11 @@ function describeCloudError(errMsg) {
   const raw = String(errMsg || '云开发调用失败')
   if (/EXCEED_MAX_PAYLOAD_SIZE/i.test(raw)) return '图片太大，单次传不下，请换一张小点的图'
   if (/-501000|could not be found/i.test(raw)) return '云函数没部署或名字不对，请联系管理员'
+  // -601034：小程序把云开发资源授权给了服务商（托管/第三方平台），管理员自己就用不了云开发
+  if (/-601034|没有权限，请先开通云开发|已授权服务商使用云开发资源/i.test(raw)) {
+    return '兜底通道（云开发）不可用，请检查网关域名是否已在 request 合法域名里'
+  }
+  if (/-601003|env.*not.*exist|环境不存在/i.test(raw)) return '云开发环境不存在或已失效，兜底通道已停用'
   if (/timed out|timeout/i.test(raw)) return '云函数超时，请稍后重试'
   return raw
 }

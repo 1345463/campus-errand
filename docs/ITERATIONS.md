@@ -1917,7 +1917,7 @@ node campus-errand/tools/style-lint.js campus-errand
 > **57** = 业务代码：`pages` 39 + `utils` 16 + `components` 2（上面第 1 步 `find` 的范围）；
 > **72** = `check-mp.js` 按 `packOptions.ignore` 算出的**真正会被上传**的 JS
 > （含 `app.js`，排除 `tests/` `tools/` `cloudfunctions/`）；
-> **78** = `scripts/sync_github.py` 四件套第 1 项实际检查的数量
+> **84** = `scripts/sync_github.py` 四件套第 1 项实际检查的数量
 > （`os.walk` 全扫，只排除 `node_modules` / `miniprogram_npm` / `.git`，**含** `tests/` 与 `tools/`）。
 
 **数据库侧**：每轮用上面的 `DO` 块冒充真实用户做角色化自检，最后主动抛错回滚，收尾一定跑脏数据复核（自测数量应为 0）。

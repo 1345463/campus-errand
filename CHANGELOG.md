@@ -1042,3 +1042,54 @@ _提交时间：2026-10-23 16:50:00_
   3. 新增 `tests/cloud-fallback.test.js` 6 条，把「init 不许裸奔」「错误要翻人话」
      「只有网络层失败才换通道」钉成断言，防止下次重构把降级边界改坏。
 - **校验**：全量 **103 项通过**；四件套全绿，主包 **0.97 MB / 183 文件**（测试目录不参与打包，体积未变）。
+
+## R58 · 大模型通道可配置：接 DeepSeek（10-30 下午）
+
+R57 的 `ai-api` 只认云开发内置的 `hy3` —— 那是成长计划送的额度，用完就哑。这一轮开的是一条
+**通用 OpenAI 兼容通道**，DeepSeek / 通义 / Kimi / 自建 vLLM 都能接，改配置不用改代码。
+
+### 密钥落在哪：新表，且 RLS 零 policy
+
+一条 `faq_settings` 上没有的边界：那张表有 `SELECT USING (true)` 策略，
+**加一列 `api_key` 等于把密钥公开给任何拿到 publishable key 的人**。所以单独建表：
+
+- `ai_secrets` 开 RLS 后**一条 policy 都不建** → anon / authenticated 直连 **0 行**；
+- 读它的 `ai_runtime_config()` 只 GRANT `service_role` → 客户端调用 **42501 permission denied**；
+- 后台读接口 `admin_get_ai_channel()` 只回 `has_key` + 末四位，`RETURNS TABLE` 里没有明文列。
+
+两条边界都用真实 PostgreSQL 验过（`SET LOCAL ROLE` + 实际调用），不是「写了就算修了」。
+
+不放环境变量的原因：`TCB_AI_KEY` 这类值 MCP 读回来是打码的 `***`，换服务商只能人工去控制台点，
+也没法在后台改。库里这份 60 秒生效，有 support 权限的人就能改。
+
+### 云函数 `ai-api`
+
+- **运行时解析通道**，优先级：库里的 `ai_secrets`（base + key 都在）> 环境变量；
+- **60 秒 TTL 缓存**；`action=models` 强制刷新，所以后台保存完再拉模型列表立刻就是新通道；
+- **base 和 key 必须同时存在**才算自定义通道，只填一半自动退回内置 —— 填到一半保存是常事；
+- **只有自定义通道才探 `/models`**：内置通道没有这个路由（R57 踩过：会被当模型名报 403）；
+  拉到了以实际为准，拉不到退回手写清单，失败原因经 `probeErr` 回显到后台；
+- 新增 **402** 的专属文案（DeepSeek 用它表示余额不足，最容易撞上）。
+
+### 后台「大模型通道」卡片
+
+Base URL / API Key（`password` 输入）/ 模型名三栏 + 「保存通道」「退回内置」。
+key 留空 = 传 `null` = **不修改**，所以日常改 Base URL 不会把已存的 key 抹掉；
+「退回内置」才显式传三个空串。新增 `llmCatalog()` 带 `source` / `builtin` / `probeErr`，
+`llmModels()` 仍返回数组，其他调用点不受影响。
+
+### 端到端实测
+
+云函数此前**只有 `app-api` 走过** `/v1/rdb/rest/rpc/` 这条读库路径，`ai-api` 是新接的，必须真验一次。
+临时加 `diag_r58` 分支测得：
+
+```
+{"dbRead":true,"dbKeys":["base_url","api_key","models"],"source":"custom",
+ "baseHost":"api.deepseek.com","hasKey":true,"keyLen":18,"models":["deepseek-chat"]}   311ms
+```
+
+验完**已删除该分支并重新部署**，现在 `diag_r58` 返回 `TOKEN_INVALID`（正常校验路径）。
+
+- **校验**：新增 `tests/ai-channel.test.js` 14 条；`feedback-ui.test.js` 里 `builtin: true`
+  改成 `builtin: builtin`（自定义通道是 false，语义变了）。全量 **117 项通过**；四件套全绿，
+  主包 **0.98 MB / 183 文件**（多了一张卡片）。

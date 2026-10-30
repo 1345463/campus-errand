@@ -12,6 +12,25 @@ const perms = require('../../utils/perms')
 //   2) 权限用 support（客服）。super 在 admin_my_perms 里隐含全部权限，不需要另写。
 //      真正的拦截在每个 admin_xxx 的 RPC 里做，前端只负责显示/隐藏。
 
+// 模型下拉的数据整形：disabled 的不能选，也别拿它当兜底默认值。
+// 首次加载和「保存通道后刷新」共用一份，免得两处逻辑漂移。
+function buildModelPicker(models, current) {
+  const modelIds = []
+  const modelNames = []
+  ;(models || []).forEach(function (item) {
+    if (!item || item.disabled === true) return
+    modelIds.push(String(item.id || ''))
+    modelNames.push(String(item.name || item.id || ''))
+  })
+  let modelIndex = current ? modelIds.indexOf(current) : -1
+  if (modelIndex < 0 && modelIds.length) modelIndex = 0
+  return {
+    modelIds: modelIds,
+    modelNames: modelNames,
+    modelIndex: modelIndex < 0 ? 0 : modelIndex,
+  }
+}
+
 Page({
   data: {
     loading: true,
@@ -53,6 +72,17 @@ Page({
     contextFaqLimit: '40',
     testing: false,
     testText: '',
+
+    // 大模型通道（R58）：接 DeepSeek 这类第三方 OpenAI 兼容服务
+    channelBase: '',
+    channelModels: '',
+    channelHasKey: false,
+    channelKeyTail: '',
+    channelSource: '',
+    channelKeyInput: '',
+    channelHint: '',
+    channelSaving: false,
+    channelClearing: false,
   },
 
   onLoad: function () {
@@ -101,21 +131,32 @@ Page({
       api.adminListFaqItems(),
       api.adminGetFaqSettings(),
       api
-        .llmModels()
-        .then(function (rows) {
-          return { models: rows || [], err: '' }
+        .llmCatalog()
+        .then(function (info) {
+          return { cat: info || {}, err: '' }
         })
         .catch(function (error) {
           // 模型列表拿不到不影响改 FAQ，只是不能选模型而已 ——
           // 但原因要留下来：不然管理员只看到「暂无可用模型」，不知道该去哪开。
-          return { models: [], err: api.getErrorMessage(error) }
+          return { cat: {}, err: api.getErrorMessage(error) }
+        }),
+      api
+        .adminGetAiChannel()
+        .then(function (row) {
+          return { row: row || {}, err: '' }
+        })
+        .catch(function (error) {
+          return { row: {}, err: api.getErrorMessage(error) }
         }),
     ])
       .then(function (result) {
         const items = result[0] || []
         const settings = result[1] || {}
-        const models = (result[2] && result[2].models) || []
+        const cat = (result[2] && result[2].cat) || {}
         const modelErr = (result[2] && result[2].err) || ''
+        const channel = (result[3] && result[3].row) || {}
+        const channelErr = (result[3] && result[3].err) || ''
+        const models = cat.models || []
 
         const list = items.map(function (row) {
           return {
@@ -131,22 +172,25 @@ Page({
         })
 
         // 模型下拉：disabled 的不能选，也别拿它当兜底默认值
-        const usable = models.filter(function (item) {
-          return item && item.disabled !== true
-        })
-        const modelIds = []
-        const modelNames = []
-        usable.forEach(function (item) {
-          modelIds.push(String(item.id || ''))
-          modelNames.push(String(item.name || item.id || ''))
-        })
-        const current = String(settings.ai_model || '')
-        let modelIndex = current ? modelIds.indexOf(current) : -1
-        if (modelIndex < 0 && modelIds.length) modelIndex = 0
+        const picker = buildModelPicker(models, String(settings.ai_model || ''))
 
         // 这四个是新加的参数，服务端可能还没刷出来，取不到就按兜底值显示
         const temperature = Number(settings.temperature)
         const timeoutSec = Math.round((Number(settings.timeout_ms) || 30000) / 1000)
+
+        // 模型区提示分四种情况：网络/权限错、探测失败但有手写清单、
+        // 自定义通道空、内置通道空。别让管理员对着「暂无可用模型」猜。
+        const probeErr = String(cat.probeErr || '')
+        let modelHint = ''
+        if (modelErr) {
+          modelHint = '拉不到模型列表：' + modelErr
+        } else if (probeErr) {
+          modelHint = '现在用的是配置里手写的模型名（自动探测失败：' + probeErr + '）'
+        } else if (!picker.modelIds.length) {
+          modelHint = cat.source === 'custom'
+            ? '自定义通道没拉到模型：检查下面的 Base URL 和 API Key，或手写模型名再保存。'
+            : '没有可用模型：去云开发控制台 → AI → 生文模型里至少启用一个，或在下面「大模型通道」接一个第三方服务（如 DeepSeek）。'
+        }
 
         page.setData({
           list: list,
@@ -155,14 +199,21 @@ Page({
           aiPrompt: String(settings.ai_prompt || ''),
           welcome: String(settings.welcome || ''),
           dailyLimit: String(Number(settings.daily_limit) || 20),
-          modelIds: modelIds,
-          modelNames: modelNames,
-          modelIndex: modelIndex < 0 ? 0 : modelIndex,
-          modelHint: modelIds.length
-            ? ''
-            : (modelErr
-                ? '拉不到模型列表：' + modelErr
-                : '没有可用模型：去云开发控制台 → AI → 生文模型里至少启用一个，再把 API Key 配到 ai-api 云函数的 TCB_AI_KEY 上。'),
+          modelIds: picker.modelIds,
+          modelNames: picker.modelNames,
+          modelIndex: picker.modelIndex,
+          modelHint: modelHint,
+          channelBase: String(channel.base_url || ''),
+          channelModels: String(channel.models || ''),
+          channelHasKey: !!channel.has_key,
+          channelKeyTail: String(channel.key_tail || ''),
+          channelSource: String(cat.source || ''),
+          channelKeyInput: '',
+          channelHint: channelErr
+            ? '读不到通道配置：' + channelErr
+            : (channel.has_key
+                ? '已保存密钥（末四位 ' + String(channel.key_tail || '****') + '）。要换就填新的，留空表示不改。'
+                : '还没填密钥。填 Base URL + API Key 保存后即切到自定义通道；清空则退回云开发内置通道。'),
           temperature: isNaN(temperature) ? '0.3' : String(temperature),
           maxTokens: String(Number(settings.max_tokens) || 400),
           timeoutSec: String(timeoutSec),
@@ -187,6 +238,133 @@ Page({
 
   onModelChange: function (event) {
     this.setData({ modelIndex: Number(event.detail.value) || 0 })
+  },
+
+  // ---------- 大模型通道（R58）----------
+  // 接 DeepSeek 这类 OpenAI 兼容服务。密钥只往服务端送，永远不回显明文。
+  onChannelBaseInput: function (event) {
+    this.setData({ channelBase: String(event.detail.value || '') })
+  },
+
+  onChannelKeyInput: function (event) {
+    this.setData({ channelKeyInput: String(event.detail.value || '') })
+  },
+
+  onChannelModelsInput: function (event) {
+    this.setData({ channelModels: String(event.detail.value || '') })
+  },
+
+  // 保存通道。key 留空 = 这一项不动（服务端收到 NULL 就是不修改），
+  // 所以日常改 Base URL 或模型名不会把已存的 key 抹掉。
+  saveChannel: function () {
+    const page = this
+    if (page.data.channelSaving) return
+    const base = String(page.data.channelBase || '').trim()
+    if (base && base.indexOf('https://') !== 0) {
+      ui.toast({ title: 'Base URL 要以 https:// 开头', icon: 'none' })
+      return
+    }
+    const typedKey = String(page.data.channelKeyInput || '').trim()
+    const models = String(page.data.channelModels || '').trim()
+    if (!base && !typedKey) {
+      ui.toast({ title: 'Base URL 和 API Key 至少填一个', icon: 'none' })
+      return
+    }
+
+    const patch = { base_url: base, models: models }
+    if (typedKey) patch.api_key = typedKey
+
+    page.setData({ channelSaving: true })
+    ui.loading({ title: '保存中', mask: true })
+    api
+      .adminSetAiChannel(patch)
+      .then(function () {
+        return page.reloadChannel()
+      })
+      .then(function () {
+        ui.hideLoading()
+        page.setData({ channelSaving: false })
+        ui.toast({ title: '通道已保存', icon: 'success' })
+      })
+      .catch(function (error) {
+        ui.hideLoading()
+        page.setData({ channelSaving: false })
+        ui.toast({ title: api.getErrorMessage(error), icon: 'none', duration: 2600 })
+      })
+  },
+
+  // 清空通道 → 退回云开发内置通道。这里 key 要显式传空串，
+  // 传 null 是「不修改」，两个语义别搞混。
+  clearChannel: function () {
+    const page = this
+    if (page.data.channelClearing) return
+    wx.showModal({
+      title: '退回内置通道',
+      content: '会清空已保存的 Base URL、API Key 和模型名，之后走云开发自带的模型。',
+      confirmText: '清空',
+      confirmColor: '#E54545',
+      success: function (res) {
+        if (!res.confirm) return
+        page.setData({ channelClearing: true })
+        ui.loading({ title: '清空中', mask: true })
+        api
+          .adminSetAiChannel({ base_url: '', api_key: '', models: '' })
+          .then(function () {
+            return page.reloadChannel()
+          })
+          .then(function () {
+            ui.hideLoading()
+            page.setData({ channelClearing: false })
+            ui.toast({ title: '已退回内置通道', icon: 'none' })
+          })
+          .catch(function (error) {
+            ui.hideLoading()
+            page.setData({ channelClearing: false })
+            ui.toast({ title: api.getErrorMessage(error), icon: 'none', duration: 2600 })
+          })
+      },
+    })
+  },
+
+  // 只刷新「通道 + 模型目录」两块，不整页 load ——
+  // 整页 load 会闪一下「加载中…」，后台改配置时看着像出错了。
+  reloadChannel: function () {
+    const page = this
+    return Promise.all([
+      api.llmCatalog().catch(function () {
+        return null
+      }),
+      api.adminGetAiChannel().catch(function () {
+        return null
+      }),
+    ]).then(function (res) {
+      const cat = res[0] || {}
+      const channel = res[1] || {}
+      const picker = buildModelPicker(cat.models || [], page.data.modelIds[page.data.modelIndex] || '')
+      const probeErr = String(cat.probeErr || '')
+      let modelHint = ''
+      if (probeErr) {
+        modelHint = '现在用的是配置里手写的模型名（自动探测失败：' + probeErr + '）'
+      } else if (!picker.modelIds.length) {
+        modelHint = '没拉到模型：检查 Base URL 和 API Key，或在模型名里手写一个再保存。'
+      }
+      page.setData({
+        modelIds: picker.modelIds,
+        modelNames: picker.modelNames,
+        modelIndex: picker.modelIndex,
+        modelHint: modelHint,
+        channelBase: String(channel.base_url || ''),
+        channelModels: String(channel.models || ''),
+        channelHasKey: !!channel.has_key,
+        channelKeyTail: String(channel.key_tail || ''),
+        channelSource: String(cat.source || ''),
+        channelKeyInput: '',
+        channelHint: channel.has_key
+          ? '已保存密钥（末四位 ' + String(channel.key_tail || '****') + '）。要换就填新的，留空表示不改。'
+          : '还没填密钥。填 Base URL + API Key 保存后即切到自定义通道；清空则退回云开发内置通道。',
+      })
+      return null
+    })
   },
 
   onPromptInput: function (event) {
@@ -233,7 +411,7 @@ Page({
       return
     }
     const started = Date.now()
-    page.setData({ testing: true, testText: '正在调用…' })
+    page.setData({ testing: true, testText: '正在调用（用的是已保存的通道配置）…' })
     api
       .llmChat(
         modelId,

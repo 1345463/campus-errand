@@ -1415,23 +1415,63 @@ async function adminUpdateFaqSettings(patch) {
   return result.data === true
 }
 
+// ---- 大模型通道配置（R58）----
+//
+// 接第三方 OpenAI 兼容服务（DeepSeek / 通义 / Kimi / 自建）就靠这两个。
+// 密钥是**只进不出**的：admin_get_ai_channel 只回「有没有 key」和末四位，
+// 明文在 ai_secrets 表里，那张表 RLS 开着但一条 policy 都没有，
+// anon / authenticated 直连都是 0 行，只有云函数能用。
+
+async function adminGetAiChannel() {
+  const result = await rpc('admin_get_ai_channel', {})
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  const rows = Array.isArray(result.data) ? result.data : []
+  return rows.length ? rows[0] : null
+}
+
+// 传 null = 不改这一项，传空串 = 清空。
+// base 和 key 同时为空时会自动退回云开发内置通道，不会变成「没配通道」。
+async function adminSetAiChannel(patch) {
+  const p = patch || {}
+  const result = await rpc('admin_set_ai_channel', {
+    p_base_url: p.base_url === undefined ? null : p.base_url,
+    p_api_key: p.api_key === undefined ? null : p.api_key,
+    p_models: p.models === undefined ? null : p.models,
+  })
+  if (result.error) throw new Error(getErrorMessage(result.error))
+  return result.data === true
+}
+
 // ---- 大模型 ----
 // R52 迁到 CloudBase 之后这里一度是占位实现（返回空数组 / 直接抛错），
 // 结果后台一直显示「暂无可用模型」。现在走 cloudfunctions/ai-api：
-// 云开发自带大模型能力且兼容 OpenAI 协议，密钥只留在云函数里，端上碰不到。
+// 密钥只留在云函数里，端上碰不到。
 //
-// 关于流式：云函数 → 小程序这一段没法流式回传，所以这里拿到的是一次性的完整文本。
-// onDelta 仍然按约定回调一次（传完整文本），页面层的「正在输入」效果不变。
-async function llmModels() {
+// 模型目录。除了 models 还带 source（cloudbase / custom）——
+// 后台用它显示「现在走的是哪条通道」，不用另外查一次库。
+async function llmCatalog() {
   const res = await tcb.callTarget('ai-api', { action: 'models' })
   const list = (res && Array.isArray(res.models) && res.models) || []
-  return list
+  return {
+    models: list,
+    source: String((res && res.source) || ''),
+    builtin: !!(res && res.builtin),
+    probeErr: String((res && res.probeErr) || ''),
+  }
+}
+
+async function llmModels() {
+  const info = await llmCatalog()
+  return info.models
 }
 
 // options: { conversationId, signal, temperature, maxTokens }
 // conversationId 只做服务端路由与计量 —— 它不等于「服务端记住了上文」，
 // 上下文仍然要靠 messages 自己带上（support 页会把最近几轮对话拼进来）。
 // 温度与最大字数由后台 faq_settings 下发，默认给客服场景的保守值。
+//
+// 关于流式：云函数 → 小程序这一段没法流式回传，所以这里拿到的是一次性的完整文本。
+// onDelta 仍然按约定回调一次（传完整文本），页面层的「正在输入」效果不变。
 async function llmChat(modelId, messages, onDelta, options) {
   const opts = options || {}
   const res = await tcb.callTarget('ai-api', {
@@ -1586,6 +1626,9 @@ module.exports = {
   adminDeleteFaqItem: adminDeleteFaqItem,
   adminGetFaqSettings: adminGetFaqSettings,
   adminUpdateFaqSettings: adminUpdateFaqSettings,
+  adminGetAiChannel: adminGetAiChannel,
+  adminSetAiChannel: adminSetAiChannel,
+  llmCatalog: llmCatalog,
   llmModels: llmModels,
   llmChat: llmChat,
   beginSupportAi: beginSupportAi,

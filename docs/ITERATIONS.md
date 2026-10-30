@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-10-30 11:30** ｜ 累计 **57 轮迭代**、**39 个页面**、**37 张表**、**156 个数据库函数**、**9 个触发器**、**58 个迁移脚本**、**103 项回归测试**、主包 **0.97 MB**
+> 统计截止：**2026-10-30 15:10** ｜ 累计 **58 轮迭代**、**39 个页面**、**38 张表**、**159 个数据库函数**、**9 个触发器**、**59 个迁移脚本**、**117 项回归测试**、主包 **0.98 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -1335,11 +1335,87 @@ R52 迁库时 `cloud.llm.*` 整体失效，当时的处理是「`llmModels()` �
 
 ---
 
+### R58 · 大模型通道可配置：把 DeepSeek 接进来（10-30 下午）
+
+用户要「加个接口，我把 DeepSeek 的 API 给你调用」。R57 的 `ai-api` 只认云开发内置的 hy3
+（成长计划送的那点额度，用完就哑），所以要开的是一条**通用 OpenAI 兼容通道**。
+
+#### 密钥放哪：不在 `faq_settings`，也不在环境变量
+
+第一反应是给 `faq_settings` 加两列，但那张表有 `SELECT USING (true)` 策略 ——
+**任何人拿到 publishable key 直连 PostgREST 就能把 `api_key` 读走**。所以单独建表：
+
+```sql
+CREATE TABLE public.ai_secrets (id int PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  base_url text, api_key text, models text, updated_at timestamptz, updated_by text);
+ALTER TABLE public.ai_secrets ENABLE ROW LEVEL SECURITY;
+-- 到此为止，一条 policy 都不建
+```
+
+**RLS 开着但零 policy，等于对 anon / authenticated 完全关闭**：能读的只有
+SECURITY DEFINER 函数，而那个函数只 GRANT 给 `service_role`。三条边界都用真实 PG 验过：
+
+| 身份 | `SELECT * FROM ai_secrets` | `SELECT ai_runtime_config()` |
+|---|---|---|
+| `authenticated` | **0 行** | **42501 permission denied** |
+| `service_role`（云函数） | 能读 | 能读 |
+
+不用环境变量是因为两条：① 那个值 MCP 读回来是打码的 `***`，换 key 只能人工去控制台点；
+② 环境变量没法在后台改，每次换服务商都得找人。库里这份 60 秒生效，谁有 support 权限都能改。
+
+#### 云函数：运行时解析通道，两条路
+
+`ai-api` 原来把 `AI_BASE` / `AI_KEY` 在模块加载时定死。现在改成每次调用前解析：
+
+```
+库里的 ai_secrets（base + key 都在）→ source: 'custom'
+   ↓ 缺任一项
+环境变量 TCB_AI_BASE / TCB_AI_KEY → source: 'cloudbase'
+```
+
+- **60 秒 TTL 缓存**：聊天走缓存省一次往返；`action=models` 强制刷新，
+  所以后台保存完再拉列表立刻就是新通道，不用等。
+- **只填一半就退回内置**：`if (dbBase && dbKey)`，比报「没配通道」友好 —— 填到一半保存是常事。
+- **只有自定义通道才去探 `/models`**：内置通道没有这个路由（会被当模型名报 403，
+  R57 踩过）；第三方（DeepSeek 有）就真拉一次，拉到的以实际为准，拉不到退回手写清单，
+  并把失败原因通过 `probeErr` 带回后台显示。
+- 新增 **402** 的专属文案：DeepSeek 用 402 表示余额不足，这条最容易撞上。
+
+#### 前端：密钥只进不出
+
+`admin_get_ai_channel` 只回 `has_key` 和 `key_tail`（末四位），
+`RETURNS TABLE` 里**故意没有 `api_key` 列**（有测试钉着）。
+后台保存时 key 留空 = 传 `null` = 不修改，所以日常改 Base URL 不会把已存的 key 抹掉；
+「退回内置」才显式传三个空串。
+
+新增 `llmCatalog()`（带 `source` / `builtin` / `probeErr`），`llmModels()` 仍返回数组，
+其他调用点不受影响。
+
+#### 端到端实测
+
+临时给云函数加了个 `diag_r58` 分支验链路（**已删除并重新部署，`diag_r58` 现在返回 TOKEN_INVALID**）：
+
+```
+{"ok":true,"dbRead":true,"dbKeys":["base_url","api_key","models"],
+ "source":"custom","baseHost":"api.deepseek.com","hasKey":true,"keyLen":18,
+ "models":["deepseek-chat"]}   耗时 311ms
+```
+
+`dbRead: true` 说明云函数真能经 `{env}.api.tcloudbasegateway.com/v1/rdb/rest/rpc/ai_runtime_config`
+读到库 —— 这条路径之前只有 `app-api` 用过，`ai-api` 是新接的，必须验。
+
+**校验**：新增 `tests/ai-channel.test.js` 14 条（RLS 零 policy、只 GRANT service_role、
+不回明文、NULL 语义、TTL、双条件、402、前端导出、password 输入框）。
+`feedback-ui.test.js` 里 `builtin: true` 那条改成 `builtin: builtin`（自定义通道是 false，语义变了）。
+全量 **117 项通过**；四件套全绿，主包 **0.98 MB**（多了一张卡片）。
+
+**待用户填**：后台「智能客服配置 → 大模型通道」填 Base URL + API Key 即可切过去。
+
 ---
 
 ## 3. 数据库演进总览
 
-### 数据表（36 张，全量 RLS）
+### 数据表（38 张，全量 RLS）
 
 | 表 | 用途 | 引入轮次 |
 |---|---|---|
@@ -1380,6 +1456,7 @@ R52 迁库时 `cloud.llm.*` 整体失效，当时的处理是「`llmModels()` �
 | `wx_phone_tickets` | 微信取号的一次性绑定凭据（**只存哈希**，5 分钟有效、用完即废） | R56 |
 | `media_uploads` | 图片分片上传任务（uid 隔离，2 小时自动清理） | R53 |
 | `media_upload_parts` | 图片分片内容（按序号拼接，级联删除） | R53 |
+| `ai_secrets` | 大模型通道配置（**RLS 零 policy，直连读不到**；只有 service_role 能取） | R58 |
 
 ### 关键：orders 表的列演进
 ```
@@ -1404,7 +1481,7 @@ pending ──accept_order──> accepted ──complete_order(+佐证照片)�
 waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（管理员判定结算）
 ```
 
-### 数据库函数（154 个，现役 CloudBase 库）
+### 数据库函数（159 个，现役 CloudBase 库）
 按职能分：
 - **订单**：`create_order`(17参) / `accept_order` / `complete_order` / `cancel_order` / `confirm_order_done` / `get_order_detail` / `order_relation` / `list_my_orders` / `search_my_orders` / `hide_my_order` / `order_hidden` …
 - **图片**：`save_media_asset` / `get_media_asset` / `get_public_asset` / **`get_order_asset`**
@@ -1417,7 +1494,8 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 - **内容安全**：`normalize_mod_text` / `scan_moderation_words` / `list_active_moderation_words`
 - **智能客服**：`list_faq_items` / `get_faq_settings` / `admin_list_faq_items` /
   `admin_upsert_faq_item` / `admin_delete_faq_item` / `admin_get_faq_settings` /
-  `admin_update_faq_settings`(10 参数)
+  `admin_update_faq_settings`(10 参数) /
+  `ai_runtime_config` / `admin_get_ai_channel` / `admin_set_ai_channel`（R58，密钥只在服务端）
 - **订单分页与放弃接单（R39）**：`list_my_orders_v2`(5 参数) / `abandon_order`
 - **AI 配额（R39）**：`support_ai_usage` / `begin_support_ai` / `finish_support_ai` /
   `rate_support_answer`
@@ -1732,8 +1810,8 @@ node campus-errand/tools/style-lint.js campus-errand
 | `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
 **当前状态（2026-10-30 01:50 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
-`check-mp.js` **0.97MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（33 wxss / 42 wxml）通过，
-`npm test` **103 项**全过。
+`check-mp.js` **0.98MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（33 wxss / 42 wxml）通过，
+`npm test` **117 项**全过。
 
 > 主包从 1.41MB 降到 **0.95MB**，是 R52 删掉 WorkBuddy Cloud SDK 与 `miniprogram_npm/` 的结果。
 

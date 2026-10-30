@@ -50,7 +50,7 @@
           </picker>
         </view>
         <view wx:if="{{modelHint}}" class="hint">{{modelHint}}</view>
-        <view wx:else class="hint">模型走云服务免密钥通道，不用自己填 API Key；调用参数在下面的「模型 API 配置」里改。</view>
+        <view wx:else class="hint">模型目录来自下面的「大模型通道」：自定义通道会实时拉取，内置通道是云开发固定的那份清单。</view>
 
         <view class="field top-gap">
           <text class="field-label">每日提问上限</text>
@@ -90,6 +90,59 @@
 
         <view class="btn-primary top-gap {{settingsSaving ? 'disabled' : ''}}" hover-class="press" bindtap="saveSettings">
           {{settingsSaving ? '保存中…' : '保存 AI 设置'}}
+        </view>
+      </view>
+
+      <!-- ===== 大模型通道 ===== -->
+      <view class="card">
+        <view class="section-head">
+          <text class="section-title">大模型通道</text>
+          <text class="section-more">{{channelSource === 'custom' ? '自定义' : '云开发内置'}}</text>
+        </view>
+
+        <view class="field">
+          <text class="field-label">Base URL</text>
+          <input
+            class="field-input"
+            placeholder="https://api.deepseek.com/v1"
+            value="{{channelBase}}"
+            bindinput="onChannelBaseInput"
+          />
+        </view>
+        <view class="hint">OpenAI 兼容地址，填到 /v1 为止，别带 /chat/completions。DeepSeek 就是 https://api.deepseek.com/v1。</view>
+
+        <view class="field top-gap">
+          <text class="field-label">API Key</text>
+          <input
+            class="field-input"
+            password="{{true}}"
+            placeholder="{{channelHasKey ? '已保存，留空表示不修改' : 'sk- 开头的密钥'}}"
+            value="{{channelKeyInput}}"
+            bindinput="onChannelKeyInput"
+          />
+        </view>
+        <view class="hint">只存在服务端，页面永远读不回明文。Base URL 和 Key 都填了才会切到自定义通道。</view>
+
+        <view class="field top-gap">
+          <text class="field-label">模型名</text>
+          <input
+            class="field-input"
+            placeholder="deepseek-chat,deepseek-reasoner"
+            value="{{channelModels}}"
+            bindinput="onChannelModelsInput"
+          />
+        </view>
+        <view class="hint">逗号分隔。自定义通道会先去 /models 拉一次，拉到了以实际为准，拉不到就用这里手写的。</view>
+
+        <view wx:if="{{channelHint}}" class="hint">{{channelHint}}</view>
+
+        <view class="tool-row top-gap">
+          <view class="doc-btn {{channelSaving ? 'doc-btn-disabled' : ''}}" bindtap="saveChannel">
+            {{channelSaving ? '保存中…' : '保存通道'}}
+          </view>
+          <view wx:if="{{channelHasKey}}" class="doc-btn {{channelClearing ? 'doc-btn-disabled' : ''}}" bindtap="clearChannel">
+            {{channelClearing ? '清空中…' : '退回内置'}}
+          </view>
         </view>
       </view>
 

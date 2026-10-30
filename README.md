@@ -11,13 +11,13 @@
 |---|---|
 | 页面 | **39** |
 | 前端代码 | **17,137** 行 JS / **5,048** 行 WXML / **5,041** 行 WXSS |
-| 数据库 | **37** 表 / **156** 个函数 / **9** 个触发器 |
+| 数据库 | **38** 表 / **159** 个函数 / **9** 个触发器 |
 | 云函数 | **8** 个 |
 | 云托管 | **1** 个（固定出口 IP，专门对接商家转账） |
-| 迁移脚本 | **58** 条（全部可重放） |
+| 迁移脚本 | **59** 条（全部可重放） |
 | 灰度开关 / 违规词 | **23** 个 / **292** 条（13 大类 + 4 条白名单） |
-| 回归测试 | **103** 项（含真实 PostgreSQL 执行） |
-| 小程序包体积 | **0.97 MB** / 上限 2 MB |
+| 回归测试 | **117** 项（含真实 PostgreSQL 执行） |
+| 小程序包体积 | **0.98 MB** / 上限 2 MB |
 
 ---
 
@@ -91,9 +91,13 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
 
 - **密钥只在云函数里**，端上只带 `action / model / messages`
 - **必须验会话令牌**：AI 是要花钱的，匿名调用一律挡掉；每日次数另由库里 `begin_support_ai` 限流
-- **模型目录是内置静态目录**：CloudBase 的 OpenAI 兼容接口**没有**模型列表路由（`/models` 会被当成
-  模型名返回 403），本环境实测可用的只有 `hy3` 与 `hy3-preview`。买了 Token 资源包后不用改代码，
-  把新模型名填进环境变量 `TCB_AI_MODELS` 即可
+- **通道可换（R58）**：默认走 CloudBase 内置通道（本环境实测可用 `hy3` / `hy3-preview`；
+  内置通道**没有**模型列表路由，`/v1/models` 会被当模型名报 403，所以是静态目录 + `TCB_AI_MODELS` 扩展）。
+  也可以在后台「智能客服配置 → 大模型通道」填任意 OpenAI 兼容服务（DeepSeek / 通义 / Kimi / 自建），
+  对方有 `/models` 就实时拉，没有就用配置里手写的。
+- **自定义通道的密钥不进前端**：存 `ai_secrets` 表，**RLS 开着但一条 policy 都不建** ——
+  anon / authenticated 直连 0 行；读它的 `ai_runtime_config()` 只 GRANT `service_role`，
+  后台只能看到「有没有」和末四位。
 
 ### 6. 权限、灰度与闸门都在服务端
 
@@ -135,6 +139,7 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
 | **R55** | **验证码调试通道**：短信未开通时只对超管回显明文，条件绑「短信没配好」，配好自动失效 |
 | **R56** | **手机号改走微信快速验证组件**，全程免短信；一次性票据防止「跳过验证直接绑号」 |
 | **R57** | **客服会话与反馈三修 + 智能客服复活**：气泡间距（类名撞全局 `min-height:100vh`）、未读清不掉（SQL `ELSIF` 只更新一边）、列表文字折断；大模型通道改云函数 `ai-api` 代持密钥 |
+| **R58** | **大模型通道可配置**：后台接任意 OpenAI 兼容服务（DeepSeek 等）；密钥存独立表且 **RLS 零 policy**，只 GRANT `service_role`，按口收死 |
 
 最有价值的几次「翻车与纠正」：
 
@@ -174,7 +179,7 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
     │              │
 ┌───▼──────────────▼─────┐
 │ CloudBase PostgreSQL    │
-│ 37 表 / 156 函数 / 9 触发器 │
+│ 38 表 / 159 函数 / 9 触发器 │
 │ RLS + SECURITY DEFINER  │
 └─────────────────────────┘
 ```
@@ -297,7 +302,7 @@ campus-errand/
 ├── cloudfunctions/   8 个：app-api / ai-api / pay-create / pay-notify /
 │                     tcb-proxy / transfer / transfer-notify / withdraw-api
 ├── cloudrun/         云托管 transfer-svc（固定出口 IP，对接商家转账）
-├── tests/            103 项回归测试（含 PGlite 真实 PostgreSQL）
+├── tests/            117 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 └── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅 / 支付方案
 ```
@@ -308,11 +313,11 @@ campus-errand/
 
 **现役库只有一套**：CloudBase `ceshi-d2g37cbg7c8f7ee48`。
 
-- **37 张表**：`pay_settings` / `withdraw_requests` / `phone_codes` / `wx_phone_tickets` /
+- **38 张表**：`pay_settings` / `withdraw_requests` / `phone_codes` / `wx_phone_tickets` /
   `media_uploads` / `media_upload_parts` 等；`profile_phones` / `account_deletions` 不开 policy，只给函数访问
-- **156 个函数**，命名约定 `p_` 前缀参数
+- **159 个函数**，命名约定 `p_` 前缀参数
 - **9 个触发器**：订单消息推送、图片归属校验、手机号闸门 ×3 等
-- **58 条迁移脚本**，全部幂等 —— 在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，
+- **59 条迁移脚本**，全部幂等 —— 在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，
   **不在本仓库内**）。完整清单见 [`docs/ITERATIONS.md` 第 3 章](docs/ITERATIONS.md)
 - 包内 `sql/` 还有 28 个早期脚本，属已退役旧库的结构参考，不再对现役库执行
 
@@ -336,7 +341,7 @@ pending ──accept──> accepted ──complete──> waiting_confirm ─�
 
 ```bash
 npm ci --ignore-scripts
-npm test        # 103 项回归测试
+npm test        # 117 项回归测试
 npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预检
 ```
 
@@ -349,7 +354,7 @@ npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预�
 没有 AppSecret、14 天不转正即注销。正式提审前需准备：小程序备案、用户隐私保护指引
 （手机号 / 证件照 / 地址 / 图片）、UGC 信息安全声明。
 
-1. 微信开发者工具打开本目录；主包需 ≤ 2 MB，当前 **0.97 MB / 2.00 MB**（183 个文件）。
+1. 微信开发者工具打开本目录；主包需 ≤ 2 MB，当前 **0.98 MB / 2.00 MB**（183 个文件）。
 2. **云函数 8 个**已部署到 `ceshi`（`tcb-proxy` 在小程序自有环境 `baozi-d2gbl784gd773f8b6`，
    需由开发者工具上传）。密钥只在云函数控制台的环境变量里配，不进代码与仓库。
 3. **云托管 `cloudrun/transfer-svc`**：函数型服务，端口 3000，9 个环境变量
@@ -358,8 +363,11 @@ npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预�
    `TCB_ENV_ID` / `TCB_PUBLISHABLE_KEY`）。上线前两件事必做：
    - 控制台开启「**固定访问公网的出口 IP**」
    - 把固定 IP 填进微信支付商户平台 → **系统信息管理**（应用范围含「商家转账到零钱」）
-4. **AI 通道**：`ai-api` 云函数需要 `TCB_ENV_ID` + `TCB_AI_KEY`（控制台「环境配置 → API Key」拿）。
-   模型要在「控制台 → AI → 生文模型」里启用。
+4. **AI 通道**：两条路任选其一。
+   - **云开发内置**：`ai-api` 云函数配 `TCB_ENV_ID` + `TCB_AI_KEY`（控制台「环境配置 → API Key」拿），
+     模型在「控制台 → AI → 生文模型」里启用。
+   - **第三方 OpenAI 兼容服务**（DeepSeek 等，R58）：后台「智能客服配置 → 大模型通道」填
+     Base URL + API Key + 模型名，存在 `ai_secrets` 表，60 秒生效，优先级高于环境变量。
 5. 灰度开关默认**全关**，发布后由 super 在「管理员工作台 → 总闸」逐个打开。
 
 详见 [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md)、[`docs/RELEASE.md`](docs/RELEASE.md)、
@@ -386,7 +394,7 @@ npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预�
   改通道前务必重新二分实测。
 - **AI 模型目录是静态内置的**（CloudBase 没有列表接口）。本环境只有 `hy3` / `hy3-preview` 可用，
   要用 DeepSeek / GLM / Kimi 等需先买 Token 资源包，再把模型名填进 `TCB_AI_MODELS`。
-- **`cloudbase/migrations/` 的 58 条脚本不在 git 内** —— 不是被 `.gitignore` 忽略，而是仓库根是
+- **`cloudbase/migrations/` 的 59 条脚本不在 git 内** —— 不是被 `.gitignore` 忽略，而是仓库根是
   `campus-errand/`、`cloudbase/` 是同级兄弟目录。空库重建目前只能靠这份本地目录，建议尽快纳入版本控制。
 - **短信仍未开通**：腾讯云 SMS 的 5 个环境变量未配置。主路径已是微信 `getPhoneNumber`（免短信），
   短信只作降级通道；配齐这 5 个变量仍有价值（代码已就绪，配完即生效）。

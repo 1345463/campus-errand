@@ -148,7 +148,9 @@ test('模型目录：CloudBase 没有列表接口，用实测过的内置目录'
   // 本环境真正能跑的只有 hy3 与 hy3-preview
   assert.ok(/DEFAULT_MODELS\s*=\s*\['hy3', 'hy3-preview'\]/.test(aiSrc), '内置目录要是实测可用的模型')
   assert.ok(/TCB_AI_MODELS/.test(aiSrc), '要能用环境变量扩展目录（买了 Token 包不用改代码）')
-  assert.ok(/builtin:\s*true/.test(aiSrc), '要标明这份目录是静态的')
+  // R58 起 builtin 不再是固定 true：接了第三方通道（DeepSeek 等）就是实时拉的，
+  // 前端要能区分「静态清单」和「/models 真实返回」，但字段本身必须还在
+  assert.ok(/builtin:\s*builtin|builtin,/.test(aiSrc), '要标明这份目录是不是静态的')
 })
 
 test('推理模型的空正文不能被当成成功', () => {

@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-10-30 23:20** ｜ 累计 **63 轮迭代**、**39 个页面**、**38 张表**、**170 个数据库函数**、**9 个触发器**、**64 个迁移脚本**、**181 项回归测试**、主包 **1.03 MB**
+> 统计截止：**2026-11-01 18:00** ｜ 累计 **63 轮迭代**、**39 个页面**、**38 张表**、**170 个数据库函数**、**9 个触发器**、**64 个迁移脚本**、**181 项回归测试**、主包 **1.03 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -1928,9 +1928,11 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 | **`add-phone-and-deletion.sql`** | 手机号闸门（3 个触发器）+ 注销 6 个月保留（R44） |
 | **`fix-order-asset-trigger.sql`** | 图片归属触发器只校验改动列（R45） |
 
-> 上面 28 个脚本面向 **WorkBuddy Cloud 运行库**。R48/R49 的新增结构不在这个目录 ——
-> 33 批迁库脚本与支付 DDL 在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，
-> 不在本仓库内），`cloudbase/MIGRATION.md` 记执行顺序，`cloudbase/HANDOFF.md` 是一页纸交接单。
+> 上面 28 个脚本面向 **已退役的 WorkBuddy Cloud 运行库**，只作结构参考，不再对现役库执行。
+> R48/R49 的新增结构不在这个目录 —— R48 当时的 **33 批**迁库脚本与支付 DDL 在
+> **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，不在本仓库内），
+> 到 2026-11-01 已累计 **64** 批；`cloudbase/MIGRATION.md` 记执行顺序，
+> `cloudbase/HANDOFF.md` 是一页纸交接单。
 
 ### 支付相关（R49 · 只落在 CloudBase 新库）
 
@@ -2323,6 +2325,18 @@ node campus-errand/tools/style-lint.js campus-errand
 17. **`profiles.owner_id` 唯一索引已补，但重复行的归并逻辑只在迁移里跑过一次**：`profiles_owner_id_uidx`
     建完后若再有并发首登插入，会直接报唯一冲突而不是静默双写 —— 这是期望行为（宁可报错也不要错账），
     但要留意 `ensure_my_profile` 的报错文案是否对用户友好。
+
+### 🟡 已知但未处理（2026-11-01 文档复核新增）
+18. **⚠️ `docs/` 下的「环境与发布」类子文档会失修，且不在常规同步清单里**（2026-11-01 复核发现，已修）：
+    - `ENVIRONMENT.md`（最后改动 10-17）仍写「后端跑在 WorkBuddy Cloud 应用 `wbapp_yPJnSvicojPmz998PjKfpM`、
+      数据库变更通过 `sql/*.sql` 执行」，还让人去改 `utils/cloud.js` 的 endpoint
+      —— 实际自 **R52** 起后端是 CloudBase `ceshi-d2g37cbg7c8f7ee48`，通道层是 `utils/tcb.js`，
+      `sql/` 那 28 个脚本已退役，现役迁移在 `cloudbase/migrations/`。
+    - `RELEASE.md` 仍写「`miniprogram_npm/` 是 SDK 构建产物，**必须入库**」（R52 已随 SDK 一起删除）
+      与「`DROP POLICY orders_write_own` 已在观察窗口内」（迁库后线上根本没有可直连的 UPDATE 通路，已失效）。
+    - `VERIFY.md` 的四件套命令仍按「含 `miniprogram_npm/`」的旧目录写，且没写清 JS 扫描的三个口径。
+    **规律**：每轮改的是 README + ITERATIONS + CHANGELOG，`docs/` 子文档不在任何一条 SOP 里，
+    于是 R52 之后一路停在旧表述 —— 以后补文档要连带扫一遍 `docs/` 下所有 `.md` 的最后修改时间。
 
 ---
 

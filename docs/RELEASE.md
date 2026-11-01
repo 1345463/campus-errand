@@ -60,15 +60,21 @@ function completeOrder(...) { }   // 284 行  ← 微信 CI 直接编译失败
 `node --check` 抓不到（非严格 Script 里顶层函数声明是 var 作用域，重复声明合法），
 只有 `new vm.SourceTextModule(src)` 能抓到 → 已固化进 `tools/check-mp.js`。
 
-## 包体积
+## 包体积（2026-11-01 复核）
 
-- `node_modules` 5.89MB > 主包 2MB 限制 → `project.config.json` 的 `packOptions.ignore` 排除。
-- `miniprogram_npm/` 是 SDK 构建产物，**必须入库**，删掉预览/上传都跑不起来。
-- 当前上传体积约 1.1MB / 2.00MB。
+- `node_modules` 30.11MB > 主包 2MB 限制 → `project.config.json` 的 `packOptions.ignore` 排除。
+- ~~`miniprogram_npm/` 是 SDK 构建产物，必须入库~~ ✅ **R52 已随 WorkBuddy Cloud SDK 一起删除**，
+  主包因此从 1.44MB 降到 0.95MB；现在包里没有 `miniprogram_npm/`，也不需要入库。
+  `cloudfunctions/` 与 `cloudrun/` 同样在 `packOptions.ignore` 里（云函数是服务端代码，不能进包）。
+- 当前上传体积 **1.03 MB / 2.00 MB（185 个文件）**。⚠️ `docs/` 在包内 —— 改长文档会让体积变大，
+  **测体积要在文档改完之后再跑** `check-mp.js`。
 
 ## 发布后仍要盯的事
 
-- `DROP POLICY orders_write_own` 已执行，但仍在观察窗口内（原计划等新版发布 + 48 小时）。
-  触发条件是旧版客户端还能直接 UPDATE 自己的订单以绕过 accept/complete 改状态。
-  一旦有反馈立刻回滚（回滚语句在 `sql/drop-orders-write-own.sql` 末尾注释里）。
-- 灰度开关默认全关，发布后由 super 管理员在「管理员工作台 → 总闸」逐个打开。
+- ~~`DROP POLICY orders_write_own` 观察窗口~~ ✅ **R52 迁库后已失效**：CloudBase 的 `public.orders`
+  只有 `orders_read_all`（只读），线上没有可直连的 UPDATE 通路，「绕 accept/complete 改状态」这条路已不存在；
+  前端也不直连表（统一 `svc_rpc`）。
+- 灰度开关默认全关，发布后由 super 管理员在「管理员工作台 → 总闸」逐个打开（现 23 个，现网均已打开）。
+- **定时任务要单独确认**：`pay-create` 的定时触发器（cron `0 */10 * * * * *`）是在 CloudBase 控制台配的，
+  **不跟着代码走**。换环境、重建函数后要重新挂一次，否则超时单没人关、滞留退款没人补查。
+- 商户 API 证书 5 年到期需轮换；微信手机号快速验证按次计费（约 0.03 元/次）且需在后台开通。

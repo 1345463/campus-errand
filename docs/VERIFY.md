@@ -14,10 +14,15 @@
 
 ```bash
 cd campus-errand
-for f in $(find . -name "*.js" -not -path "./node_modules/*" -not -path "./miniprogram_npm/*"); do
-  node --check "$f" || echo "FAIL $f"
-done
+for f in $(find pages utils components -name '*.js'); do node --check "$f" || echo "FAIL $f"; done
 ```
+
+> **三个 JS 数字口径不同，别误判成文档漂移**（2026-11-01 复核，三个都对）：
+> **58** = 上面这条 `find` 的业务 JS（`pages` 40 + `utils` 16 + `components` 2；`pages` 里多出的
+> 一个是未注册也未被引用的孤儿调试页 `pages/paytest/paytest.js`）；
+> **73** = `check-mp.js` 按 `packOptions.ignore` 算出真正会被上传的 JS（含 `app.js`，排除
+> `tests/` `tools/` `cloudfunctions/`）；**89** = `scripts/sync_github.py` 四件套第 1 项实际检查的数量
+> （`os.walk` 全扫，只排除 `node_modules` / `.git`，**含** `tests/` 与 `tools/`）。
 
 ## 2. 页面注册 / 四件套 / 事件绑定
 
@@ -46,7 +51,7 @@ node --experimental-vm-modules tools/check-mp.js campus-errand
 4. `app.json` 页面文件齐全
 5. `usingComponents` 指向存在
 6. 按 `packOptions.ignore` 算**真实**上传体积
-7. 裸包名能在 `miniprogram_npm` 解析
+7. 裸包名能在 `miniprogram_npm` 解析 —— ⚠️ 本项目 **R52 起已无 `miniprogram_npm/`**，这项恒为通过
 
 > `verify-mp.js` / `check-mp.js` 放在**工作区根目录**运行，放进包内会被当成缺 npm 依赖。
 > 仓库里的 `tools/` 是副本，方便随代码一起归档。
@@ -66,6 +71,9 @@ node campus-errand/tools/style-lint.js campus-errand
 5. **全角标点** —— 去掉注释后仍出现 `：；，（）` 等，选择器或属性里必炸
 6. **`var(--x)` 引用了从未定义的变量** —— 跨文件汇总所有 `--x:` 定义，
    没定义又没兜底值（`var(--x, fallback)`）时**不报错、整条样式静默失效**
+
+7. **全局命名空间类名** —— 业务 class 必须带前缀（全局那批已统一成 `pg-`），
+   裸用 `.home` / `.mine` / `.page` 这类通用词会被拦（`.mine` 撞过消息行的 class，导致气泡间距异常）
 
 顺带查 wxml 的反引号和 `{{ }}` 配对。
 

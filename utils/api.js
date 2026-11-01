@@ -122,7 +122,16 @@ async function login() {
 }
 
 async function logout() {
+  const session = tcb.readSession()
+  const uid = (session && session.uid) || ''
   tcb.saveSession(null)
+  // 顺手把这个账号的图片缓存清掉：换账号登录不会命中上一个人的图。
+  // 传 uid 是因为会话上面刚被清空，clearAssetCache 自己读不到账号了。
+  try {
+    upload.clearAssetCache(uid)
+  } catch (e) {
+    /* 清缓存失败不能影响退出登录本身 */
+  }
 }
 
 async function restoreSession() {

@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-11-01 20:00** ｜ 累计 **64 轮迭代**、**39 个页面**、**38 张表**、**173 个数据库函数**、**9 个触发器**、**66 个迁移脚本**、**193 项回归测试**、主包 **0.91 MB**
+> 统计截止：**2026-11-01 21:00** ｜ 累计 **65 轮迭代**、**39 个页面**、**38 张表**、**174 个数据库函数**、**9 个触发器**、**67 个迁移脚本**、**213 项回归测试**、主包 **0.92 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -13,7 +13,7 @@
 
 - [0. 项目概况](#0-项目概况)
 - [1. 技术基线（不可动摇的约定）](#1-技术基线不可动摇的约定)
-- [2. 迭代时间线（64 轮）](#2-迭代时间线63-轮)
+- [2. 迭代时间线（65 轮）](#2-迭代时间线65-轮)
 - [3. 数据库演进总览](#3-数据库演进总览)
 - [4. 前端页面与模块总览](#4-前端页面与模块总览)
 - [5. 踩坑知识库](#5-踩坑知识库)
@@ -71,7 +71,7 @@
 
 ---
 
-## 2. 迭代时间线（64 轮）
+## 2. 迭代时间线（65 轮）
 
 ### Day 1 — 2026-10-14：从录屏原型到可用链路
 
@@ -1926,6 +1926,138 @@ withdraw-api {"ok":true,"checked":0,"results":[{"id":20,"ok":true,"error":""}],"
 9 条在 PGlite 跑真实 SQL），表 38 / 触发器 9（未变），RLS **38 张全开**，
 主包 1.03 → **0.91 MB / 183 个文件**（文档移出上传包）。
 
+### R65 · 下单金额一直信客户端（11-01 深夜）
+
+用户让「审一遍代码，能优化的优化一下」。这轮不靠印象，先把钱的链路从
+「点支付」到「回调落库」整条读了一遍，再按「出错代价」排序动手。
+
+**① P0：下单金额由调用方说了算**
+
+`pay-create` 的 create 分支原来是这样：
+
+```js
+const amountFen = Math.round(Number(payload.amount || 0) * 100)
+// ...
+amount: { total: amountFen, currency: 'CNY' }   // 直接发给微信
+```
+
+也就是说，**发到微信的金额完全等于调用方传的那个数**。
+这里要分清两件事：
+
+- 不会被「1 分钱买到 20 元服务」—— 回调落库时 `mark_order_paid` 会按
+  `round((reward - discount_amount) * 100)` 重算并比对，对不上就拒绝落 `paid`。
+- 但会变成**「钱收了、单没开通」**：微信真扣了款，订单却永远停在 `unpaid`，
+  只能人工退。触发条件很日常 —— 前端算错（浮点、券没同步）、改包、断点调试，
+  用户还看不出哪里不对，因为微信那边显示「支付成功」。
+
+修法是把口径收到库里（新增 `svc_order_pay_amount(order_id, uid)`，
+`REVOKE ... FROM PUBLIC, anon, authenticated` + 只 `GRANT service_role`）：
+
+```
+应付分 = round((reward - discount_amount) * 100)
+```
+
+云函数下单前先问它，然后按四种情况分别拒绝：订单不存在 / 已支付 / 已取消 /
+金额对不上。**真正发给微信的是服务端算出来的那个数**，调用方传的 `amount`
+只用来比对，`AMOUNT_MISMATCH` 时直接不发单。
+
+顺带做对了两件小事：
+
+- 校验挪到「取 openid」**之前**。取 openid 要走一次 `jscode2session`，
+  而金额校验只是查库 —— 先查库能把无效请求在打微信接口之前挡掉，少一次往返。
+- 前端 `pay.js` 从 `tcb.call` 换成 `tcb.callTarget`，把会话令牌带上，
+  云函数才有办法判「这笔单是不是你的」。老版本不带令牌的调用仍然放行，
+  金额照样被卡住，不至于把正常用户挡在支付外。
+
+**② P1：网关 5xx 不切通道，一次超时却永久改道**
+
+`utils/tcb.js` 是所有请求的必经之路，两个判断都不对：
+
+```js
+const data = raw || {}
+if (data.ok) { ... } else { reject(new Error(data.error || data.code || '调用失败')) }
+```
+
+网关返 5xx 时（缩容到 0 冷启动、滚动发布），响应体是一页 HTML 或空串，
+既没有 `ok` 也没有 `code` —— 于是报一句「调用失败」、**不标 `_network`**，
+既不切云函数通道，日志里也看不出是网关挂了。这和 R64 在 `withdraw-api` 上
+踩的是同一个坑（503 被记成 `ok:true`）：**HTTP 状态码必须当回事**。
+
+另一个方向的问题：
+
+```js
+if (!err._network) { reject(err); return }
+gatewayUsable = false        // ← 一次超时就永久放弃直连
+```
+
+用户在电梯里丢一次包，整场会话就都挂在云函数通道上（每次多一次冷启动）。
+现在把失败分两类：**确定性**（域名没配白名单、云开发被服务商代持）才永久降级；
+**临时性**（超时、5xx）只让这一次退到云函数，下个请求仍然先试直连。
+
+还有一处顺手修的：两条通道都失败时，原来固定 `reject(err)` 把云函数通道的
+报错整个丢掉，用户只看到「请求超时」。现在会拼成「网关…；兜底通道：…」。
+
+**③ P1：图片每次重新下载，本地文件永不清理**
+
+`assetToLocalFile` / `orderAssetToLocalFile` / `publicAssetToLocalFile`
+每次都用「时间戳 + 随机数」写一个新文件，**不查缓存、不清理**：
+
+- 同一张图每进一次订单详情就重新拉一遍 base64（最大约 920KB）；
+- 每看一次就在 `USER_DATA_PATH` 里多留一份，删都不删。
+
+改成按「图 id + 账号尾号」缓存：命中直接用本地路径、不联网；并发读同一张图
+共用一个下载；超过 120 个文件时清掉一小时以前的旧文件（拿不到修改时间的一律不碰，
+宁可不清也别删掉正在显示的图）；退出登录顺手清本账号的缓存。
+
+文件名带账号尾号是为了切账号不串图 —— 同一台设备换微信账号时本地目录理论上
+也隔离，但不依赖那个前提。
+
+**④ P2：四件套脚本两份完整副本，各修一半**
+
+`verify-mp.js` 与 `check-mp.js` 在工作区根和 `campus-errand/tools/` 各有一份完整实现：
+
+| 脚本 | 根目录版 | 仓库版 |
+|---|---|---|
+| `verify-mp.js` | 10-16 旧版，**不设退出码** | 10-23 新版，`process.exitCode` 正确 |
+| `check-mp.js` | 10-24 修过包体积误报 | 10-23 未修，一直误报「排除 node_modules 也有 2.08MB」 |
+
+`sync_github.py` 调的是根目录版 → verify 那道门禁**永远 exit 0**（形同不存在），
+而手工跑仓库版又会被一个假超限拦住。现在实现只留在 `tools/`（入库、可追溯），
+根目录两个文件改成一行 `require` 转发，两边不可能再分叉。
+
+**⑤ P2：132 KB 文档跟着上传包走**
+
+`packOptions.ignore` 里有 `docs/`、`sql/`、`tests/`、`tools/`、`cloudfunctions/`、
+`cloudrun/`，**唯独没有 `README.md` 和 `CHANGELOG.md`** —— 132 KB 纯 markdown
+进了用户的上传包，端上一行都读不到。补进 ignore 后 1.03 MB → **0.91 MB**。
+
+同时纠正一条传了很久的说法：`docs/RELEASE.md` 与项目备忘都写
+「`docs/` 在包内，改文档会改变体积」——**这是错的**，`docs/` 从 R52 起就在 ignore 里。
+之前 1.02 → 1.03 的变化来自代码，不是文档。
+
+**实测**
+
+真库 `DO` 块与 `invokeFunction` 都过了一遍：
+
+| 场景 | 结果 |
+|---|---|
+| `svc_order_pay_amount`（20 元减 5 元券） | `amount_fen=1500`，与 `mark_order_paid` 同口径 |
+| 券抵满（10 元减 10 元） | `amount_fen=0`，前端据此跳过支付 |
+| 订单不存在 | `order_status=missing`，不抛错 |
+| 不带令牌 | `token_missing=true`、`is_owner=false`，金额照算 |
+| 别人下的单 | `is_owner=false`，云函数据此拒 |
+| 调用 `pay-create {orderId:999999}` | `ORDER_NOT_FOUND` |
+| 调用 `{orderId:1}`（已付） | `ALREADY_PAID` |
+| 调用 `{orderId:8, amount:1}`（应付 2 元） | `AMOUNT_MISMATCH`：页面显示 1.00、实际应付 2.00 |
+| 调用 `{orderId:8, amount:2}` | 金额放行，继续走取 openid |
+
+⚠️ 部署后**第一次调用打到了旧实例**（返回的还是老逻辑的 `NO_OPENID`），
+第二次才生效 —— 更新函数代码后别拿单次结果当结论。
+
+**数字**：迁移 66 → **67**，函数 173 → **174**（线上 `pg_proc` 实测），
+测试 193 → **213**（新增 `pay-amount` 8 条、`net-degrade` 7 条、`image-cache` 5 条），
+页面 39 / 表 38 / 触发器 9（均未变），主包 0.91 → **0.92 MB / 183 个文件**。
+
 ---
 
 
@@ -2016,7 +2148,7 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 不查微信交易号 —— 钱从没进过商户号，也就没有回调可等。只有 `pay_channel='wxpay'` 的单
 才需要那套异步状态机。
 
-### 数据库函数（173 个，现役 CloudBase 库）
+### 数据库函数（174 个，现役 CloudBase 库）
 按职能分：
 - **订单**：`create_order`(17参) / `accept_order` / `complete_order` / `cancel_order` / `confirm_order_done` / `get_order_detail` / `order_relation` / `list_my_orders` / `search_my_orders` / `hide_my_order` / `order_hidden` …
 - **取消与退款（R60）**：`request_cancel_order`（发布方发起，已付直接进退款、已接单转协商）/
@@ -2370,9 +2502,9 @@ node campus-errand/tools/style-lint.js campus-errand
 > 「即使排除 node_modules 也有 2.08MB」。现在实现只在 `tools/`（入库、可追溯），根目录文件只剩
 > 一行 `require` 转发，两边不可能再分叉。
 
-**当前状态（2026-11-01 20:00 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
-`check-mp.js` **0.91MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（35 wxss / 42 wxml）通过，
-`npm test` **193 项**全过。
+**当前状态（2026-11-01 21:00 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
+`check-mp.js` **0.92MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（35 wxss / 42 wxml）通过，
+`npm test` **213 项**全过。
 
 > 主包从 1.41MB 降到 **0.95MB**，是 R52 删掉 WorkBuddy Cloud SDK 与 `miniprogram_npm/` 的结果。
 

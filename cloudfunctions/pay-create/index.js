@@ -16,7 +16,9 @@
  *   前端仍按语义调用（PATHS 里 'refund' 指向同一地址），代码里不混。
  *
  * action（不传 = 下单，保持老调用兼容）：
- *   create      下单（= 老行为，参数 code / orderId / amount / notifyUrl）
+ *   create      下单（= 老行为，参数 code / orderId / amount / token）
+ *               ⚠️ 金额以库里为准：amount 只用来和 svc_order_pay_amount 的结果比对，
+ *               对不上直接返回 AMOUNT_MISMATCH，不会拿调用方的数去微信下单。
  *   cancel      发布方取消：待接单直接退款，已接单转协商
  *   respond     接单员回应取消申请
  *   sync        主动查退款结果（回调没到时的兜底）
@@ -690,6 +692,59 @@ exports.main = async (event) => {
       return done({ ok: false, code: 'PAY_DISABLED', error: '在线支付暂未开放，请稍后再试或联系客服' })
     }
 
+    // ---- 金额与归属：只认库，不认调用方（R65）----
+    // 放在取 openid 之前：这一步只是查库，比 wx.login 换 openid 便宜得多，
+    // 能在打微信接口之前就把「单不存在 / 已付过 / 金额对不上」全挡掉。
+    //
+    // 原来这里是直接拿 payload.amount 去微信下单。金额传错时（前端算错、
+    // 券没同步、有人改包）微信照扣款，但回调落库时 mark_order_paid 会按
+    // round((reward - discount_amount) * 100) 重算并比对，对不上就拒绝落 paid
+    // —— 结果是「钱收了、单没开通」，还得人工退。
+    const orderId = Number(payload.orderId || 0)
+    if (!orderId) {
+      return done({ ok: false, code: 'BAD_PARAM', error: 'orderId 必填' })
+    }
+    const uid = verifyToken(payload.token)
+    let expect = null
+    try {
+      const rows = await directRpc('svc_order_pay_amount', {
+        p_order_id: orderId,
+        p_uid: uid || null,
+      })
+      expect = (Array.isArray(rows) ? rows[0] : rows) || null
+    } catch (e) {
+      return done({
+        ok: false, code: 'PAY_AMOUNT_UNAVAILABLE',
+        error: '读取订单金额失败，请稍后重试（' + e.message + '）',
+      })
+    }
+    if (!expect || String(expect.order_status || '') === 'missing') {
+      return done({ ok: false, code: 'ORDER_NOT_FOUND', error: '订单不存在' })
+    }
+    // 只有「带了有效令牌」时才判归属：老版本前端不带令牌，
+    // 那种调用仍然放行（金额照样被下面卡住），不至于把正常用户挡在支付外。
+    if (expect.token_missing === false && expect.is_owner === false) {
+      return done({ ok: false, code: 'NOT_OWNER', error: '这笔订单不属于当前账号，无法支付' })
+    }
+    if (String(expect.pay_status || '') === 'paid') {
+      return done({ ok: false, code: 'ALREADY_PAID', error: '这笔订单已经支付过了' })
+    }
+    if (String(expect.order_status || '') === 'canceled') {
+      return done({ ok: false, code: 'ORDER_CANCELED', error: '订单已取消，无需支付' })
+    }
+    const serverFen = Number(expect.amount_fen || 0)
+    if (!(serverFen > 0)) {
+      return done({ ok: false, code: 'BAD_AMOUNT', error: '订单应付金额异常，请返回订单页刷新后重试' })
+    }
+    const amountFen = Math.round(Number(payload.amount || 0) * 100)
+    if (amountFen > 0 && amountFen !== serverFen) {
+      return done({
+        ok: false, code: 'AMOUNT_MISMATCH',
+        error: '金额已变化（页面显示 ' + (amountFen / 100).toFixed(2) +
+          ' 元，实际应付 ' + (serverFen / 100).toFixed(2) + ' 元），请返回订单页刷新后重试',
+      })
+    }
+
     // ---- 取 openid，三条路按优先级 ----
     let openid = ''
 
@@ -725,11 +780,6 @@ exports.main = async (event) => {
       return done({ ok: false, code: 'NO_OPENID', error: '缺少身份：小程序端请先 wx.login 拿 code 再调用' })
     }
 
-    const orderId = Number(payload.orderId || 0)
-    const amountFen = Math.round(Number(payload.amount || 0) * 100)
-    if (!orderId || amountFen <= 0) {
-      return done({ ok: false, code: 'BAD_PARAM', error: 'orderId 与 amount 必填，且金额需大于 0' })
-    }
     const notifyUrl = payload.notifyUrl || NOTIFY_URL
     if (!notifyUrl) {
       return done({ ok: false, code: 'NO_NOTIFY_URL', error: '缺少支付回调地址' })
@@ -743,7 +793,9 @@ exports.main = async (event) => {
       description: `校园跑腿 订单${orderId}`,
       out_trade_no: outTradeNo,
       notify_url: notifyUrl,
-      amount: { total: amountFen, currency: 'CNY' },
+      // 用服务端算出来的 serverFen，不是调用方传的 amountFen ——
+      // 上面那段只是拿 amountFen 和库里的数比对，真正发到微信的必须是库里的数。
+      amount: { total: serverFen, currency: 'CNY' },
       payer: { openid },
     })
 

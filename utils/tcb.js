@@ -32,6 +32,19 @@ function isNetworkError(errMsg) {
   return /url not in domain list|不在以下 request 合法域名|request:fail|ERR_/i.test(String(errMsg || ''))
 }
 
+/**
+ * 网络失败分两种，处理方式不能一样：
+ *   · **确定性**：域名没配白名单、云开发被授权给服务商 —— 再试也不会变，
+ *     本次启动内就不该再撞；撞一次白等一个往返。
+ *   · **临时性**：超时、5xx、连接被重置 —— 只让这一次退到云函数通道，
+ *     下个请求还试直连。否则用户在电梯里丢一次包，整场会话都走慢通道。
+ */
+function isPermanentFailure(errMsg) {
+  return /url not in domain list|不在以下 request 合法域名|-601034|已授权服务商使用云开发资源/i.test(
+    String(errMsg || '')
+  )
+}
+
 function viaGateway(target, payload) {
   return new Promise(function (resolve, reject) {
     const path = PATHS[target]
@@ -60,17 +73,37 @@ function viaGateway(target, payload) {
           reject(err)
           return
         }
+        // 5xx 是**网关自己挂了**（缩容到 0 冷启动、滚动发布、后端超时），
+        // 响应体往往是一页 HTML 或空串，根本没有 data.ok。
+        // 以前这里会掉到下面的 else，报一句「调用失败」且不标 _network，
+        // 于是既不切云函数通道、日志里也看不出是网关的问题。
+        // （同一类坑 R64 在 withdraw-api 上刚踩过：503 被记成 ok:true。）
+        if (res.statusCode >= 500) {
+          const err = new Error('服务网关暂时不可用（HTTP ' + res.statusCode + '），已自动切换通道重试')
+          err._network = true
+          err._transient = true
+          err.statusCode = res.statusCode
+          reject(err)
+          return
+        }
         const data = raw || {}
         if (data.ok) {
           data._via = 'gateway'
           resolve(data)
+        } else if (data.code || data.error) {
+          reject(new Error(data.error || data.code))
         } else {
-          reject(new Error(data.error || data.code || '调用失败'))
+          // 2xx/4xx 但既没有 ok 也没有 code/error：把状态码带出来，
+          // 否则排查时只剩「调用失败」四个字。
+          const err = new Error('调用失败（HTTP ' + res.statusCode + '，响应体无法识别）')
+          err.statusCode = res.statusCode
+          reject(err)
         }
       },
       fail: function (e) {
         const err = new Error(e.errMsg || '网络请求失败')
         err._network = isNetworkError(e.errMsg)
+        err._permanent = isPermanentFailure(e.errMsg)
         reject(err)
       },
     })
@@ -130,10 +163,17 @@ function call(target, payload) {
         reject(err)
         return
       }
-      // 域名没配白名单之类的网络问题：这次启动就别再试直连了
-      gatewayUsable = false
-      viaCloud(target, payload).then(resolve, function () {
-        reject(err)
+      // 域名没配白名单这类**确定性**失败，才值得在本次启动内永久放弃直连；
+      // 超时、5xx 只让这一次退到云函数通道，下个请求仍然先试直连 ——
+      // 否则一次电梯里丢包，整场会话都挂在慢通道上。
+      if (err._permanent) gatewayUsable = false
+      viaCloud(target, payload).then(resolve, function (e2) {
+        // 两条通道都失败：把网关那条的真实原因拼进去。
+        // 原来这里固定 reject(err)，云函数通道的报错被整个丢掉，
+        // 用户只看到「请求超时」，看不出兜底通道到底怎么了。
+        const msg = String((e2 && e2.message) || '')
+        if (e2 && msg) e2.message = err.message + '；兜底通道：' + msg
+        reject(e2 || err)
       })
     })
   })

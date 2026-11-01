@@ -109,7 +109,9 @@ function payOrder(order) {
 
   return loginCode()
     .then(function (code) {
-      return tcb.call('pay-create', { code: code, orderId: orderId, amount: amount })
+      // callTarget 而不是 call：要带上会话令牌，
+      // 云函数才能核对「这笔单是不是你的」以及「应付多少」。
+      return tcb.callTarget('pay-create', { code: code, orderId: orderId, amount: amount })
     })
     .then(function (body) {
       const params = (body && body.payParams) || {}

@@ -65,6 +65,172 @@ const MIME_BY_EXT = {
   webp: 'image/webp',
 }
 
+// ============================================================
+// 本地图片缓存（2026-11-01）
+//
+// 原来 assetToLocalFile / orderAssetToLocalFile / publicAssetToLocalFile
+// 每次都写一个「时间戳 + 随机数」的新文件：同一张图每进一次页面就重新
+// 拉一遍 base64（最大约 920KB），并在 USER_DATA_PATH 里再留一份，**永不清理**。
+// 订单详情来回看几遍、大厅反复刷，磁盘和流量都在白烧。
+//
+// 改成：文件名由「图 id + 账号尾号」决定 → 命中就直接用，不联网；
+// 并发请求同一张图只下载一次；超过上限的老文件顺手清掉。
+//
+// 文件名带账号尾号是为了切账号时不会命中上一个人的图（同一台设备上
+// 换微信账号时本地目录理论上也是隔离的，但这里不依赖那个前提）。
+// ============================================================
+const CACHE_FILE_RE = /^(asset|banner)_\d+_[A-Za-z0-9]+\.(jpg|png|gif|webp)$/
+const CACHE_KEEP = 120 // 最多留 120 个文件（约 30-60MB 量级，看图片大小）
+const CACHE_MIN_AGE = 60 * 60 * 1000 // 一小时内的文件一律不删（可能正显示在页面上）
+const PRUNE_INTERVAL = 10 * 60 * 1000
+let cacheIndex = null // { 'asset_12_ab12cd': '/path/asset_12_ab12cd.jpg' }
+let lastPruneAt = 0
+const inflight = {}
+
+function cacheAccountTag() {
+  try {
+    const session = tcb.readSession()
+    const uid = session && session.uid ? String(session.uid) : ''
+    const tail = uid.replace(/[^a-zA-Z0-9]/g, '').slice(-12)
+    return tail || 'anon'
+  } catch (e) {
+    return 'anon'
+  }
+}
+
+/** 首次用到时扫一遍目录，之后靠内存索引；写入时同步更新索引 */
+function ensureIndex(manager) {
+  if (cacheIndex) return cacheIndex
+  cacheIndex = {}
+  let names = []
+  try {
+    names = manager.readdirSync(wx.env.USER_DATA_PATH) || []
+  } catch (e) {
+    return cacheIndex
+  }
+  for (let i = 0; i < names.length; i++) {
+    const name = String(names[i] || '')
+    if (!CACHE_FILE_RE.test(name)) continue
+    cacheIndex[name.replace(/\.[a-z]+$/, '')] = wx.env.USER_DATA_PATH + '/' + name
+  }
+  return cacheIndex
+}
+
+function fileExists(manager, path) {
+  try {
+    manager.accessSync(path)
+    return true
+  } catch (e) {
+    return false
+  }
+}
+
+/**
+ * 超过上限就清老文件。拿不到修改时间的文件一律跳过 ——
+ * 宁可不清理，也不要删掉正在显示的图。
+ */
+function pruneCache(manager) {
+  const now = Date.now()
+  if (now - lastPruneAt < PRUNE_INTERVAL) return
+  lastPruneAt = now
+  try {
+    const dir = wx.env.USER_DATA_PATH
+    const names = manager.readdirSync(dir) || []
+    const files = []
+    for (let i = 0; i < names.length; i++) {
+      const name = String(names[i] || '')
+      if (!CACHE_FILE_RE.test(name)) continue
+      let mtime = 0
+      try {
+        const st = manager.statSync(dir + '/' + name)
+        mtime = st && st.lastModifiedTime ? st.lastModifiedTime * 1000 : 0
+      } catch (e) {
+        mtime = 0
+      }
+      if (!mtime) continue
+      files.push({ name: name, mtime: mtime })
+    }
+    if (files.length <= CACHE_KEEP) return
+    files.sort(function (a, b) {
+      return b.mtime - a.mtime
+    })
+    for (let i = CACHE_KEEP; i < files.length; i++) {
+      if (now - files[i].mtime < CACHE_MIN_AGE) continue
+      try {
+        manager.unlinkSync(dir + '/' + files[i].name)
+        if (cacheIndex) delete cacheIndex[files[i].name.replace(/\.[a-z]+$/, '')]
+      } catch (e) {
+        /* 单个删不掉不影响别的 */
+      }
+    }
+  } catch (e) {
+    /* 清理是尽力而为，失败不影响读图 */
+  }
+}
+
+/**
+ * 「先看本地有没有，没有才下载」的公共实现。
+ * runRead 只在未命中时调用一次；并发的重复请求共用同一个 Promise。
+ */
+async function cachedLocalFile(kind, assetPath, runRead) {
+  const id = parseAssetId(assetPath)
+  if (!id) throw new Error('图片路径无效：' + String(assetPath).slice(0, 40))
+  const manager = fsManager()
+  const key = kind + '_' + id + '_' + cacheAccountTag()
+  const index = ensureIndex(manager)
+
+  const hit = index[key]
+  if (hit && fileExists(manager, hit)) {
+    pruneCache(manager)
+    return hit
+  }
+  if (hit) delete index[key]
+
+  if (inflight[key]) return inflight[key]
+
+  const task = (async function () {
+    const asset = await runRead(assetPath)
+    const ext = EXT_BY_MIME[asset.mime] || 'jpg'
+    const path = wx.env.USER_DATA_PATH + '/' + key + '.' + ext
+    manager.writeFileSync(path, asset.data, 'base64')
+    index[key] = path
+    pruneCache(manager)
+    return path
+  })()
+  inflight[key] = task
+  try {
+    return await task
+  } finally {
+    delete inflight[key]
+  }
+}
+
+/**
+ * 退出登录时清掉本账号的图片缓存（换账号不串图，也顺手回收磁盘）。
+ * 可以传 uid：登出流程里会话可能已经被清掉，那就按传进来的账号算。
+ */
+function clearAssetCache(uid) {
+  try {
+    const manager = fsManager()
+    const index = ensureIndex(manager)
+    const tail = String(uid || '')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(-12)
+    const tag = tail || cacheAccountTag()
+    Object.keys(index).forEach(function (key) {
+      if (key.indexOf('_' + tag) < 0) return
+      try {
+        manager.unlinkSync(index[key])
+      } catch (e) {
+        /* 删不掉就算了 */
+      }
+      delete index[key]
+    })
+  } catch (e) {
+    /* 清理失败不影响退出登录 */
+  }
+}
+
 const EXT_BY_MIME = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -518,20 +684,11 @@ async function readAsset(assetPath) {
  * asset:<id> → 本地临时文件路径。
  * 优先用本地文件而不是 data URL：没有体积膨胀（setData 单次上限 1MB），
  * 而且本地路径照样能进 wx.previewImage 放大看。
+ *
+ * 命中缓存就不联网了 —— 同一张图重复看不再重新拉 base64。
  */
 async function assetToLocalFile(assetPath) {
-  const asset = await readAsset(assetPath)
-  const manager = fsManager()
-  const path =
-    wx.env.USER_DATA_PATH +
-    '/asset_' +
-    Date.now() +
-    '_' +
-    Math.floor(Math.random() * 10000) +
-    '.' +
-    (EXT_BY_MIME[asset.mime] || 'jpg')
-  manager.writeFileSync(path, asset.data, 'base64')
-  return path
+  return cachedLocalFile('asset', assetPath, readAsset)
 }
 
 /** asset:<id> → data URL。文件系统不可用时兜底。 */
@@ -568,18 +725,10 @@ async function readOrderAsset(assetPath, orderId) {
 }
 
 async function orderAssetToLocalFile(assetPath, orderId) {
-  const asset = await readOrderAsset(assetPath, orderId)
-  const manager = fsManager()
-  const path =
-    wx.env.USER_DATA_PATH +
-    '/asset_' +
-    Date.now() +
-    '_' +
-    Math.floor(Math.random() * 10000) +
-    '.' +
-    (EXT_BY_MIME[asset.mime] || 'jpg')
-  manager.writeFileSync(path, asset.data, 'base64')
-  return path
+  if (!orderId) throw new Error('缺少订单号，无法校验图片权限')
+  return cachedLocalFile('asset', assetPath, function () {
+    return readOrderAsset(assetPath, orderId)
+  })
 }
 
 async function orderAssetToDataUrl(assetPath, orderId) {
@@ -606,20 +755,9 @@ async function readPublicAsset(assetPath) {
   return { mime: row.mime || 'image/jpeg', data: String(row.data) }
 }
 
-/** 公开资源 → 本地临时文件路径 */
+/** 公开资源 → 本地临时文件路径（轮播图，同样走缓存） */
 async function publicAssetToLocalFile(assetPath) {
-  const asset = await readPublicAsset(assetPath)
-  const manager = fsManager()
-  const path =
-    wx.env.USER_DATA_PATH +
-    '/banner_' +
-    Date.now() +
-    '_' +
-    Math.floor(Math.random() * 10000) +
-    '.' +
-    (EXT_BY_MIME[asset.mime] || 'jpg')
-  manager.writeFileSync(path, asset.data, 'base64')
-  return path
+  return cachedLocalFile('banner', assetPath, readPublicAsset)
 }
 
 /** 公开资源 → data URL。文件系统不可用时兜底。 */
@@ -807,6 +945,7 @@ module.exports = {
   orderAssetToDataUrl: orderAssetToDataUrl,
   publicAssetToLocalFile: publicAssetToLocalFile,
   publicAssetToDataUrl: publicAssetToDataUrl,
+  clearAssetCache: clearAssetCache,
   // 以下仍是对象存储的读通道，只为兼容历史数据保留
   createSignedUrl: createSignedUrl,
   downloadBuffer: downloadBuffer,

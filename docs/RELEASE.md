@@ -66,7 +66,7 @@ function completeOrder(...) { }   // 284 行  ← 微信 CI 直接编译失败
 - ~~`miniprogram_npm/` 是 SDK 构建产物，必须入库~~ ✅ **R52 已随 WorkBuddy Cloud SDK 一起删除**，
   主包因此从 1.44MB 降到 0.95MB；现在包里没有 `miniprogram_npm/`，也不需要入库。
   `cloudfunctions/` 与 `cloudrun/` 同样在 `packOptions.ignore` 里（云函数是服务端代码，不能进包）。
-- 当前上传体积 **0.91 MB / 2.00 MB（183 个文件）**。
+- 当前上传体积 **0.92 MB / 2.00 MB（183 个文件）**。
 - ~~⚠️ `docs/` 在包内 —— 改长文档会让体积变大，测体积要在文档改完之后再跑~~ ✅
   **2026-11-01 复核推翻**：`docs/` 从 R52 起就在 `packOptions.ignore` 里，`README.md` 与
   `CHANGELOG.md` 之前**没**被忽略，132 KB 纯文档一直跟着上传包走（端上永远读不到）。

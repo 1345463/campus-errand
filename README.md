@@ -11,13 +11,13 @@
 |---|---|
 | 页面 | **39** |
 | 前端代码 | **18,037** 行 JS / **5,146** 行 WXML / **5,199** 行 WXSS |
-| 数据库 | **38** 表 / **173** 个函数 / **9** 个触发器 |
+| 数据库 | **38** 表 / **174** 个函数 / **9** 个触发器 |
 | 云函数 | **8** 个 |
 | 云托管 | **1** 个（固定出口 IP，专门对接商家转账） |
-| 迁移脚本 | **66** 条（全部可重放） |
+| 迁移脚本 | **67** 条（全部可重放） |
 | 灰度开关 / 违规词 | **23** 个 / **292** 条（13 大类 + 4 条白名单） |
-| 回归测试 | **193** 项（含真实 PostgreSQL 执行） |
-| 小程序包体积 | **0.91 MB** / 上限 2 MB |
+| 回归测试 | **213** 项（含真实 PostgreSQL 执行） |
+| 小程序包体积 | **0.92 MB** / 上限 2 MB |
 
 > JS / WXML / WXSS 行数口径 = `pages/` + `components/` + `utils/` + 根目录 `app.js`、`app.wxss`
 > （不含 `tests/` `tools/` `cloudfunctions/` `cloudrun/`）。
@@ -122,11 +122,11 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
 
 `svc_rpc` 由云函数先验 HMAC 令牌拿到可信 uid，再在同一事务里 `set_config('request.jwt.claim.sub', uid)`
 后执行业务函数 —— 库里当时 129 个 `SECURITY DEFINER` 函数**一行未改**就完成了整体迁移
-（现役库已增至 **173** 个，迁移方式未变）。
+（现役库已增至 **174** 个，迁移方式未变）。
 
 ---
 
-## 二、核心迭代（64 轮）
+## 二、核心迭代（65 轮）
 
 | 阶段 | 交付 |
 |---|---|
@@ -151,6 +151,7 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
 | **R62** | **修三处资金漏洞**：确认完成发双份赏金（函数与触发器各加一次）、微信/余额双付（自动退重复支付）、`calc_settle_amount` 零调用导致抽成白配 |
 | **R63** | **券要退、单要能管、没人管的自愈**：券回滚铺进 5 个函数的 8 个终态出口；管理端订单运维三 RPC + `pages/admin/orders`；退款回调丢失三层兜底（进页补查 / 手动刷新 / 每 10 分钟定时任务） |
 | **R64** | **数据库的第二道门一直是空的**：5 张核心表建了 policy 却从没 `ENABLE ROW LEVEL SECURITY`（等于零防护），开启并收紧订单读取；`waiting_confirm` / `cancel_requested` / 提现 `pending` 三个死锁状态各补出口；提现卡 50 小时的真因是云托管缩容到 0 + 超时写死 10 秒，改 25s / 函数 60s 并补 HTTP 状态码判定 |
+| **R65** | **下单金额不再信任客户端**：`pay-create` 原来直接拿调用方传的 `amount` 去微信下单，金额传错就是「钱收了、单没开通」；改为先问 `svc_order_pay_amount` 要库里的应付分，对不上一律拒绝。同时修网关 5xx 不切通道 / 一次超时永久降级、图片每次重下且永不清理、四件套脚本两份分叉 |
 
 最有价值的几次「翻车与纠正」：
 
@@ -190,7 +191,7 @@ R57 之前这块是死的（R52 迁库时留下的占位实现），现在走 `c
     │              │
 ┌───▼──────────────▼─────┐
 │ CloudBase PostgreSQL    │
-│ 38 表 / 173 函数 / 9 触发器 │
+│ 38 表 / 174 函数 / 9 触发器 │
 │ RLS + SECURITY DEFINER  │
 └─────────────────────────┘
 ```
@@ -313,7 +314,7 @@ campus-errand/
 ├── cloudfunctions/   8 个：app-api / ai-api / pay-create / pay-notify /
 │                     tcb-proxy / transfer / transfer-notify / withdraw-api
 ├── cloudrun/         云托管 transfer-svc（固定出口 IP，对接商家转账）
-├── tests/            193 项回归测试（含 PGlite 真实 PostgreSQL）
+├── tests/            213 项回归测试（含 PGlite 真实 PostgreSQL）
 ├── tools/            verify-mp / check-mp / style-lint / release-check
 └── docs/             迭代记录 / 环境 / 发布 / 验收 / 代码审阅 / 支付方案
 ```
@@ -326,9 +327,9 @@ campus-errand/
 
 - **38 张表**：`pay_settings` / `withdraw_requests` / `phone_codes` / `wx_phone_tickets` /
   `media_uploads` / `media_upload_parts` 等；`profile_phones` / `account_deletions` 不开 policy，只给函数访问
-- **173 个函数**，命名约定 `p_` 前缀参数
+- **174 个函数**，命名约定 `p_` 前缀参数
 - **9 个触发器**：订单消息推送、图片归属校验、手机号闸门 ×3 等
-- **66 条迁移脚本**，全部幂等 —— 在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，
+- **67 条迁移脚本**，全部幂等 —— 在 **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，
   **不在本仓库内**）。完整清单见 [`docs/ITERATIONS.md` 第 3 章](docs/ITERATIONS.md)
 - 包内 `sql/` 还有 28 个早期脚本，属已退役旧库的结构参考，不再对现役库执行
 
@@ -352,7 +353,7 @@ pending ──accept──> accepted ──complete──> waiting_confirm ─�
 
 ```bash
 npm ci --ignore-scripts
-npm test        # 193 项回归测试
+npm test        # 213 项回归测试
 npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预检
 ```
 
@@ -365,7 +366,7 @@ npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预�
 没有 AppSecret、14 天不转正即注销。正式提审前需准备：小程序备案、用户隐私保护指引
 （手机号 / 证件照 / 地址 / 图片）、UGC 信息安全声明。
 
-1. 微信开发者工具打开本目录；主包需 ≤ 2 MB，当前 **0.91 MB / 2.00 MB**（183 个文件）。
+1. 微信开发者工具打开本目录；主包需 ≤ 2 MB，当前 **0.92 MB / 2.00 MB**（183 个文件）。
 2. **云函数 8 个**已部署到 `ceshi`（`tcb-proxy` 在小程序自有环境 `baozi-d2gbl784gd773f8b6`，
    需由开发者工具上传）。密钥只在云函数控制台的环境变量里配，不进代码与仓库。
 3. **云托管 `cloudrun/transfer-svc`**：函数型服务，端口 3000，9 个环境变量
@@ -414,7 +415,7 @@ npm run check   # 四件套：语法 / 页面注册 / 上传预检 / 样式预�
   改通道前务必重新二分实测。
 - **内置通道的模型目录是静态的**（CloudBase 没有列表接口），本环境只有 `hy3` / `hy3-preview` 可用；
   换了自定义通道（R58）才会真拉 `/models`。内置通道要加模型得先买 Token 资源包再填 `TCB_AI_MODELS`。
-- **`cloudbase/migrations/` 的 66 条脚本不在 git 内** —— 不是被 `.gitignore` 忽略，而是仓库根是
+- **`cloudbase/migrations/` 的 67 条脚本不在 git 内** —— 不是被 `.gitignore` 忽略，而是仓库根是
   `campus-errand/`、`cloudbase/` 是同级兄弟目录。空库重建目前只能靠这份本地目录，建议尽快纳入版本控制。
 - **短信仍未开通**：腾讯云 SMS 的 5 个环境变量未配置。主路径已是微信 `getPhoneNumber`（免短信），
   短信只作降级通道；配齐这 5 个变量仍有价值（代码已就绪，配完即生效）。

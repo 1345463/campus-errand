@@ -17,6 +17,10 @@
  * 单笔上限（默认 200 元），超过的仍留给后台人工确认。
  * summary 也会补转一次「停留在 pending 的历史单」，避免旧单永远没人点。
  *
+ * 定时任务（R64）：event 不带 httpMethod 且 action=cron 时，直接调 transfer
+ * 服务的全局 sync，把所有在途转账跟微信对一遍。以前只有用户打开钱包页
+ * 才会对账，回调一丢、用户又不进钱包，那笔提现就永远停在处理中。
+ *
  * 身份：小程序端 wx.login 拿 code，云函数用 AppSecret 换 openid，再查 admin_grants。
  */
 const https = require('https')
@@ -32,11 +36,16 @@ const SVC_HOST = process.env.TRANSFER_SVC_HOST || ''
 const AUTO_TRANSFER = process.env.AUTO_TRANSFER !== '0'
 const AUTO_MAX = Number(process.env.AUTO_TRANSFER_MAX || 200)
 
+// 超时给到 25 秒：云托管 transfer-svc 的 MinNum=0，常态是 0 实例，
+// 每次调用都要冷启动（实测 10 秒等不完，直接 NETWORK 请求超时，
+// 这也是线上那笔提现卡 50 小时的真因）。函数 Timeout 同步提到 60 秒。
+const HTTP_TIMEOUT = Number(process.env.SVC_TIMEOUT_MS || 25000)
+
 function httpsJson(hostname, path, method, bodyStr, headers) {
   return new Promise((resolve, reject) => {
     const h = Object.assign({}, headers)
     if (bodyStr) h['Content-Length'] = Buffer.byteLength(bodyStr)
-    const req = https.request({ hostname, path, method, headers: h, timeout: 10000 }, (res) => {
+    const req = https.request({ hostname, path, method, headers: h, timeout: HTTP_TIMEOUT }, (res) => {
       let data = ''
       res.on('data', (c) => { data += c })
       res.on('end', () => {
@@ -144,6 +153,75 @@ function canAuto(amount) {
   return AUTO_TRANSFER && Number(amount || 0) <= AUTO_MAX
 }
 
+/**
+ * 定时任务：两件事。
+ *   ① 让 transfer 服务把已发起的在途转账跟微信对一遍（回调丢了也能收尾）
+ *   ② 补转「还停在 pending」的单 —— create 那一刻云托管缩容到 0、
+ *      冷启动没赶上，转账就压根没发起，钱从余额扣了却卡在 pending。
+ *
+ * 以前这两件事都只有用户打开钱包页（action=summary）才会做：回调丢了、
+ * 用户又不进钱包，那笔提现就永远停在处理中。R64 起每 10 分钟自动跑一次。
+ *
+ * 补转是安全的：doTransfer 内部走 transfer_prepare，同一笔单只会被锁成
+ * processing 一次，重复调用拿到的是同一笔，不会重复打款。
+ */
+async function runWithdrawSync() {
+  const sec = await getSecret()
+  if (!SVC_HOST || !sec) {
+    return {
+      ok: false,
+      code: 'NOT_CONFIGURED',
+      error: '转账服务未配置（TRANSFER_SVC_HOST / PAY_WEBHOOK_SECRET）',
+    }
+  }
+  const out = { ok: true, checked: 0, results: [] }
+
+  try {
+    const r = await httpsJson(SVC_HOST, '/transfer', 'POST',
+      JSON.stringify({ action: 'sync', secret: sec }), { 'Content-Type': 'application/json' })
+    const body = (r && r.body) || {}
+    // 云托管缩容到 0 时网关会回 503（nginx 的 HTML 错误页）。
+    // 不认状态码就会把「服务没起来」记成同步成功，日志永远看不出问题。
+    if (!r || r.status < 200 || r.status >= 300) {
+      return {
+        ok: false,
+        code: 'SVC_' + ((r && r.status) || 0),
+        error: '转账服务返回 ' + ((r && r.status) || '无响应') + '，可能正在冷启动或未就绪',
+        detail: body,
+      }
+    }
+    out.checked = Number(body.checked || 0)
+    if (Array.isArray(body.results)) out.results = body.results
+  } catch (e) {
+    return { ok: false, code: 'NETWORK', error: '同步转账状态失败：' + ((e && e.message) || e) }
+  }
+
+  // 补转：只碰 pending、超过 10 分钟、金额在自动上限内的单，单轮最多 2 笔。
+  // 刚创建的单不碰 —— create 那条路径自己会转，避免同一笔被两边同时触发。
+  try {
+    const wr = await rest('GET',
+      '/v1/rdb/rest/withdraw_requests?select=id,amount,status,created_at&status=eq.pending&order=id.asc&limit=5')
+    const rows = Array.isArray(wr.body) ? wr.body : []
+    out.pending = rows.length
+    const cutoff = Date.now() - 10 * 60 * 1000
+    let done = 0
+    for (let i = 0; i < rows.length && done < 2; i++) {
+      const one = rows[i] || {}
+      if (!canAuto(one.amount)) continue
+      const ts = Date.parse(one.created_at || '')
+      if (!isFinite(ts) || ts > cutoff) continue
+      const r = await doTransfer(Number(one.id))
+      out.results.push({ id: one.id, ok: !!(r && r.ok), error: (r && r.error) || '' })
+      if (r && r.ok) done += 1
+    }
+    out.transferred = done
+  } catch (e) {
+    out.pendingError = String((e && e.message) || e || '补转失败')
+  }
+
+  return out
+}
+
 async function loadNicknames(uids) {
   const map = {}
   const list = uids.filter(Boolean)
@@ -180,6 +258,13 @@ exports.main = async (event) => {
 
   const action = String(payload.action || '')
   const code = String(payload.code || '')
+
+  // 定时任务（R64）：必须同时满足「非 HTTP」和 action=cron。
+  // 网关请求一定带 httpMethod，body 里伪造 action=cron 进不来；
+  // 这条路径也不需要 code（定时器没有 wx.login）。
+  if (!isHttp && action === 'cron') {
+    return done(await runWithdrawSync())
+  }
 
   if (!code) return done({ ok: false, code: 'NO_CODE', error: '缺少 code：小程序端请先 wx.login' })
   if (!action) return done({ ok: false, code: 'BAD_PARAM', error: '缺少 action' })

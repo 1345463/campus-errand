@@ -1315,3 +1315,75 @@ _提交时间：2026-10-30 23:00_
 拿它核对反而会误判。已改用「grep `cloudbase/migrations/*.sql` 的 CREATE 语句去重计数」兜底：
 表 38、触发器 9、函数 grep 得 171（多算 1：`ai_runtime_config` 被 DROP 改名成 `svc_ai_runtime_config`，
 两个名字都在迁移里）→ 真值 **170**，与文档现值一致。
+
+## R64 · 数据库的第二道门一直是空的（11-01 晚）
+
+用户问「还有什么没修」，于是先做静态扫描再回答：前端 116 个 RPC 与库里函数逐个对照（只差两个，
+且都在迁移里）、141 个 `api.*` 导出与页面调用全匹配、全部 `bindtap` 都有对应方法 —— 都干净。
+真正的问题落在静态扫描看不见的地方。
+
+**① 5 张核心表的 RLS 从来没打开（P0）** —— `20261027210000_direct_table_grants.sql` 给
+`orders` / `profiles` / `addresses` / `rental_requests` / `runner_applications` 授了 `anon` 的
+增删改查，也建了 `owner_id = auth.uid()` 的 policy，**但整份文件没有一句 `ENABLE ROW LEVEL SECURITY`**。
+policy 只在 RLS 开启后才参与判定，所以从建库那天起这 5 张表的 policy 全是死代码；线上 38 张表
+33 张开着，就这 5 张关着。实测切 `anon` 角色：可见 `orders` 3 行、`profiles` 6 行、`DELETE` 可执行 ——
+而 `orders` 里有地址与联系方式、`profiles` 里有 `balance`。
+修复前先验了两个前提：`service_role` 的 `rolbypassrls = true`（`svc_rpc` 不受影响）、
+全仓 `rdb/rest/<表名>` 零匹配（前端没有一处直连表）。顺带收紧 `orders_read_all`：
+它原本允许 `is_certified_runner()` 看**全部**订单，RLS 一开就会把全站订单暴露给每个认证接单员，
+改为只认 `owner_id` / `runner_id` / `admin_is_any()`，且不再授给 `anon`。
+
+**② 三个状态会永久卡住，钱跟着卡（P1）** ——
+
+| 状态 | 后果 | 补的出口 |
+|---|---|---|
+| `waiting_confirm` | 发布方不点确认，钱永远在平台 | `svc_auto_confirm_orders(72)` 超 72 小时自动结算 |
+| `cancel_requested` | 接单员不回应，双方都动不了 | `svc_expire_cancel_requests(24)` 超 24 小时视同同意 |
+| `withdraw_requests.pending` | 转账没发起，钱扣了却一直「处理中」 | `withdraw-api` cron 补转 |
+
+自动结算与 `confirm_order_done` 同一套口径：唯一出口、`ROW_COUNT` 幂等、先改状态再发钱、
+5% 抽成走 `calc_settle_amount`；`feedback_status = 'pending'`（已申诉待核查）的单一律跳过。
+72 小时 = 送达后 48 小时申诉窗口 + 24 小时管理员响应。取消申请过期三条分支与
+`request_cancel_order` 一字不差：余额单同库退回并落 `canceled + refunded` + 券回滚，
+微信单只转 `canceling + refunding` 并把 `refund_no` 写成 `RF+订单号`（DB 发不了微信请求）。
+
+**③ 提现卡 50 小时的真因不是回调丢失，是转账压根没发起（P1）** ——
+补对账时 `withdraw-api` cron 返回 `{"ok":false,"code":"NETWORK","error":"请求超时"}`。
+查下去：云托管 `transfer-svc` 的 `ServerConfig.MinNum = 0`、`ScaleStatus = zero`，
+常态 0 实例、每个请求都要冷启动；而 `httpsJson` 超时写死 10 秒、函数 Timeout 只有 20 秒。
+线上提现 #20（10 元，10-30 17:11 申请）`status=pending`、`batch_id` 为空，卡了 50 小时。
+三处一起改：超时 10s → **25s**（`SVC_TIMEOUT_MS` 可覆盖）、函数 Timeout 20s → **60s**、
+HTTP 状态码要认（503 原来会被记成 `ok:true`，日志永远看不出问题）。
+改完重跑 606ms 返回；再跑带补转的版本 `{"ok":true,"pending":1,"transferred":1}`，
+提现 #20 从 `pending` → `processing`，转账已受理（`transfer_prepare` 行锁保证重复调用拿到同一笔）。
+
+**④ 提现的并发窗口（P2）** —— `svc_create_withdraw` 的「是否已有处理中的提现」检查排在
+`profiles ... FOR UPDATE` **之前**，两个请求能同时通过检查再各插一笔 `pending`
+（不会超扣，但会排两笔队）。把检查挪到锁之后。
+
+**⑤ 退款「查了但没补发」的洞** —— R63 的 cron 用 `doSync` 补查滞留退款，但 `doSync` **只查不发**：
+微信侧 404 时返回 `REFUND_NOT_EXIST` 就结束了。若当初 `doRefund` 就失败（网络错 / 余额不足），
+这笔单会永远卡在 `canceling`，只能等管理员手动重试。给 `svc_list_stuck_refunds` 的返回加上
+`pay_txn_id` / `refund_amount` / `refund_error`（改返回类型必须 DROP + CREATE 且 GRANT 重跑），
+cron 就能在 404 时直接补发。
+
+**⑥ 132 KB 文档一直跟着上传包走（P2）** —— `packOptions.ignore` 里只有 `docs/`、`sql/`、`tests/`、
+`tools/`、`cloudfunctions/`、`cloudrun/`，**`README.md` 与 `CHANGELOG.md` 没被忽略**：132 KB 纯 markdown
+进了用户的上传包，端上永远读不到。补进 ignore 后 1.03 MB → **0.91 MB（185 → 183 个文件）**。
+顺带纠正一条传了很久的说法：`docs/RELEASE.md` 与项目备忘都写「`docs/` 在包内，改文档会改变体积」，
+**这是错的** —— `docs/` 从 R52 起就在 ignore 里。
+
+**⑦ 四件套脚本存在两份完整副本，各自修一半（P2）** —— `verify-mp.js` / `check-mp.js` 在工作区根
+与 `campus-errand/tools/` 各有一份：根目录的 `verify-mp.js` 是旧版且**不设退出码**（经
+`sync_github.py` 调用永远 exit 0，这道门禁形同不存在），根目录的 `check-mp.js` 才是修过包体积误报的
+那份、仓库内那份反倒一直误报「排除 node_modules 也有 2.08MB」。现在实现只留在 `tools/`，
+根目录两个文件改成一行 `require` 转发，两边不可能再分叉。
+
+- **实测**（真库 `DO` 块 7 项全过，事务回滚零残留）：anon 读订单 0 行、anon 删订单行还在（RLS 静默过滤）、
+  anon 插订单被拒；超时未确认自动结算 10 元 → 接单员 **9.50**（5% 抽成）、再跑一次 `done_count=0` 余额不动；
+  申诉中的单跳过；余额单超时取消余额 +8 且 `canceled + refunded`；微信单只转 `canceling + refunding`
+  并落 `refund_no=RF<id>`；未满 24 小时的取消申请不动。
+- **校验**：新增 `tests/rls-timeout.test.js` 12 条（9 条在 PGlite 跑真实 SQL），全量 **193 项**通过；
+  四件套全绿，主包 **0.91 MB / 183 个文件**；迁移 64 → **66**、函数 170 → **173**、RLS **38 张全开**。
+
+_提交时间：2026-11-01 19:50:00_

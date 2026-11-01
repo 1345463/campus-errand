@@ -22,10 +22,14 @@
  *   sync        主动查退款结果（回调没到时的兜底）
  *   adminRetry  管理端：退款失败重试 / 强制取消后补发退款
  *
- * 定时触发（R63）：
- *   event.Type === 'Timer' 且不是 HTTP 调用时走 cron：关超时未付单 +
- *   补查滞留退款。判断依据是「定时事件没有 httpMethod」，HTTP 请求
- *   一定带 httpMethod，所以 body 里伪造 Type=Timer 进不来。
+ * 定时触发（R63 / R64）：
+ *   event.Type === 'Timer' 且不是 HTTP 调用时走 cron：
+ *     · 关超时未付单
+ *     · 超时未确认自动结算（waiting_confirm 卡住，接单员拿不到钱）
+ *     · 取消申请超时自动同意（cancel_requested 卡住，发布方退不了款）
+ *     · 补查滞留退款，微信侧没有这笔就补发
+ *   判断依据是「定时事件没有 httpMethod」，HTTP 请求一定带 httpMethod，
+ *   所以 body 里伪造 Type=Timer 进不来。
  *
  * 环境变量：
  *   WXPAY_MCHID / WXPAY_APPID / WXPAY_SERIAL_NO / WXPAY_PRIVATE_KEY / WXPAY_NOTIFY_URL
@@ -499,16 +503,28 @@ async function doAdminRetry(uid, payload) {
 }
 
 /**
- * 定时任务（每 10 分钟）：两件事都是「没有它就永远没人管」的。
- *   ① 关掉超时未付的 pending 单 —— 以前它们永远停在列表里
- *   ② 补查滞留退款 —— 回调丢了就永远 canceling，用户只能来找客服
- * 单次最多补查 5 笔，避免把函数超时拖爆；剩下的下一轮继续。
+ * 定时任务（每 10 分钟）：全都是「没有它就永远没人管」的事。
+ *   ① 关掉超时未付的 pending 单
+ *   ② 超时未确认 → 自动结算（接单员送完了，发布方不点，钱就永远在平台）
+ *   ③ 取消申请超时 → 自动同意（接单员不回应，发布方既不能取消也不能继续）
+ *   ④ 补查滞留退款；微信侧压根没这笔退款时**补发**（当初 doRefund 就失败的洞）
+ *   ⑤ 统计滞留提现（真正的 sync 由 withdraw-api 的定时任务做）
+ * 单次最多处理 5 笔退款，避免把函数超时拖爆；剩下的下一轮继续。
  */
 async function runCron() {
   if (!TCB_ENV || !TCB_KEY) {
     return { ok: false, code: 'NOT_CONFIGURED', error: '读库配置缺失（TCB_ENV_ID / TCB_PUBLISHABLE_KEY）' }
   }
-  const out = { ok: true, closed: 0, stuck: 0, refunded: 0, failed: 0 }
+  const out = {
+    ok: true,
+    closed: 0,
+    autoDone: 0,
+    cancelExpired: 0,
+    stuck: 0,
+    refunded: 0,
+    failed: 0,
+    stuckWithdrawals: 0,
+  }
 
   try {
     const closedRows = await directRpc('svc_close_expired_orders', { p_minutes: 30 })
@@ -518,6 +534,25 @@ async function runCron() {
     out.closeError = String((e && e.message) || e || '关单失败')
   }
 
+  // 72 小时：送给 submit_settle_feedback 留 48 小时申诉 + 24 小时人工处理。
+  // 已申诉（feedback_status='pending'）的单函数内部会跳过，不会被自动确认盖掉。
+  try {
+    const rows = await directRpc('svc_auto_confirm_orders', { p_hours: 72 })
+    const r0 = (rows && rows[0]) || {}
+    out.autoDone = Number(r0.done_count) || 0
+  } catch (e) {
+    out.autoConfirmError = String((e && e.message) || e || '自动结算失败')
+  }
+
+  // 24 小时：接单员一直不回应取消申请，视同同意
+  try {
+    const rows = await directRpc('svc_expire_cancel_requests', { p_hours: 24 })
+    const r0 = (rows && rows[0]) || {}
+    out.cancelExpired = (Number(r0.moved_count) || 0) + (Number(r0.refunded_count) || 0)
+  } catch (e) {
+    out.cancelExpireError = String((e && e.message) || e || '超时取消失败')
+  }
+
   try {
     const rows = await directRpc('svc_list_stuck_refunds', { p_minutes: 10 })
     const list = Array.isArray(rows) ? rows : []
@@ -525,11 +560,34 @@ async function runCron() {
     for (let i = 0; i < list.length && i < 5; i++) {
       const one = list[i] || {}
       const r = await doSync('', { orderId: one.order_id })
-      if (r && r.wxStatus === 'SUCCESS') out.refunded += 1
-      else if (!r || r.ok === false) out.failed += 1
+      if (r && r.wxStatus === 'SUCCESS') {
+        out.refunded += 1
+        continue
+      }
+      // 404 = 微信侧没有这笔退款，说明当初 doRefund 就没成功。
+      // 只查不补发的话，这种单会永远卡在 canceling。
+      if (r && r.code === 'REFUND_NOT_EXIST') {
+        const retry = await doRefund(one.order_id, {
+          refund_fen: Math.round(Number(one.refund_amount || 0) * 100),
+          txn_id: String(one.pay_txn_id || ''),
+        })
+        if (retry && retry.ok) out.refunded += 1
+        else out.failed += 1
+        continue
+      }
+      if (!r || r.ok === false) out.failed += 1
     }
   } catch (e) {
     out.refundError = String((e && e.message) || e || '补查退款失败')
+  }
+
+  // 只做统计：真正的转账 sync 在 withdraw-api 的定时任务里，
+  // 那边才有 TRANSFER_SVC_HOST 和固定出口 IP。
+  try {
+    const rows = await directRpc('svc_list_stuck_withdrawals', { p_minutes: 10 })
+    out.stuckWithdrawals = Array.isArray(rows) ? rows.length : 0
+  } catch (e) {
+    out.withdrawError = String((e && e.message) || e || '统计滞留提现失败')
   }
 
   return out

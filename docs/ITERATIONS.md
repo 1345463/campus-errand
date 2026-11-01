@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-11-01 18:00** ｜ 累计 **63 轮迭代**、**39 个页面**、**38 张表**、**170 个数据库函数**、**9 个触发器**、**64 个迁移脚本**、**181 项回归测试**、主包 **1.03 MB**
+> 统计截止：**2026-11-01 20:00** ｜ 累计 **64 轮迭代**、**39 个页面**、**38 张表**、**173 个数据库函数**、**9 个触发器**、**66 个迁移脚本**、**193 项回归测试**、主包 **0.91 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -13,7 +13,7 @@
 
 - [0. 项目概况](#0-项目概况)
 - [1. 技术基线（不可动摇的约定）](#1-技术基线不可动摇的约定)
-- [2. 迭代时间线（63 轮）](#2-迭代时间线63-轮)
+- [2. 迭代时间线（64 轮）](#2-迭代时间线63-轮)
 - [3. 数据库演进总览](#3-数据库演进总览)
 - [4. 前端页面与模块总览](#4-前端页面与模块总览)
 - [5. 踩坑知识库](#5-踩坑知识库)
@@ -71,7 +71,7 @@
 
 ---
 
-## 2. 迭代时间线（63 轮）
+## 2. 迭代时间线（64 轮）
 
 ### Day 1 — 2026-10-14：从录屏原型到可用链路
 
@@ -1765,6 +1765,169 @@ accepted --申请取消---> cancel_requested --同意--> canceling --> canceled
 
 ---
 
+### R64 · 数据库的第二道门一直是空的（11-01 晚）
+
+用户问「还有什么没修」。这次先跑静态扫描再答：比对前端 116 个 RPC 与库里 168 个函数
+（只差两个，且都在迁移里）、检查 141 个 `api.*` 导出与页面调用、检查全部
+`bindtap` 是否有对应方法 —— 都干净。真正的问题在没人看的地方。
+
+**① P0：5 张核心表的 RLS 从来没打开**
+
+`20261027210000_direct_table_grants.sql` 给 `orders` / `profiles` / `addresses` /
+`rental_requests` / `runner_applications` 授了 `anon` 的增删改查，也建了
+`owner_id = auth.uid()` 的 policy，**但整份文件没有一句 `ENABLE ROW LEVEL SECURITY`**。
+
+policy 只有在 RLS 开启后才参与判定 —— 从建库那天起，这 5 张表的 policy 全是死代码。
+线上 38 张表 33 张开着，就这 5 张关着。实测切 `anon` 角色：
+
+```
+anon 可见 orders=3 行, profiles=6 行, 可执行 DELETE=t
+```
+
+`orders` 里有 `pickup_addr` / `deliver_addr` / `contact`，`profiles` 里有 `balance`。
+
+**要澄清的一点**：这不等于「现在就能被拖库」。PostgREST 仍要 `TCB_PUBLISHABLE_KEY`
+才进得来，而那个 key 只在云函数环境变量里 —— 前端 `utils/config.js` 里的
+`wbpk_...` 是 WorkBuddy 托管服务的 key（endpoint `mp-api.app.workbuddy.host`，
+只用于传图），跟 CloudBase 的 key 不是同一个东西，前端确实没拿到。
+
+但这是**纵深防御只剩一层**：key 一旦出现在日志、构建产物，或有人改用 Web SDK，
+拿到的就是「全表读写删 + 改任意人余额」。
+
+修复很干净，因为两个前提都成立：
+
+| 前提 | 实测 |
+|---|---|
+| `service_role` 能绕过 RLS | `rolbypassrls = true`，所以 `svc_rpc` 不受影响 |
+| 前端没有一处直连表 | 全仓 `rdb/rest/<表名>` 零匹配，全走 `rpc()` |
+
+顺手把 `orders_read_all` 收紧了：它原本允许 `is_certified_runner()` 看**全部**订单，
+RLS 一开这条就会真的生效，把全站订单暴露给每个认证接单员。大厅列表走
+`list_hall_orders`（service_role），根本不需要它兜底，改成只认
+`owner_id` / `runner_id` / `admin_is_any()`，并且不再授给 `anon`。
+
+**② P1：三个状态会永久卡住，钱跟着卡**
+
+R63 的 cron 只覆盖了「未付款超时」，剩下三个状态是死的：
+
+| 状态 | 卡住的后果 | 本轮补的出口 |
+|---|---|---|
+| `waiting_confirm` | 接单员送完了，发布方不点确认，**钱永远在平台** | 超 72 小时自动结算 |
+| `cancel_requested` | 接单员不回应，发布方既不能取消也不能继续 | 超 24 小时视同同意 |
+| `withdraw_requests.pending` | 转账没发起成功，钱扣了却一直「处理中」 | cron 补转 |
+
+`svc_auto_confirm_orders(72)` 与 `confirm_order_done` **同一套口径**：唯一出口、
+`ROW_COUNT` 幂等、先改状态再发钱、5% 抽成走 `calc_settle_amount`。多一条保护：
+`feedback_status = 'pending'` 的单（接单员已申诉、等管理员处理）一律跳过 ——
+不能被自动确认盖掉人工核查。
+
+72 小时是这样算的：`submit_settle_feedback` 允许送达满 48 小时后申诉，
+剩下 24 小时留给管理员响应。
+
+`svc_expire_cancel_requests(24)` 三条分支与 `request_cancel_order` 一字不差：
+余额单同库退回并落 `canceled + refunded` + 券回滚；微信单只转
+`canceling + refunding` 并把 `refund_no` 写成 `RF+订单号`，真正的打款交给
+cron 补发（DB 发不了微信请求）；没付款或实付为 0 直接关单。
+
+**③ P1 的真正凶手：转账服务缩容到 0，10 秒等不完冷启动**
+
+补提现对账时实测 `withdraw-api` 的 cron，第一次返回：
+
+```
+{"ok":false,"code":"NETWORK","error":"同步转账状态失败：请求超时"}
+```
+
+云托管 `transfer-svc` 的 `ServerConfig.MinNum = 0`、`ScaleStatus = zero` ——
+常态是 **0 实例**，每个请求都要冷启动。而 `httpsJson` 的超时写死 10 秒、
+函数 Timeout 只有 20 秒。线上提现 #20（10 元，2026-10-30 17:11 申请，
+`status=pending`、`batch_id` 为空）卡了 **50 小时**，就是这个原因 ——
+不是回调丢失，是转账压根没发起。
+
+三处一起改：
+
+- `httpsJson` 超时 10s → **25s**（可用 `SVC_TIMEOUT_MS` 覆盖）
+- `withdraw-api` 函数 Timeout 20s → **60s**
+- HTTP 状态码要认：503 时不能记成「同步成功」（原来会写 `ok:true`，日志永远看不出问题）
+
+改完重跑，606ms 返回 `{"ok":true,"checked":0,"results":[]}`。再跑一次带补转的版本：
+
+```
+{"ok":true,"checked":0,"results":[{"id":20,"ok":true,"error":""}],"pending":1,"transferred":1}
+```
+
+提现 #20 从 `pending` → `processing`，转账已受理。补转是安全的：
+`doTransfer` 内部走 `transfer_prepare` 把单锁成 `processing`，
+重复调用拿到的是同一笔，不会重复打款。
+
+**④ P2：提现的并发窗口**
+
+`svc_create_withdraw` 的「是否已有处理中的提现」检查排在
+`profiles ... FOR UPDATE` **之前**。两个请求能同时通过检查，再排队各插一笔
+`pending`（不会超扣，但会排两笔队）。把检查挪到锁之后，并发就串行化了。
+
+**⑤ 退款「查了但没补发」的洞**
+
+R63 的 cron 用 `doSync` 补查滞留退款，但 `doSync` **只查不发**：
+微信侧 404 时返回 `REFUND_NOT_EXIST` 就结束了。如果当初 `doRefund` 就失败了
+（网络错 / 商户余额不足），这笔单会永远卡在 `canceling`，只有管理员到后台
+点「重试退款」才能救。
+
+把 `svc_list_stuck_refunds` 的返回加上 `pay_txn_id` / `refund_amount` / `refund_error`
+（改返回类型必须 DROP + CREATE，GRANT 重跑），cron 就能在 404 时直接
+`doRefund` 补发。
+
+**⑥ P2：132 KB 文档一直跟着上传包走**
+
+查体积时顺手发现 `packOptions.ignore` 里只有 `docs/`、`sql/`、`tests/`、`tools/`、`cloudfunctions/`、
+`cloudrun/`，**`README.md` 与 `CHANGELOG.md` 没被忽略** —— 132 KB 纯 markdown 进了用户的上传包，
+端上永远读不到一行。补进 ignore 后 1.03 MB → **0.91 MB（185 → 183 个文件）**。
+
+顺带纠了一条传了很久的说法：`docs/RELEASE.md` 与项目备忘都写着「`docs/` 在包内，改文档会改变体积」，
+**这是错的** —— `docs/` 从 R52 起就在 ignore 里，之前 1.02 → 1.03 的变化来自代码不是文档。
+
+**⑦ P2：四件套脚本存在两份完整副本，且各自修一半**
+
+`verify-mp.js` / `check-mp.js` 在工作区根与 `campus-errand/tools/` 各有一份，内容不同：
+
+| 脚本 | 根目录版 | 仓库版 |
+|---|---|---|
+| `verify-mp.js` | 10-16 的旧版，**不设退出码** | 10-23 新版，`process.exitCode` 正确 |
+| `check-mp.js` | 10-24 修过包体积误报 | 10-23 未修，一直误报「排除 node_modules 也有 2.08MB」 |
+
+`sync_github.py` 调的是**根目录**版 → `verify-mp` 那道门禁永远 exit 0（形同不存在），
+而手工跑仓库版又会被一个假超限拦住。两边都是错的。现在实现只留在 `tools/`（入库、可追溯），
+根目录两个文件改成一行 `require` 转发，无法再分叉。
+
+**实测（真库 `DO` 块，7 项全过，事务回滚零残留）**
+
+| 场景 | 结果 |
+|---|---|
+| anon 读 orders | 0 行（表里原有 3 行） |
+| anon 删订单 | 行还在，RLS 静默过滤 |
+| anon 插订单 | 拒绝 |
+| 超时未确认自动结算 | 10 元 → 接单员 **9.50**（5% 抽成），`settle_amount=9.50` |
+| 再跑一次 | `done_count=0`，余额不再增加 |
+| 申诉中的单 | 跳过，保持 `waiting_confirm` |
+| 余额单超时取消 | 余额 +8，`canceled + refunded` |
+| 微信单超时取消 | `canceling + refunding`，`refund_no=RF<id>` |
+| 没到 24 小时的取消申请 | 不动 |
+
+`invokeFunction` 实跑两个 cron：
+
+```
+pay-create   {"ok":true,"closed":0,"autoDone":0,"cancelExpired":0,"stuck":0,"refunded":0,"failed":0,"stuckWithdrawals":1}
+withdraw-api {"ok":true,"checked":0,"results":[{"id":20,"ok":true,"error":""}],"pending":1,"transferred":1}
+```
+
+`stuckWithdrawals:1` 就是 #20 —— 这个统计字段是本轮加的，正是它把问题暴露出来的。
+
+**数字**：迁移 64 → **66**，函数 170 → **173**（线上 `pg_proc` 实测），
+页面 39（未变），测试 181 → **193**（`tests/rls-timeout.test.js` 12 条，
+9 条在 PGlite 跑真实 SQL），表 38 / 触发器 9（未变），RLS **38 张全开**，
+主包 1.03 → **0.91 MB / 183 个文件**（文档移出上传包）。
+
+---
+
 
 ## 3. 数据库演进总览
 
@@ -1853,7 +2016,7 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 不查微信交易号 —— 钱从没进过商户号，也就没有回调可等。只有 `pay_channel='wxpay'` 的单
 才需要那套异步状态机。
 
-### 数据库函数（170 个，现役 CloudBase 库）
+### 数据库函数（173 个，现役 CloudBase 库）
 按职能分：
 - **订单**：`create_order`(17参) / `accept_order` / `complete_order` / `cancel_order` / `confirm_order_done` / `get_order_detail` / `order_relation` / `list_my_orders` / `search_my_orders` / `hide_my_order` / `order_hidden` …
 - **取消与退款（R60）**：`request_cancel_order`（发布方发起，已付直接进退款、已接单转协商）/
@@ -2197,13 +2360,19 @@ node campus-errand/tools/style-lint.js campus-errand
 
 | 工具 | 位置 | 检查内容 |
 |---|---|---|
-| `verify-mp.js` | **工作区根目录**（放包内会被当成缺 npm 依赖） | 页面四件套齐全、WXML 事件方法在 JS 里有定义、class 有样式定义 |
-| `check-mp.js` | **工作区根目录** | ① ESM 严格解析（抓重复声明）② JSON 可解析 ③ WXML 标签配对 + id 唯一 ④ app.json 页面文件齐全 ⑤ usingComponents 指向存在 ⑥ 按 packOptions.ignore 算真实上传体积 ⑦ 裸包名能在 miniprogram_npm 解析 |
+| `verify-mp.js` | 实现 `tools/`；根目录同名文件是**转发垫片** | 页面四件套齐全、WXML 事件方法在 JS 里有定义、class 有样式定义 |
+| `check-mp.js` | 实现 `tools/`；根目录同名文件是**转发垫片** | ① ESM 严格解析（抓重复声明）② JSON 可解析 ③ WXML 标签配对 + id 唯一 ④ app.json 页面文件齐全 ⑤ usingComponents 指向存在 ⑥ 按 packOptions.ignore 算真实上传体积 ⑦ 裸包名能在 miniprogram_npm 解析 |
 | `tools/style-lint.js` | 包内 `tools/`（不参与打包） | ① 反引号 / Markdown 粗体 ② 中文全角标点 ③ 注释与花括号配对 ④ `var(--x)` 是否已定义 ⑤ **选择器里的 `*` 通配符（硬失败）** ⑥ `+` / `~` 兄弟选择器（警告） ⑦ WXML 的 `{{ }}` 配对 |
 
-**当前状态（2026-10-30 23:30 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
-`check-mp.js` **1.03MB / 2.00MB**（185 个文件，扫描 JS 73 个）通过，`style-lint.js`（35 wxss / 42 wxml）通过，
-`npm test` **181 项**全过。
+> ⚠️ **2026-11-01 收敛双份脚本**：`verify-mp.js` / `check-mp.js` 曾在工作区根与 `tools/` 各存一份
+> 完整副本，两份各改各的：根目录的 `verify-mp.js` **不设退出码**（经 `sync_github.py` 调用永远 exit 0，
+> 这道门禁其实是哑的），根目录的 `check-mp.js` 才是修过包体积误报的那份、仓库里那份反倒一直误报
+> 「即使排除 node_modules 也有 2.08MB」。现在实现只在 `tools/`（入库、可追溯），根目录文件只剩
+> 一行 `require` 转发，两边不可能再分叉。
+
+**当前状态（2026-11-01 20:00 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
+`check-mp.js` **0.91MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（35 wxss / 42 wxml）通过，
+`npm test` **193 项**全过。
 
 > 主包从 1.41MB 降到 **0.95MB**，是 R52 删掉 WorkBuddy Cloud SDK 与 `miniprogram_npm/` 的结果。
 
@@ -2337,6 +2506,18 @@ node campus-errand/tools/style-lint.js campus-errand
     - `VERIFY.md` 的四件套命令仍按「含 `miniprogram_npm/`」的旧目录写，且没写清 JS 扫描的三个口径。
     **规律**：每轮改的是 README + ITERATIONS + CHANGELOG，`docs/` 子文档不在任何一条 SOP 里，
     于是 R52 之后一路停在旧表述 —— 以后补文档要连带扫一遍 `docs/` 下所有 `.md` 的最后修改时间。
+
+### 🟡 已知但未处理（R64 新增）
+
+19. **⚠️ 云托管 `transfer-svc` 的 `MinNum = 0` 是提现慢的配置层根因，代码只能容忍不能消除**：
+    R64 把 `httpsJson` 超时提到 25 秒、函数 Timeout 提到 60 秒，提现不会再卡死；
+    但常态 0 实例意味着**每一次**提现与**每一轮** cron 都要先等一次冷启动（实测 > 10 秒）。
+    后台把 `ServerConfig.MinNum` 设为 1 才有常驻实例，代价是持续计费（低配一整天约几元钱）。
+    不设也不影响正确性，只是响应慢、cron 轮次里有一半时间在等启动。
+20. **短信验证码的 `SMS_*` 环境变量一直没配**：`phone_codes` 表只存哈希、逻辑齐全，
+    但发送通道（腾讯云短信 SDK 的 SecretId / SecretKey / SdkAppId / 模板 ID）在云函数环境变量里是空的，
+    所以短信降级路径实际不可用，绑手机号只能走微信一键取号。
+    真要用短信得先在腾讯云短信控制台过模板审核（个人主体审核严、周期长），再补 4 个环境变量。
 
 ---
 

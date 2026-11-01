@@ -190,21 +190,25 @@ function isIgnored(relPath, size) {
 
 const everyFile = walkAll(ROOT, [])
 const uploaded = everyFile.filter((f) => !isIgnored(path.relative(ROOT, f)))
-const withNm = everyFile.filter((f) => {
+// node_modules 单独算：只有它没被 packOptions.ignore 排除时才会真的进包。
+// （老版本这里把 docs/sql/tests/tools 也算进「排除 node_modules 后」的体积，
+//   那几个目录本来就在 ignore 里、不参与上传，于是文档一变长就误报「即使排除
+//   node_modules 也有 2.08MB」。2026-11-01 与工作区根下的同名脚本对齐。）
+const nmFiles = everyFile.filter((f) => {
   const rel = path.relative(ROOT, f).split(path.sep).join('/')
-  return !rel.startsWith('node_modules/')
+  return rel.startsWith('node_modules/')
 })
 
 const LIMIT = 2 * 1024 * 1024
 const mb = (n) => (n / 1024 / 1024).toFixed(2) + ' MB'
 const uploadSize = sumSize(uploaded)
-const withoutNm = sumSize(withNm)
 const sizeLine =
   '实际上传体积 = ' +
   mb(uploadSize) +
   '（' +
   uploaded.length +
-  ' 个文件）/ 主包上限 2.00 MB'
+  ' 个文件）/ 主包上限 2.00 MB' +
+  (nmFiles.length ? '；node_modules ' + mb(sumSize(nmFiles)) + '（已在 ignore 中排除）' : '')
 if (uploadSize > LIMIT) {
   const top = uploaded
     .map((f) => ({ f: path.relative(ROOT, f), s: fs.statSync(f).size }))
@@ -212,9 +216,6 @@ if (uploadSize > LIMIT) {
     .slice(0, 5)
     .map((x) => x.f + ' ' + mb(x.s))
   fail('包体积', mb(uploadSize) + ' 超出主包 2MB 限制，最大的几个：' + top.join('、'))
-}
-if (withoutNm > LIMIT) {
-  fail('包体积', '即使排除 node_modules 也有 ' + mb(withoutNm) + '，超出主包 2MB 限制')
 }
 
 // ---------- 7. npm 依赖必须能在 miniprogram_npm 里解析到 ----------

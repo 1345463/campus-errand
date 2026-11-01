@@ -147,9 +147,16 @@ admin_update_pay_settings(...)        -- 超管改，带 0–50% 范围校验，
 
 ## 五、云函数清单（迁库完成后开始写）
 
+> ⚠️ 本节是 **R49 时的方案稿**，实际落地有变化（以 README / ITERATIONS 为准）：
+> `pay-create` 从 **R65** 起**不再信调用方传的 `amount`** —— 下单前先调
+> `svc_order_pay_amount(order_id, uid)` 取库里的应付分（口径 `round((reward - discount_amount) * 100)`），
+> 按「不存在 / 已付 / 已取消 / 金额不符」拒绝，发给微信的是服务端算出来的数；
+> 前端传的 `amount` 只用于比对。另：R63 起 `pay-create` 按 `action` 兼管退款与退款补查，
+> 并挂定时触发器跑超时关单与三个超时自愈函数。
+
 | 函数 | 触发 | 职责 |
 |---|---|---|
-| `pay-create` | 小程序调用 | 校验订单归属与金额 → 调 JSAPI 下单 → 返回支付参数 |
+| `pay-create` | 小程序调用 | 校验订单归属 → **取服务端金额** → 调 JSAPI 下单 → 返回支付参数 |
 | `pay-notify` | 微信回调（HTTP） | 验签 → 幂等更新 `orders.pay_status` / `pay_txn_id` → 回 `{code:"SUCCESS"}` |
 | `pay-query` | 小程序调用 | 主动查单兜底（回调丢了时补齐状态） |
 | `settle` | 小程序调用 | 确认完成时计算实付 → 写 `wallet_records` |

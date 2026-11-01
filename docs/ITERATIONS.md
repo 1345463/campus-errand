@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-11-01 21:00** ｜ 累计 **65 轮迭代**、**39 个页面**、**38 张表**、**174 个数据库函数**、**9 个触发器**、**67 个迁移脚本**、**213 项回归测试**、主包 **0.92 MB**
+> 统计截止：**2026-11-02 07:00** ｜ 累计 **65 轮迭代**、**39 个页面**、**38 张表**、**174 个数据库函数**、**9 个触发器**、**67 个迁移脚本**、**213 项回归测试**、主包 **0.92 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -2190,6 +2190,13 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
   `svc_create_withdraw` / `transfer_prepare` / `svc_save_transfer_result`
 - **服务端短信验证码（R52）**：`issue_phone_code` / `bind_my_phone_verified` / `_bind_phone_row`
 - **图片分片上传（R53）**：`begin_media_upload` / `push_media_part` / `finish_media_upload`
+- **订单运维（R63）**：`admin_list_orders` / `admin_order_detail` / `admin_force_cancel_order` /
+  `svc_rollback_order_coupon`（券回滚，六个终态出口调用）
+- **超时自愈（R63–R64）**：`svc_close_expired_orders`（关超时未付单）/ `svc_list_stuck_refunds`（滞留退款）/
+  `svc_auto_confirm_orders`（`waiting_confirm` 超 72h 自动结算）/
+  `svc_expire_cancel_requests`（`cancel_requested` 超 24h 视同同意）
+- **支付金额服务端口径（R65）**：`svc_order_pay_amount` —— 只 GRANT `service_role`，
+  `pay-create` 下单前先问它要应付分，调用方的 `amount` 只用于比对
 - **云函数代持身份（R52）**：`svc_rpc` —— 先验 HMAC 令牌取可信 uid，再
   `set_config('request.jwt.claim.sub', uid)`，最后执行业务函数；`svc_*` 与
   `SERVER_ONLY_FNS`（`issue_phone_code` / `bind_my_phone*`）禁止客户端直接调用。
@@ -2226,7 +2233,7 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 > 上面 28 个脚本面向 **已退役的 WorkBuddy Cloud 运行库**，只作结构参考，不再对现役库执行。
 > R48/R49 的新增结构不在这个目录 —— R48 当时的 **33 批**迁库脚本与支付 DDL 在
 > **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，不在本仓库内），
-> 到 2026-11-01 已累计 **64** 批；`cloudbase/MIGRATION.md` 记执行顺序，
+> 到 2026-11-02 已累计 **67** 批；`cloudbase/MIGRATION.md` 记执行顺序，
 > `cloudbase/HANDOFF.md` 是一页纸交接单。
 
 ### 支付相关（R49 · 只落在 CloudBase 新库）
@@ -2282,9 +2289,11 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 
 ### 工具模块（`utils/`，16 个）
 
-`api.js`（唯一允许 async 的地方）、`ui.js`（wx API 安全封装）、`upload.js`（分片上传 + 三条读图通道）、
-`tcb.js`（R52 新增：网关直连优先、失败退 `tcb-proxy` 的通道层）、
-`pay.js`（R50 新增：JSAPI 下单与补付）、`guard.js`（登录/命名统一入口；R44 加 `requirePhone()` 手机号闸门引导）、
+`api.js`（唯一允许 async 的地方）、`ui.js`（wx API 安全封装）、
+`upload.js`（分片上传 + 三条读图通道；**R65 起加本地缓存与老化清理**，同图不再每次重下）、
+`tcb.js`（R52 新增：网关直连优先、失败退 `tcb-proxy` 的通道层；R65 起区分「确定性失败才永久降级」
+与「超时 / 5xx 只降级本次」）、
+`pay.js`（R50 新增：JSAPI 下单与补付；R65 起用 `callTarget` 带上令牌，让云函数能判归属）、`guard.js`（登录/命名统一入口；R44 加 `requirePhone()` 手机号闸门引导）、
 `flags.js`、`perms.js`、`moderation.js`、`moderation-words.js`、`services.js`、`campus.js`、`config.js`、`agreement.js`、
 `motion.js`（R31 新增：动效与触感统一入口）、
 `login-return.js`（R39–R41 引入：登录跳走的返回归口：走之前先 `saveDraft()` 存草稿、记录受限白名单地址，30 分钟内回来自动 `navigateTo` 回去）
@@ -2304,11 +2313,11 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 | 函数 | 用途 | 部署环境 |
 |---|---|---|
 | `app-api` | **统一入口**：`action` = login / rpc / sendPhoneCode / bindPhone；用 `WX_APP_SECRET` 签发 HMAC 会话令牌 | CloudBase `ceshi` |
-| `pay-create` | 微信支付 JSAPI 下单（双入口：云函数带 OPENID / 网关用 code 换 OPENID） | CloudBase `ceshi` |
+| `pay-create` | 微信支付 JSAPI 下单（双入口：云函数带 OPENID / 网关用 code 换 OPENID）；R63 起按 `action` 兼管退款与退款补查、并挂 **定时触发器** 跑超时关单；**R65 起下单金额只认库**（先问 `svc_order_pay_amount`，校验在取 openid 之前） | CloudBase `ceshi` |
 | `pay-notify` | 微信支付结果回调（**HTTP 函数**）：验签 → 解密 → `mark_order_paid` 落库 | CloudBase `ceshi` |
 | `transfer` | 商家转账到零钱（提现执行）：校验 secret → `transfer_prepare` 锁单 → 调微信 API | CloudBase `ceshi` |
 | `transfer-notify` | 商家转账结果回调（Event + 网关路由）：解密后写 `state` / `fail_reason` | CloudBase `ceshi` |
-| `withdraw-api` | 提现管理 API（供管理后台调用，service_role 访问新库） | CloudBase `ceshi` |
+| `withdraw-api` | 提现管理 API（供管理后台调用，service_role 访问新库）；R64 起挂**独立定时触发器**（cron `0 5,15,25,35,45,55 * * * * *`，与 `pay-create` 错开）先 sync 再补转 `pending`，单轮最多 2 笔、只碰超 10 分钟的 | CloudBase `ceshi` |
 | `ai-api` | **智能客服代理**（R57 重建）：验 HMAC 令牌 → 取 `ai_secrets` 通道配置 → 转发大模型；密钥只留在服务端 | CloudBase `ceshi` |
 | `tcb-proxy` | **网关转发**（零配置、白名单目标；不持有任何密钥，身份由上游函数各自校验） | **小程序自己的微信云开发环境** |
 
@@ -2362,6 +2371,19 @@ BEGIN
   RAISE EXCEPTION 'RESULT %', r;            -- 主动抛错回滚整笔，既拿到结果又不留脏数据
 END $t$;
 ```
+
+> 🔴 **`ENABLE ROW LEVEL SECURITY` 和 `CREATE POLICY` 是两件事**（R64 才发现线上 38 张表里
+> 有 5 张只有 policy、全文没有一句 `ENABLE`）—— 只建 policy 不 ENABLE，policy 就是**死代码**，
+> 表实际上裸奔。改 RLS 前先验两条：`service_role.rolbypassrls = true`（`svc_rpc` 不受影响）、
+> 全仓 `rdb/rest/<表名>` 零匹配（前端不直连表）。
+>
+> 🔴 **RLS 对 DELETE 是静默过滤**：DELETE 返回成功但删 0 行，只有 INSERT/SELECT 的
+> USING / WITH CHECK 才抛错。所以自测断言必须验「行还在」，不能靠
+> `EXCEPTION WHEN insufficient_privilege` —— 那条永远不会走到，测试会假绿。
+>
+> 🔴 **给表开 RLS 会同时让过宽的 policy 生效**：`orders_read_all` 原来带 `is_certified_runner()`，
+> 意味着每个认证接单员都能看全站订单；它之所以一直没出事，只是因为那张表没 ENABLE。
+> R64 改成只认 `owner_id` / `runner_id` / `admin_is_any()` 且不授 `anon`。
 
 ### owner_id 的精度陷阱
 `owner_id` 形如 `2110332344891084800`，**超过 JS 安全整数范围（2^53）**。客户端 `===` 或 `.eq()` 会因精度丢失而匹配不上。**所有涉及本人数据的读写一律走服务端 `auth.uid()`。**
@@ -2460,6 +2482,27 @@ END $t$;
 - `wx.compressImage` 返回的临时文件**不一定带扩展名**，一律按 target 猜会把 png 误判成 jpeg。
 - 图片展示**优先写本地临时文件再交给 `<image>` / `previewImage`**，不要用 base64（`setData` 单次上限 1MB）。
 - **订单相关的图必须用 `get_order_asset`，不能用 `getSignedUrls`**（后者 owner-only，跨人读不到）。轮播/头像用 `get_public_asset`。
+- **读图必须带本地缓存（R65）**：三个 `*ToLocalFile` 原来按「时间戳 + 随机数」写新文件，
+  同一张图每进一次页面就重拉一遍 base64（最大约 920KB），`USER_DATA_PATH` 里的副本只增不减。
+  现在按「图 id + 账号尾号」缓存：命中直读本地、并发共用一个下载、超 120 个清 1 小时前的旧文件、
+  退出登录清本账号。**新增读图入口必须复用 `cachedLocalFile`**，否则又回到「每次重下 + 永不清理」。
+- ⚠️ **读图 API 收的是 asset 路径（`asset:12`），不是 id**：`readAsset` / `readOrderAsset` /
+  `readPublicAsset` 三个都这样，传 id 会一路返回空而不报错。
+
+### 云函数部署与调用（R64–R65）
+- 🔴 **部署后第一次调用可能打到旧实例**：`updateFunctionCode` 返回 success，紧接着的
+  `invokeFunction` 仍跑老代码（R65 实测返回旧分支的 `NO_OPENID`），**第二次才生效**。
+  验证云函数改动至少打两次或等几秒，别拿单次结果下结论。
+- 🔴 **HTTP 调用要认状态码**：只判 `catch` 会把 503 的 HTML 当成 `ok:true`，
+  日志里永远看不出下游挂了（R64 在 `withdraw-api` 上、R65 在网关降级上各踩一次）。
+- 🔴 **钱相关的数字只认库**：`pay-create` 原来直接拿调用方 `amount` 去微信下单，
+  金额传错就是「微信真扣款、订单停在 `unpaid`」，只能人工退。现改为先问
+  `svc_order_pay_amount`，且**校验要放在取 openid 之前**（省一次 `jscode2session`）。
+- ⚠️ **新建云函数无法继承商户私钥**：要用到私钥的能力只能并进已有函数
+  （`pay-create` / `pay-notify` 里加 `action` 分派），新函数是拿不到那把钥匙的。
+- ⚠️ **网关降级要分两类**：确定性失败（域名白名单、`-601034` 云开发被代持）才永久置
+  `gatewayUsable = false`；超时 / 5xx **只降级本次**，否则电梯里丢一次包整场会话都走慢通道。
+  业务错误（`!err._network`）**绝不**换通道 —— 换了会重复下单。
 
 ### 微信小程序 CI 与发布
 - 界面上的「上传失败，请稍后重试」是**洗过的通用文案**，真实报错在 `C:/Users/包子6688/.workbuddy/logs/renderer.log`，搜 `[miniprogram:publish] publish failed`（字段 `raw=`）。**微信 CI 每次只报第一个错**，修完会继续冒下一个。
@@ -2502,7 +2545,7 @@ node campus-errand/tools/style-lint.js campus-errand
 > 「即使排除 node_modules 也有 2.08MB」。现在实现只在 `tools/`（入库、可追溯），根目录文件只剩
 > 一行 `require` 转发，两边不可能再分叉。
 
-**当前状态（2026-11-01 21:00 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
+**当前状态（2026-11-02 07:00 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
 `check-mp.js` **0.92MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（35 wxss / 42 wxml）通过，
 `npm test` **213 项**全过。
 
@@ -2585,7 +2628,7 @@ node campus-errand/tools/style-lint.js campus-errand
     前端整体切到 CloudBase（`utils/cloud.js` 与 `miniprogram_npm/` 已删除，
     换为 `utils/tcb.js` + `svc_rpc` 代持身份），WorkBuddy Cloud 退役，**现役库只剩一套**，
     不再有「只改一边对不上账」的问题。
-13. **`cloudbase/` 不在 git 仓库内** ⚠️ **仍是未决项**：64 批迁库脚本在工作区根下
+13. **`cloudbase/` 不在 git 仓库内** ⚠️ **仍是未决项**：67 批迁库脚本在工作区根下
     `cloudbase/migrations/`，与 `campus-errand/` 同级，目前**不受版本控制**（工作区根不是 git 仓库）。
     现役库的完整结构只存在于这些脚本 + 线上库本身，**没有异地留档**；
     若要长期留档，需单独入仓库或另建一个仓库。
@@ -2650,6 +2693,18 @@ node campus-errand/tools/style-lint.js campus-errand
     但发送通道（腾讯云短信 SDK 的 SecretId / SecretKey / SdkAppId / 模板 ID）在云函数环境变量里是空的，
     所以短信降级路径实际不可用，绑手机号只能走微信一键取号。
     真要用短信得先在腾讯云短信控制台过模板审核（个人主体审核严、周期长），再补 4 个环境变量。
+
+### 🟡 已知但未处理（R65 新增）
+
+21. **⚠️ 云函数部署后第一次调用可能打到旧实例**（2026-11-01 实测）：`updateFunctionCode` 返回 success，
+    紧接的一次 `invokeFunction` 跑的仍是老代码（返回旧分支的 `NO_OPENID`），第二次才生效。
+    **验证云函数改动时不要拿部署后的单次调用下结论**，至少再打一次或等几秒再打。
+    这条会直接误导排障：看到旧返回值会以为「改动没生效 / 部署失败」，其实是实例没换。
+22. **图片本地缓存是「尽力清理」，不是硬性配额**（R65 引入）：清理触发条件是「文件数 > 120 且
+    距今 1 小时以上」，而拿不到修改时间的文件一律跳过（宁可不删，也不删正在显示的图），
+    所以极端情况下 `USER_DATA_PATH` 仍会缓慢增长。另外缓存只对走 `utils/upload.js`
+    三条 `xxxToLocalFile` 的读图生效 —— **任何绕过它自己下载写盘的路径都不受约束**，
+    以后加新的读图入口必须复用 `cachedLocalFile`。
 
 ---
 

@@ -19,8 +19,8 @@
 |---|---|
 | CloudBase 环境 | **`ceshi-d2g37cbg7c8f7ee48`**（PostgreSQL） |
 | 小程序自有云开发环境 | `baozi-d2gbl784gd773f8b6` —— 只放 `tcb-proxy` 一个函数 |
-| 结构规模 | 38 张表 / 170 个 `SECURITY DEFINER` 函数 / 9 个触发器（2026-11-01 复核） |
-| 迁移脚本 | **`cloudbase/migrations/*.sql`，64 条**，在工作区根下与 `campus-errand/` 同级，**不在 git 仓库内** |
+| 结构规模 | 38 张表 / **174** 个 `SECURITY DEFINER` 函数 / 9 个触发器（2026-11-02 复核） |
+| 迁移脚本 | **`cloudbase/migrations/*.sql`，67 条**，在工作区根下与 `campus-errand/` 同级，**不在 git 仓库内** |
 | 退役结构 | 包内 `campus-errand/sql/*.sql` 那 28 个脚本面向已退役的 WorkBuddy Cloud 旧库，只作结构参考 |
 | 访问链 | `utils/api.js` → `utils/tcb.js`：网关 `/api/xxx` 直连优先，域名没白名单时退 `wx.cloud.callFunction('tcb-proxy')`；**只有网络层失败才换通道，业务拒绝不重试** |
 | 云函数 | 8 个：`app-api` / `ai-api` / `pay-create` / `pay-notify` / `transfer` / `transfer-notify` / `withdraw-api` / `tcb-proxy` |

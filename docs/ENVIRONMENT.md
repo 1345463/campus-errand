@@ -19,12 +19,12 @@
 |---|---|
 | CloudBase 环境 | **`ceshi-d2g37cbg7c8f7ee48`**（PostgreSQL） |
 | 小程序自有云开发环境 | `baozi-d2gbl784gd773f8b6` —— 只放 `tcb-proxy` 一个函数 |
-| 结构规模 | 38 张表 / **174** 个 `SECURITY DEFINER` 函数 / 9 个触发器（2026-11-02 复核） |
+| 结构规模 | 38 张表 / **174** 个 `SECURITY DEFINER` 函数 / 9 个触发器（2026-11-03 复核） |
 | 迁移脚本 | **`cloudbase/migrations/*.sql`，67 条**，在工作区根下与 `campus-errand/` 同级，**不在 git 仓库内** |
 | 退役结构 | 包内 `campus-errand/sql/*.sql` 那 28 个脚本面向已退役的 WorkBuddy Cloud 旧库，只作结构参考 |
 | 访问链 | `utils/api.js` → `utils/tcb.js`：网关 `/api/xxx` 直连优先，域名没白名单时退 `wx.cloud.callFunction('tcb-proxy')`；**只有网络层失败才换通道，业务拒绝不重试** |
 | 云函数 | 8 个：`app-api` / `ai-api` / `pay-create` / `pay-notify` / `transfer` / `transfer-notify` / `withdraw-api` / `tcb-proxy` |
-| 定时任务 | `pay-create` 挂定时触发器，cron `0 */10 * * * * *`（见 README「十、部署」第 5 条） |
+| 定时任务 | **两个**，都要在控制台手动挂，不跟着代码走（见 README「十、部署」第 5 条）：`pay-create` cron `0 */10 * * * * *`；`withdraw-api` cron `0 5,15,25,35,45,55 * * * * *`（R64 起，与前者错开） |
 
 ## 从零重建环境时的顺序
 
@@ -35,7 +35,10 @@
    传 `envVariables` 不会落到函数配置上）。
 5. ⚠️ **新建函数无法继承商户私钥**：凡是需要 `WXPAY_PRIVATE_KEY` 的能力，只能并进已有函数
    （`pay-create` / `pay-notify` 目前靠 `action` 分派实现多能力），不要新建函数。
-6. 给 `pay-create` 挂定时触发器（7 段 cron），否则超时单与滞留退款无人清理。
+6. 挂两个定时触发器（7 段 cron）：`pay-create` 的 `0 */10 * * * * *`（否则超时单与滞留退款无人清理）、
+   `withdraw-api` 的 `0 5,15,25,35,45,55 * * * * *`（否则提现回调丢失后只能等用户打开钱包页才补转）。
+   ⚠️ cron 判定必须写成 `!isHttp && event.Type === 'Timer'` —— 只判 `Type` 的话，
+   请求体里伪造 `{"Type":"Timer"}` 就能直接触发关单。
 
 ## 鉴权模型
 

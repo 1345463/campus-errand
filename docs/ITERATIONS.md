@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-11-02 07:00** ｜ 累计 **65 轮迭代**、**39 个页面**、**38 张表**、**174 个数据库函数**、**9 个触发器**、**67 个迁移脚本**、**213 项回归测试**、主包 **0.92 MB**
+> 统计截止：**2026-11-03** ｜ 累计 **65 轮迭代**、**39 个页面**、**38 张表**、**174 个数据库函数**、**9 个触发器**、**67 个迁移脚本**、**213 项回归测试**、主包 **0.92 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -2545,7 +2545,7 @@ node campus-errand/tools/style-lint.js campus-errand
 > 「即使排除 node_modules 也有 2.08MB」。现在实现只在 `tools/`（入库、可追溯），根目录文件只剩
 > 一行 `require` 转发，两边不可能再分叉。
 
-**当前状态（2026-11-02 07:00 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
+**当前状态（2026-11-03 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
 `check-mp.js` **0.92MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（35 wxss / 42 wxml）通过，
 `npm test` **213 项**全过。
 
@@ -2690,9 +2690,10 @@ node campus-errand/tools/style-lint.js campus-errand
     后台把 `ServerConfig.MinNum` 设为 1 才有常驻实例，代价是持续计费（低配一整天约几元钱）。
     不设也不影响正确性，只是响应慢、cron 轮次里有一半时间在等启动。
 20. **短信验证码的 `SMS_*` 环境变量一直没配**：`phone_codes` 表只存哈希、逻辑齐全，
-    但发送通道（腾讯云短信 SDK 的 SecretId / SecretKey / SdkAppId / 模板 ID）在云函数环境变量里是空的，
-    所以短信降级路径实际不可用，绑手机号只能走微信一键取号。
-    真要用短信得先在腾讯云短信控制台过模板审核（个人主体审核严、周期长），再补 4 个环境变量。
+    但发送通道（腾讯云短信 SDK 的 `SMS_SECRET_ID` / `SMS_SECRET_KEY` / `SMS_SDK_APP_ID` /
+    `SMS_TEMPLATE_ID` / `SMS_SIGN_NAME`，**共 5 个**，见 `cloudfunctions/app-api/index.js` 第 40–44 行）
+    在云函数环境变量里是空的，所以短信降级路径实际不可用，绑手机号只能走微信一键取号。
+    真要用短信得先在腾讯云短信控制台过模板审核（个人主体审核严、周期长），再补 **5 个**环境变量。
 
 ### 🟡 已知但未处理（R65 新增）
 

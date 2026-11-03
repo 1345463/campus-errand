@@ -31,7 +31,7 @@
 | 学校 | 广东邮电职业技术学院 |
 | 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 39 个页面 |
 | 云端 | **CloudBase `ceshi-d2g37cbg7c8f7ee48`（现役唯一）**。原 WorkBuddy Cloud（应用 id `wbapp_yPJnSvicojPmz998PjKfpM`）已随 R52 退役；历史值 31 表 / 129 函数 / 7 触发器属旧库，仅作存档 |
-| 数据库 | CloudBase PostgreSQL：**38** 张表，全量 RLS，**170** 个 `SECURITY DEFINER` 函数、**9** 个触发器（2026-10-30 复核） |
+| 数据库 | CloudBase PostgreSQL：**38** 张表，全量 RLS，**174** 个 `SECURITY DEFINER` 函数、**9** 个触发器（2026-11-03 复核） |
 | 代码位置 | 工作区 `campus-errand/` |
 | 发布状态 | **企业主体小程序已绑定，微信审核中（2026-10-27）**。此前经 WorkBuddy 试用版（微信「试用小程序」，14 天 / 15 人 / 不能转正式版）完成真机验证，试用期已结束；审核通过后发布正式版。 |
 
@@ -2159,10 +2159,12 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
   重复调用只扣一次；余额不足返回 `insufficient` 且分文不动）
 - **订单运维（R63）**：`admin_list_orders` / `admin_order_detail` / `admin_force_cancel_order`
   （管理端查单与强制取消，`settle` / `support` 校验在函数内部）/
-  `svc_rollback_order_coupon`（券回滚，铺在 5 个函数的 **8 个终态出口**：
-  `request_cancel_order` 未付 + 余额两分支、`respond_cancel_request`、
-  `svc_finish_order_refund` 的 SUCCESS、`admin_force_cancel_order` 三个分支、
-  `svc_close_expired_orders`）/ `svc_list_stuck_refunds`
+  `svc_rollback_order_coupon`（券回滚，现役铺在 **6 个函数的 10 个终态出口**：
+  R63 的 5 个函数 8 个出口 —— `request_cancel_order` 未付 + 余额两分支、
+  `respond_cancel_request`、`svc_finish_order_refund` 的 SUCCESS、
+  `admin_force_cancel_order` 三个分支、`svc_close_expired_orders`；
+  **R64 又补 `svc_expire_cancel_requests` 2 个出口**：`cancel_requested` 超 24h 视同同意时，
+  余额单退回分支与未付单直接取消分支各回滚一次）/ `svc_list_stuck_refunds`
   （后三个 `svc_` 前缀，只 GRANT `service_role`，供定时任务调用）
 - **图片**：`save_media_asset` / `get_media_asset` / `get_public_asset` / **`get_order_asset`**
 - **租赁**：`submit_rental_request` / `admin_set_rental_price` / `admin_create_rental_order` / `list_rental_items` / `admin_*_rental_item`
@@ -2190,8 +2192,6 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
   `svc_create_withdraw` / `transfer_prepare` / `svc_save_transfer_result`
 - **服务端短信验证码（R52）**：`issue_phone_code` / `bind_my_phone_verified` / `_bind_phone_row`
 - **图片分片上传（R53）**：`begin_media_upload` / `push_media_part` / `finish_media_upload`
-- **订单运维（R63）**：`admin_list_orders` / `admin_order_detail` / `admin_force_cancel_order` /
-  `svc_rollback_order_coupon`（券回滚，六个终态出口调用）
 - **超时自愈（R63–R64）**：`svc_close_expired_orders`（关超时未付单）/ `svc_list_stuck_refunds`（滞留退款）/
   `svc_auto_confirm_orders`（`waiting_confirm` 超 72h 自动结算）/
   `svc_expire_cancel_requests`（`cancel_requested` 超 24h 视同同意）
@@ -2233,7 +2233,9 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 > 上面 28 个脚本面向 **已退役的 WorkBuddy Cloud 运行库**，只作结构参考，不再对现役库执行。
 > R48/R49 的新增结构不在这个目录 —— R48 当时的 **33 批**迁库脚本与支付 DDL 在
 > **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，不在本仓库内），
-> 到 2026-11-02 已累计 **67** 批；`cloudbase/MIGRATION.md` 记执行顺序，
+> 到 2026-11-03 已累计 **67** 批；**执行顺序以文件名时间戳为准** ——
+> `cloudbase/MIGRATION.md` 是 R48 当时的旧交接单，只覆盖早期 23 条、正文还停在迁库前的
+> 「体验版套餐 / 前端 SDK 替换」背景，别拿它当全量清单或现役说明；
 > `cloudbase/HANDOFF.md` 是一页纸交接单。
 
 ### 支付相关（R49 · 只落在 CloudBase 新库）
@@ -2561,8 +2563,10 @@ node campus-errand/tools/style-lint.js campus-errand
 >   `pages/paytest/paytest.js`（R50 支付联调留下的调试页，未注册、无跳转点，但仍会打进包）。
 > **73** = `check-mp.js` 按 `packOptions.ignore` 算出的**真正会被上传**的 JS
 > （含 `app.js`，排除 `tests/` `tools/` `cloudfunctions/`）；
-> **89** = `scripts/sync_github.py` 四件套第 1 项实际检查的数量
-> （`os.walk` 全扫，只排除 `node_modules` / `miniprogram_npm` / `.git`，**含** `tests/` 与 `tools/`）。
+> **93** = `scripts/sync_github.py` 四件套第 1 项实际检查的数量
+> （`os.walk` 全扫，只排除 `node_modules` / `miniprogram_npm` / `.git`，**含** `tests/` 与 `tools/`；
+> 随测试文件增加而变，复核命令：
+> `find campus-errand -name "*.js" -not -path "*/node_modules/*" -not -path "*/miniprogram_npm/*" -not -path "*/.git/*" | wc -l`）。
 
 **数据库侧**：每轮用上面的 `DO` 块冒充真实用户做角色化自检，最后主动抛错回滚，收尾一定跑脏数据复核（自测数量应为 0）。
 

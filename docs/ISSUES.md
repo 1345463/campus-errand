@@ -84,7 +84,7 @@
 | 52 | R62 | **微信 + 余额双付**：回调晚到时用户又点余额支付，两笔都成功，`mark_order_paid` 只认 `pay_status='paid'` 就返回幂等，钱收了不记账 | 回调侧返回 `DUPLICATE_PAY` + 写 `dup_txn_id`，自动原路退（`RD+订单号`）；余额侧遇已有交易号返回 `already_wxpay`，分文不扣 |
 | 53 | R62 | **券补贴看不见**：用券后用户实付变少、接单员仍按赏金结算（产品定为平台补贴），但库里没有字段记这笔成本 | 新增 `orders.platform_subsidy` |
 | 54 | R62 | **抽成函数从定义起零调用**：`calc_settle_amount()` 没人调，费率配了白配、平台收入为 0 | 结算接上它，读 `pay_settings.commission_rate`（0.05）；后台 `admin/settle` 可改 |
-| 55 | R64 | **提现卡 50 小时的真因不是回调丢失**：云托管 `transfer-svc` 的 `MinNum=0`、`ScaleStatus=zero`，常态 0 实例，每次都要冷启动；而 `httpsJson` 超时写死 10s、函数 Timeout 20s | 超时改 25s（`SVC_TIMEOUT_MS` 可覆盖）/ 函数 60s；补 HTTP 状态码判定；提现 #20 已补转成功 |
+| 55 | R64 | **提现卡 50 小时的真因不是回调丢失**：云托管 `transfer-svc` 的 `MinNum=0`、`ScaleStatus=zero`，常态 0 实例，每次都要冷启动；而 `withdraw-api` 里 `httpsJson`（调云托管那一跳）超时写死 10s、函数 Timeout 20s | `withdraw-api` 的 `HTTP_TIMEOUT` 改 25s（`SVC_TIMEOUT_MS` 可覆盖）/ 函数 60s；⚠️ `transfer-svc` 内部调微信的 `httpsJson` 仍是 12s 写死，别把两者混谈；补 HTTP 状态码判定；提现 #20 已补转成功 |
 | 56 | R64 | **提现并发窗口**：`svc_create_withdraw` 的「是否已有 pending/processing」检查排在 `profiles ... FOR UPDATE` **之前**，两个请求能同时通过检查各插一笔 | 检查挪到行锁之后 |
 | 57 | R64 | **退款「只查不发」**：`doSync` 遇 `REFUND_NOT_EXIST` 就结束；若当初 `doRefund` 就失败（网络错 / 余额不足），订单永远卡 `canceling` | `svc_list_stuck_refunds` 补 `pay_txn_id` / `refund_amount` / `refund_error`，404 时 cron 直接补发 |
 | 58 | R65 | **下单金额由调用方说了算**：`pay-create` 直接把 `payload.amount` 发给微信。不会「1 分钱买 20 元服务」（落库会重算比对），但会变成**「钱收了、单没开通」** —— 微信真扣款，订单永远 `unpaid`，只能人工退 | 新增 `svc_order_pay_amount(order_id, uid)` 取库里的应付分，四种情况拒绝；**发给微信的必须是 `serverFen`**，客户端 amount 只用于比对 |

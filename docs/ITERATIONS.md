@@ -1,7 +1,7 @@
 # 校园跑腿小程序 · 全量迭代修改记录
 
 > 广东邮电职业技术学院校园跑腿平台 ｜ 微信小程序原生 ｜ 云端 **CloudBase `ceshi-d2g37cbg7c8f7ee48`**
-> 统计截止：**2026-11-03** ｜ 累计 **65 轮迭代**、**39 个页面**、**38 张表**、**174 个数据库函数**、**9 个触发器**、**67 个迁移脚本**、**213 项回归测试**、主包 **0.92 MB**
+> 统计截止：**2026-11-04** ｜ 累计 **65 轮迭代**、**39 个页面**、**38 张表**、**174 个数据库函数**、**9 个触发器**、**67 个迁移脚本**、**213 项回归测试**、主包 **0.92 MB**
 >
 > 📌 **R52 已完成切换**：前端整体从 WorkBuddy Cloud 换到 CloudBase，WorkBuddy SDK 连同
 > `miniprogram_npm/` 一起删除（主包 1.44 MB → 0.94 MB）。数据访问统一走「云函数代持身份」
@@ -31,7 +31,7 @@
 | 学校 | 广东邮电职业技术学院 |
 | 形态 | 微信小程序**原生**（无框架），3 个 tabBar + 39 个页面 |
 | 云端 | **CloudBase `ceshi-d2g37cbg7c8f7ee48`（现役唯一）**。原 WorkBuddy Cloud（应用 id `wbapp_yPJnSvicojPmz998PjKfpM`）已随 R52 退役；历史值 31 表 / 129 函数 / 7 触发器属旧库，仅作存档 |
-| 数据库 | CloudBase PostgreSQL：**38** 张表，全量 RLS，**174** 个 `SECURITY DEFINER` 函数、**9** 个触发器（2026-11-03 复核） |
+| 数据库 | CloudBase PostgreSQL：**38** 张表，全量 RLS，**174** 个 `SECURITY DEFINER` 函数、**9** 个触发器（2026-11-04 复核） |
 | 代码位置 | 工作区 `campus-errand/` |
 | 发布状态 | **企业主体小程序已绑定，微信审核中（2026-10-27）**。此前经 WorkBuddy 试用版（微信「试用小程序」，14 天 / 15 人 / 不能转正式版）完成真机验证，试用期已结束；审核通过后发布正式版。 |
 
@@ -1846,6 +1846,10 @@ cron 补发（DB 发不了微信请求）；没付款或实付为 0 直接关单
 三处一起改：
 
 - `httpsJson` 超时 10s → **25s**（可用 `SVC_TIMEOUT_MS` 覆盖）
+  —— 指的是 **`cloudfunctions/withdraw-api/index.js` 里那个 `httpsJson`**（`HTTP_TIMEOUT`，
+  它去调云托管的 `/transfer`，冷启动时间算在这一跳）；
+  ⚠️ **`cloudrun/transfer-svc/src/transfer/index.js` 里同名函数的 `httpsJson` 仍是 12 秒写死**
+  （它调的是微信转账接口，不受 `SVC_TIMEOUT_MS` 影响）。2026-11-04 复核时两者常被混为一谈，改文档别写错归属。
 - `withdraw-api` 函数 Timeout 20s → **60s**
 - HTTP 状态码要认：503 时不能记成「同步成功」（原来会写 `ok:true`，日志永远看不出问题）
 
@@ -2233,7 +2237,7 @@ waiting_confirm 满 48h → submit_settle_feedback → admin_resolve_feedback（
 > 上面 28 个脚本面向 **已退役的 WorkBuddy Cloud 运行库**，只作结构参考，不再对现役库执行。
 > R48/R49 的新增结构不在这个目录 —— R48 当时的 **33 批**迁库脚本与支付 DDL 在
 > **`cloudbase/migrations/`**（工作区根下，与 `campus-errand/` 同级，不在本仓库内），
-> 到 2026-11-03 已累计 **67** 批；**执行顺序以文件名时间戳为准** ——
+> 到 2026-11-04 已累计 **67** 批；**执行顺序以文件名时间戳为准** ——
 > `cloudbase/MIGRATION.md` 是 R48 当时的旧交接单，只覆盖早期 23 条、正文还停在迁库前的
 > 「体验版套餐 / 前端 SDK 替换」背景，别拿它当全量清单或现役说明；
 > `cloudbase/HANDOFF.md` 是一页纸交接单。
@@ -2547,7 +2551,7 @@ node campus-errand/tools/style-lint.js campus-errand
 > 「即使排除 node_modules 也有 2.08MB」。现在实现只在 `tools/`（入库、可追溯），根目录文件只剩
 > 一行 `require` 转发，两边不可能再分叉。
 
-**当前状态（2026-11-03 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
+**当前状态（2026-11-04 复核）**：58 个业务 JS `node --check` 全过，`verify-mp.js` 通过，
 `check-mp.js` **0.92MB / 2.00MB**（183 个文件，扫描 JS 73 个）通过，`style-lint.js`（35 wxss / 42 wxml）通过，
 `npm test` **213 项**全过。
 
@@ -2689,7 +2693,10 @@ node campus-errand/tools/style-lint.js campus-errand
 ### 🟡 已知但未处理（R64 新增）
 
 19. **⚠️ 云托管 `transfer-svc` 的 `MinNum = 0` 是提现慢的配置层根因，代码只能容忍不能消除**：
-    R64 把 `httpsJson` 超时提到 25 秒、函数 Timeout 提到 60 秒，提现不会再卡死；
+    R64 把**云函数侧**调云托管的 HTTP 超时提到 25 秒（`withdraw-api` 的 `HTTP_TIMEOUT`，
+    `SVC_TIMEOUT_MS` 可覆盖）、函数 Timeout 提到 60 秒，提现不会再卡死；
+    ⚠️ 注意归属：`transfer-svc` 内部的 `httpsJson`（调微信转账）**仍是 12 秒写死**，
+    25 秒只作用于「云函数 → 云托管」那一跳（2026-11-04 复核澄清，之前几份文档写反了）。
     但常态 0 实例意味着**每一次**提现与**每一轮** cron 都要先等一次冷启动（实测 > 10 秒）。
     后台把 `ServerConfig.MinNum` 设为 1 才有常驻实例，代价是持续计费（低配一整天约几元钱）。
     不设也不影响正确性，只是响应慢、cron 轮次里有一半时间在等启动。
